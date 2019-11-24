@@ -1,0 +1,5 @@
+add_subdirectory(admesh)
+add_subdirectory(Clipper)
+add_subdirectory(poly2tri)
+add_subdirectory(polypartition)
+add_subdirectory(DLPSlicer)

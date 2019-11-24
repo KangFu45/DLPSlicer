@@ -1,0 +1,21 @@
+project(DLPSlicer)
+cmake_minimum_required(VERSION 3.8)
+# 本次使用C++标准版本
+set(CMAKE_CXX_STANDARD 11)
+
+if(WIN32 AND NOT MINGW)
+  if(NOT DEFINED CMAKE_DEBUG_POSTFIX)
+    set(CMAKE_DEBUG_POSTFIX "_d")
+  endif()
+  if(NOT DEFINED CMAKE_RELEASE_POSTFIX)
+    set(CMAKE_RELEASE_POSTFIX "_r")
+  endif()
+  if(NOT DEFINED CMAKE_RELWITHDEBINFO_POSTFIX)
+    set(CMAKE_RELWITHDEBINFO_POSTFIX "_r")
+  endif()
+  if(NOT DEFINED CMAKE_MINSIZEREL_POSTFIX)
+    set(CMAKE_MINSIZEREL_POSTFIX "_r")
+  endif()
+endif()
+
+add_subdirectory(src)

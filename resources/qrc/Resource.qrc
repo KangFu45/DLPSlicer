@@ -1,0 +1,37 @@
+<RCC>
+    <qresource prefix="/icon">
+        <file>images/back.png</file>
+        <file>images/front.png</file>
+        <file>images/fronview.png</file>
+        <file>images/iso.png</file>
+        <file>images/left.png</file>
+        <file>images/right.png</file>
+        <file>images/SM.png</file>
+        <file>images/top.png</file>
+        <file>images/load.png</file>
+        <file>images/rotate.png</file>
+        <file>images/scale.png</file>
+        <file>images/setup.png</file>
+        <file>images/slice.png</file>
+        <file>images/support.png</file>
+        <file>images/supportEdit.png</file>
+        <file>images/redo.png</file>
+        <file>images/undo.png</file>
+        <file>images/load_b.png</file>
+        <file>images/load_w.png</file>
+        <file>images/offset_w.png</file>
+        <file>images/rotate_b.png</file>
+        <file>images/rotate_w.png</file>
+        <file>images/scale_b.png</file>
+        <file>images/scale_w.png</file>
+        <file>images/setup_b.png</file>
+        <file>images/setup_w.png</file>
+        <file>images/slice_b.png</file>
+        <file>images/slice_w.png</file>
+        <file>images/support_b.png</file>
+        <file>images/support_w.png</file>
+        <file>images/supportEdit_b.png</file>
+        <file>images/supportEdit_w.png</file>
+        <file>images/offset_b.PNG</file>
+    </qresource>
+</RCC>
