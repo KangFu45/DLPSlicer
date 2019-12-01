@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+
+	<!-- MUON decay Channels -->
+
+	<DecayChannel name="omega_pi0mumu_dalitz" parent="omega" >
+		<DecayProduct name="pi0" />
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+	<DecayChannel name="eta_gammamumu_dalitz" parent="eta" >
+		<DecayProduct name="photon" />
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+	<DecayChannel name="etaprime_gammamumu_dalitz" parent="etaprime" >
+		<DecayProduct name="photon" />
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+	
+	<DecayChannel name="eta_mumu" parent="eta" >
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+	<DecayChannel name="omega_mumu" parent="omega" >
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+	
+	<DecayChannel name="phi_mumu" parent="phi" >
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+	<DecayChannel name="rho_mumu" parent="rho" >
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+	<DecayChannel name="jpsi_mumu" parent="jpsi" >
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+	<!-- Example of a custom plc for flat mass distribution to mu mu-->
+	<DecayChannel name="X_mumu" parent="X" >
+		<DecayProduct name="muon" />
+		<DecayProduct name="muon" />
+	</DecayChannel>
+
+
+	<!-- electron decay channels -->
+	<DecayChannel name="omega_pi0ee_dalitz" parent="omega" >
+		<DecayProduct name="pi0" />
+		<DecayProduct name="electron" />
+		<DecayProduct name="electron" />
+	</DecayChannel>
+
+	<DecayChannel name="omega_ee" parent="omega" >
+		<DecayProduct name="electron" />
+		<DecayProduct name="electron" />
+	</DecayChannel>
+
+
+
+</config>

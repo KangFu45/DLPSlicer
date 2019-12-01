@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+
+	<Particle invLambda3="1.756" mass="0.1349766" mcId="111" name="pi0first0" width="0"/>
+	<Particle invLambda3="1.756" mass="0.1349766" mcId="111" name="pi0first1" width="0"/>
+	<Include url="./Particles.xml" />
+	<Particle invLambda3="1.756" mass="0.1349766" mcId="111" name="pi0last0" width="0"/>
+	<Particle invLambda3="1.756" mass="0.1349766" mcId="111" name="pi0last1" width="0"/>
+	
+
+	<Scope>
+	<!-- <Include url="./DecayChannels.xml" /> -->
+	</Scope>
+
+	<Task name="Convert ccbar to cocktail format" type="ConvertCCbar" config="" nodePath="ccbar" />
+	<Logger color="true" globalLogLevel="info" />
+
+	<ccbar>
+		<Logger color="true" globalLogLevel="info" />
+
+		<EventLoop progress="true" />
+
+		<input>
+			<dst treeName="ccbar" url="lists/ccbar_pythia.lis" splitBy="10"/>
+		</input>
+
+		<output>
+			<TFile url="/macstar/star2/jdb12/pp200/Cocktail/components/ccbar_cocktail_{jobIndex}.root" />
+		</output>
+
+		<histograms>
+			
+		</histograms>
+
+		<!-- Cross sections in [mb] -->
+		<CrossSections ccbar="0.92" eccbar="0.10" minbias="42" eminbias="0.5" />
+
+		<!-- Used to scale the invariant mass -->
+		<BranchingRatio parent="411" br="0.176" ebr="0.032" />
+		<BranchingRatio parent="421" br="0.067" ebr="0.006" />
+		<BranchingRatio parent="431" br="0.065" ebr="0.004" /> <!-- PDG value for BR e, but using equivalence from Pythia -->
+		<BranchingRatio parent="4122" br="0.045" ebr="0.017" /> <!-- PDG value for BR e, but using equivalence from Pythia -->
+		<!-- NOTE: for 431 (Ds) and 4122 (Lambda_c) the PDG does not list inclusive muon but Pythia has exactly the same BR for electron and muon -->
+
+	</ccbar>
+
+</config>

@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+ï»¿#include "mainwindow.h"
 #include "qmenubar.h"
 #include "qevent.h"
 #include "qdebug.h"
@@ -10,698 +10,10 @@
 #include "qtimer.h"
 #include "tool.h"
 
-PixItem::PixItem(QPixmap* pixmap)
-{
-	pix = *pixmap;
-}
+//ERROR:setting.hæ”¾åœ¨.cppæ–‡ä»¶å¤¹ä¸‹ä¼šæŠ¥é”™
+//#include "Setting.h"
 
-QRectF PixItem::boundingRect() const
-{
-	return QRectF(-2 - pix.width() / 2, -2 - pix.height() / 2, pix.width() + 4, pix.height() + 4);
-}
-
-void PixItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
-{
-	painter->drawPixmap(-pix.width() / 2, -pix.height() / 2, pix);
-}
-
-void PixItem::updateItem(QString path)
-{
-	pix.load(path);
-	update();
-}
-
-PreviewDialog::PreviewDialog()
-{
-	previewWidget = new PreviewView();
-
-	//printTimeName = new QLabel(QStringLiteral(""));
-	//printTimeLabel = new QLabel();
-
-	modelVolumeName = new QLabel(QStringLiteral("ÏûºÄÊ÷Ö¬Á¿£º"));
-	modelVolumeLabel = new QLabel();
-
-	numberSlicesName = new QLabel(QStringLiteral("×Ü²ãÊı£º"));
-	numberSlicesLabel = new QLabel();
-
-	layout1 = new QHBoxLayout();
-	//layout1->addWidget(printTimeName);
-	//layout1->addWidget(printTimeLabel);
-	layout1->addWidget(modelVolumeName);
-	layout1->addWidget(modelVolumeLabel);
-	layout1->addWidget(numberSlicesName);
-	layout1->addWidget(numberSlicesLabel);
-	
-	mainLayout = new QGridLayout();
-	mainLayout->addLayout(layout1,0,0);
-	mainLayout->addWidget(previewWidget, 1, 0, 1, 3);
-	mainLayout->setSpacing(2);
-	mainLayout->setMargin(1);
-
-	setLayout(mainLayout);
-	
-	setWindowState(Qt::WindowMaximized);
-}
-
-PreviewDialog::~PreviewDialog()
-{
-	delete previewWidget;
-	delete modelVolumeName;
-	delete modelVolumeLabel;
-	delete numberSlicesName;
-	delete numberSlicesLabel;
-	delete layout1;
-	delete mainLayout;
-}
-
-bool PreviewDialog::readIni(QString path)
-{
-	this->previewWidget->path = path;
-	this->previewWidget->path.append("/");
-	this->previewWidget->path.append(ImageName);
-
-	QDir *dir = new QDir(path);
-	QStringList filter;
-	//µÃµ½ÎÄ¼şÃûÁĞ±í
-	QList<QFileInfo> *fileInfo = new QList<QFileInfo>(dir->entryInfoList(filter));
-
-	int normIlluminationTime,numberSlices;
-
-	for (auto f = fileInfo->begin(); f != fileInfo->end(); ++f) {
-		if ((*f).baseName() == buildsciptName) {
-			QFile file((*f).filePath());
-			if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-				return false;
-			QTextStream in(&file);
-			QString line = in.readLine();
-			while (!line.isNull())
-			{
-				if (line.contains("number of slices")) {
-					int a = line.lastIndexOf("=");
-					QString num = line.mid(a + 2);//µÃµ½×Ü²ãÊı
-					previewWidget->slider->setRange(0, num.toInt() - 1);
-					numberSlices = num.toInt();
-
-					num.append(QStringLiteral("²ã"));
-					numberSlicesLabel->setText(num);
-					//³õÊ¼»¯
-					previewWidget->slider->setValue(0);
-					previewWidget->image->setScale(1);
-					previewWidget->image->setPos(0, 0);
-					previewWidget->_scale = 1;
-					previewWidget->x = 0;
-					previewWidget->y = 0;
-
-					//¶ÁÈ¡µÚÒ»ÕÅÍ¼Æ¬
-					QString s = path;
-					s.append("/");
-					s.append(ImageName);
-					s.append("0.png");
-					previewWidget->image->updateItem(s);
-
-				}
-				else if (line.contains("model volume")) {
-					int a = line.lastIndexOf("=");
-					QString num = line.mid(a + 2);
-					num.append("ml");
-					modelVolumeLabel->setText(num);
-				}
-				else if (line.contains("norm illumination time")) {
-					int a = line.lastIndexOf("=");
-					normIlluminationTime = line.mid(a + 2).toInt();
-				}
-				line = in.readLine();
-			}
-		}
-	}
-
-	//¼ÆËã´òÓ¡Ê±¼ä
-	//int printTime= normIlluminationTime*
-
-	return true;
-}
-
-PreviewView::PreviewView()
-{
-	_scale = 1;
-	x = 0;
-	y = 0;
-	//ÉèÖÃ³¡¾°
-	scene = new QGraphicsScene(this);
-	scene->setSceneRect(-200, -150, 400, 300);
-	setScene(scene);
-	pixmap = new QPixmap(":/new/prefix1/images/slice0.png");
-	image = new PixItem(pixmap);
-	scene->addItem(image);
-	image->setPos(0, 0);
-	//²ãÊıÏÔÊ¾±êÇ©
-	label = new QLabel;
-	label->setStyleSheet("color: rgb(255,0,0) ; background-color: rgb(225,225,225); border: 1px outset blue; border-radius: 5px;");
-	label->setFixedSize(32, 15);
-	label->setText(QString::number(0));
-	//ÓÃÇĞ»»²ãµÄ»¬¶¯Ìõ
-	slider = new QSlider();
-	slider->setOrientation(Qt::Vertical);
-	slider->setRange(0,0);
-	slider->setTickInterval(1);
-	slider->setValue(0);
-	connect(slider, SIGNAL(valueChanged(int)), this, SLOT(valueChange(int)));	
-
-	layerLayout = new QVBoxLayout();
-	layerLayout->addWidget(label);
-	layerLayout->addWidget(slider, 10);
-
-	setBackgroundBrush(QColor(0, 0, 0));//ÉèÖÃºÚÉ«±³¾°
-	setLayout(layerLayout);
-	setWindowTitle(QStringLiteral("Ô¤ÀÀ"));
-	//setWindowState(Qt::WindowMaximized);
-	setWindowIcon(QIcon(":/new/prefix1/images/SM.png"));
-	//setAttribute(Qt::WA_QuitOnClose, false);//ÉèÖÃÖ÷´°¿Ú¹Ø±Õ¼´³ÌĞòÍË³ö
-}
-
-PreviewView::~PreviewView()
-{
-	delete image;
-	delete slider;
-	delete label;
-	delete layerLayout;
-	delete scene;
-	delete pixmap;
-}
-
-void PreviewView::valueChange(int num)
-{
-	//¸üĞÂlabel
-	label->setText(QString::number(num));
-	//¸üĞÂÍ¼Æ¬
-	QString s = this->path;
-	s.append(QString::number(num));
-	s.append(".png");
-	image->updateItem(s);
-}
-
-void PreviewView::wheelEvent(QWheelEvent *event)
-{
-	int numDegrees = event->delta() / 8;//¹ö¶¯µÄ½Ç¶È£¬*8¾ÍÊÇÊó±ê¹ö¶¯µÄ¾àÀë
-	int numSteps = numDegrees / 15;//¹ö¶¯µÄ²½Êı£¬*15¾ÍÊÇÊó±ê¹ö¶¯µÄ½Ç¶È
-	_scale = _scale + numSteps*0.1;
-	if (_scale > 3)
-		_scale = 3;
-	if (_scale < 0.1)
-		_scale = 0.1;
-	image->setScale(_scale);
-	update();
-}
-
-void PreviewView::mouseMoveEvent(QMouseEvent *event)
-{
-	image->moveBy(event->x() - x, event->y() - y);
-	x = event->x();
-	y = event->y();
-	update();
-}
-
-void PreviewView::mousePressEvent(QMouseEvent *event)
-{
-	x = event->x();
-	y = event->y();
-}
-
-SetupDialog::SetupDialog(MainWindow* _mainwindow)
-	:mainwindow(_mainwindow)
-{
-	initLayout();
-	readConfig();
-	resize(minimumSize());
-	setWindowFlags(windowFlags()&~Qt::WindowCloseButtonHint);
-	setWindowTitle(QStringLiteral("ÉèÖÃ"));
-	setWindowIcon(QIcon(":/icon/images/SM.png"));
-}
-
-SetupDialog::~SetupDialog()
-{
-	delete normIlluSpin;               
-	delete normIlluLabel;
-	delete norm_inttersity_spin;       
-	delete norm_inttersity_label;
-	delete overIlluSpin;               
-	delete overIlluLabel;
-	delete over_inttersity_spin;       
-	delete over_inttersity_label;
-	delete overLayerSpin;              
-	delete overLayerLabel;
-
-	delete illuLayout;
-	delete illuWidget;
-
-	delete top_height_spin;		
-	delete top_height_label;
-	delete top_radius_spin;      
-	delete top_radius_label;
-	delete support_radius_spin;  
-	delete support_radius_label;
-	delete bottom_radius_spin;		
-	delete bottom_radius_label;
-	delete support_space_spin;         
-	delete support_space_label;
-	delete support_angle_spin;         
-	delete support_angle_label;
-	delete leaf_num_spin;				
-	delete leaf_num_label;
-	delete model_lift_spin;		
-	delete model_lift_label;
-
-	delete supportLayout;
-	delete supportWidget;
-	
-	delete hollow_out_box;            
-	delete hollow_out_label;
-	delete fill_pattern_combo;			
-	delete fillPatternLabel;
-	delete wall_thickness_spin;  
-	delete wall_thickness_label;
-	delete density_spin;					
-	delete density_label;
-	
-	delete hollowOutLayout;
-	delete hollowOutWidget;
-	
-	delete thicknessCombo;            
-	delete thicknessLabel;
-	delete raftSpin;                   
-	delete raftLabel;
-	delete arrange_space_spin;		
-	delete arrangeSpaceLabel;
-	delete threadSpin;					
-	delete threadLabel;
-
-	delete otherLayourt;
-	delete otherWidget;
-
-	delete setupTab;
-
-	delete defultBtn;
-	delete cancalBtn;
-	delete okBtn;
-	delete mainLayout;
-}
-
-void SetupDialog::initLayout()
-{
-	//¹âÕÕÉèÖÃ
-	normIlluSpin = new QSpinBox();
-	normIlluSpin->setRange(5, 10);
-	normIlluSpin->setSuffix("s");
-	normIlluLabel = new QLabel(QStringLiteral("Õı³£ÆØ¹âÊ±¼ä"));
-
-	norm_inttersity_spin = new QSpinBox();
-	norm_inttersity_spin->setRange(50, 100);
-	norm_inttersity_spin->setSuffix("%");
-	norm_inttersity_label = new QLabel(QStringLiteral("Õı³£ÆØ¹âÇ¿¶È"));
-
-	overIlluSpin = new QSpinBox();
-	overIlluSpin->setRange(5, 10);
-	overIlluSpin->setSuffix("s");
-	overIlluLabel = new QLabel(QStringLiteral("³¤ÆØ¹âÊ±¼ä"));
-	overIlluLabel->setToolTip(QStringLiteral("Ç°¼¸²ãĞèÒª³¤ÆØ¹âµÄÊ±¼ä"));
-
-	over_inttersity_spin = new QSpinBox();
-	over_inttersity_spin->setRange(50, 100);
-	over_inttersity_spin->setSuffix("%");
-	over_inttersity_label = new QLabel(QStringLiteral("³¤ÆØ¹âÇ¿¶È"));
-	over_inttersity_label->setToolTip(QStringLiteral("Ç°¼¸²ãĞèÒª³¤ÆØ¹âµÄ¹âÕÕÇ¿¶È"));
-
-	overLayerSpin = new QSpinBox(); 
-	overLayerSpin->setRange(0, 10);
-	overLayerSpin->setSuffix(QStringLiteral("²ã"));
-	overLayerLabel = new QLabel(QStringLiteral("³¤ÆØ¹â²ãÊı"));
-	overLayerLabel->setToolTip(QStringLiteral("Ç°¼¸²ãĞèÒª³¤ÆØ¹âµÄ²ãÊı"));
-
-	illuLayout = new QGridLayout();
-	illuLayout->setMargin(10);
-	illuLayout->setSpacing(10);
-	illuLayout->addWidget(normIlluLabel, 0, 0);
-	illuLayout->addWidget(normIlluSpin, 0, 1);
-	illuLayout->addWidget(norm_inttersity_label, 1, 0);
-	illuLayout->addWidget(norm_inttersity_spin, 1, 1);
-	illuLayout->addWidget(overIlluLabel, 2, 0);
-	illuLayout->addWidget(overIlluSpin, 2, 1);
-	illuLayout->addWidget(over_inttersity_label, 3, 0);
-	illuLayout->addWidget(over_inttersity_spin, 3, 1);
-	illuLayout->addWidget(overLayerLabel, 4, 0);
-	illuLayout->addWidget(overLayerSpin, 4, 1);
-	illuWidget = new QWidget(this);
-	illuWidget->setLayout(illuLayout);
-
-	//Ö§³ÅÉèÖÃ
-	top_height_spin = new QDoubleSpinBox();
-	top_height_spin->setRange(1, 5);
-	top_height_spin->setSingleStep(1);
-	top_height_spin->setSuffix("mm");
-	top_height_label = new QLabel(QStringLiteral("¶¥¶Ë¸ß¶È"));
-
-	top_radius_spin = new QDoubleSpinBox();
-	top_radius_spin->setRange(0.5, 2);
-	top_radius_spin->setSingleStep(0.1);
-	top_radius_spin->setSuffix("mm");
-	top_radius_label = new QLabel(QStringLiteral("¶¥¶ËÖ±¾¶"));
-	top_radius_label->setToolTip(QStringLiteral("¿ØÖÆÖ§³Å¶¥¶ËÓëÄ£ĞÍ½Ó´¥Ãæ»ı´óĞ¡"));
-
-	support_radius_spin = new QDoubleSpinBox();
-	support_radius_spin->setRange(0.5, 3);
-	support_radius_spin->setSingleStep(0.1);
-	support_radius_spin->setSuffix("mm");
-	support_radius_label = new QLabel(QStringLiteral("Ö§³ÅÖ±¾¶"));
-	support_radius_label->setToolTip(QStringLiteral("Ö§³ÅÖùÖ÷¸Ë²¿·ÖµÄ´ÖÏ¸³Ì¶È"));
-
-	bottom_radius_spin = new QDoubleSpinBox();
-	bottom_radius_spin->setRange(0.5, 4);
-	bottom_radius_spin->setSingleStep(0.1);
-	bottom_radius_spin->setSuffix("mm");
-	bottom_radius_label = new QLabel(QStringLiteral("µ×¶ËÖ±¾¶"));
-	bottom_radius_label->setToolTip(QStringLiteral("Ò»¶ËÔÚµ×°åÉÏµÄÖ§³ÅÖùµ×¶ËµÄ´ÖÏ¸³Ì¶È"));
-
-	support_space_spin = new QSpinBox();
-	support_space_spin->setRange(2, 20);
-	support_space_spin->setSuffix("mm");
-	support_space_label = new QLabel(QStringLiteral("Ö§³Å¼ä¾à"));
-	support_space_label->setToolTip(QStringLiteral("Ö§³ÅÌØÕ÷ÃæµÄÖ§³ÅÖùµÄ¼ä¾à"));
-
-	support_angle_spin = new QSpinBox();
-	support_angle_spin->setRange(0, 90);
-	support_angle_spin->setSingleStep(5);
-	support_angle_spin->setSuffix(QStringLiteral("¡ã"));
-	support_angle_label = new QLabel(QStringLiteral("Ö§³Å½Ç¶È"));
-	support_angle_label->setToolTip(QStringLiteral("Èı½ÇÃæÆ¬ÓëÆ½Ì¨µÄ¼Ğ½ÇµÍÓÚÉè¶¨Ö§³Å½Ç¶ÈµÄÈı½ÇÃæÆ¬»á±»Ö§³Å"));
-
-	leaf_num_spin = new QSpinBox();
-	leaf_num_spin->setRange(1, 100);
-	leaf_num_spin->setSingleStep(1);
-	leaf_num_spin->setSuffix(QStringLiteral("¸ö"));
-	leaf_num_label = new QLabel(QStringLiteral("Ê÷Ö¦ÊıÁ¿"));
-	leaf_num_label->setToolTip(QStringLiteral("Ê÷×´Ö§³ÅÖĞÒ»¿ÅÊ÷Ê÷Ö¦µÄ×î´óÊıÁ¿"));
-
-	model_lift_spin = new QDoubleSpinBox();
-	model_lift_spin->setRange(0, 10);
-	model_lift_spin->setSingleStep(1);
-	model_lift_spin->setSuffix(tr("mm"));
-	model_lift_label = new QLabel(QStringLiteral("Ä£ĞÍÌáÉı"));
-	model_lift_label->setToolTip(QStringLiteral("×Ô¶¯Ö§³ÅÊ±Ä£ĞÍÌáÉı¸ß¶È"));
-
-	supportLayout = new QGridLayout();
-	supportLayout->setMargin(10);
-	supportLayout->setSpacing(10);
-	supportLayout->addWidget(top_height_label, 0, 0);
-	supportLayout->addWidget(top_height_spin, 0, 1);
-	supportLayout->addWidget(top_radius_label, 1, 0);
-	supportLayout->addWidget(top_radius_spin, 1, 1);
-	supportLayout->addWidget(support_radius_label, 2, 0);
-	supportLayout->addWidget(support_radius_spin, 2, 1);
-	supportLayout->addWidget(bottom_radius_label, 3, 0);
-	supportLayout->addWidget(bottom_radius_spin, 3, 1);
-	supportLayout->addWidget(support_space_label, 4, 0);
-	supportLayout->addWidget(support_space_spin, 4, 1);
-	supportLayout->addWidget(support_angle_label, 5, 0);
-	supportLayout->addWidget(support_angle_spin, 5, 1);
-	supportLayout->addWidget(leaf_num_label, 6, 0);
-	supportLayout->addWidget(leaf_num_spin, 6, 1);
-	supportLayout->addWidget(model_lift_label, 7, 0);
-	supportLayout->addWidget(model_lift_spin, 7, 1);
-	supportWidget = new QWidget(this);
-	supportWidget->setLayout(supportLayout);
-
-	//³é¿ÕÉèÖÃ
-	hollow_out_box = new QCheckBox();
-	hollow_out_label = new QLabel(QStringLiteral("³é        ¿Õ"));
-	hollow_out_label->setToolTip(QStringLiteral("Ìå»ı½Ï´óµÄÄ£ĞÍÄÚ²¿ÊÇ·ñĞèÒª³é¿Õ"));
-
-	fill_pattern_combo = new QComboBox();
-	fill_pattern_combo->insertItem(0, QStringLiteral("·äÎÑÌî³ä"));
-	fill_pattern_combo->insertItem(1, QStringLiteral("3DÖ§³ÅÌî³ä"));
-	fillPatternLabel = new QLabel(QStringLiteral("Ìî³äÀàĞÍ"));
-
-	wall_thickness_spin = new QDoubleSpinBox();
-	wall_thickness_spin->setRange(1, 5);
-	wall_thickness_spin->setSuffix("mm");
-	wall_thickness_label = new QLabel(QStringLiteral("±Ú        ºñ"));
-	wall_thickness_label->setToolTip(QStringLiteral("³é¿ÕÄ£ĞÍµÄ±Úºñ"));
-
-	density_spin = new QSpinBox();
-	density_spin->setRange(0, 100);
-	density_spin->setSingleStep(5);
-	density_spin->setSuffix("%");
-	density_label = new QLabel(QStringLiteral("Ìî³äÃÜ¶È"));
-
-	hollowOutLayout = new QGridLayout();
-	hollowOutLayout->setMargin(10);
-	hollowOutLayout->setSpacing(10);
-	hollowOutLayout->addWidget(hollow_out_label, 0, 0);
-	hollowOutLayout->addWidget(hollow_out_box, 0, 1);
-	hollowOutLayout->addWidget(fillPatternLabel, 1, 0);
-	hollowOutLayout->addWidget(fill_pattern_combo, 1, 1);
-	hollowOutLayout->addWidget(wall_thickness_label, 2, 0);
-	hollowOutLayout->addWidget(wall_thickness_spin, 2, 1);
-	hollowOutLayout->addWidget(density_label, 3, 0);
-	hollowOutLayout->addWidget(density_spin, 3, 1);
-	hollowOutWidget = new QWidget(this);
-	hollowOutWidget->setLayout(hollowOutLayout);
-
-	//ÆäËûÉèÖÃ
-	thicknessCombo = new QComboBox();
-	thicknessCombo->insertItem(0, "0.1mm");
-	thicknessCombo->insertItem(1, "0.05mm");
-	thicknessCombo->insertItem(2, "0.025mm");
-	thicknessLabel = new QLabel(QStringLiteral("²ã    ºñ"));
-	thicknessLabel->setToolTip(QStringLiteral("Ä£ĞÍÇĞÆ¬µÄ²ãºñ"));
-
-	raftSpin = new QSpinBox();
-	raftSpin->setRange(0, 10);
-	raftSpin->setSuffix(QStringLiteral("²ã"));
-	raftLabel = new QLabel(QStringLiteral("µ×·¤²ãÊı"));
-	raftLabel->setToolTip(QStringLiteral("Ä£ĞÍµ×²¿µÄµ×°å²ãÊı(µ×°å¸ß¶ÈĞè³ËÒÔ²ãºñÖµ)"));
-
-	raftOffsetSpin = new QSpinBox();
-	raftOffsetSpin->setRange(0, 100);
-	raftOffsetSpin->setSuffix("mm");
-	raftOffsetLabel = new QLabel(QStringLiteral("µ×°å²¹³¥"));
-
-	arrange_space_spin = new QDoubleSpinBox();
-	arrange_space_spin->setRange(0, 10);
-	arrange_space_spin->setSuffix("mm");
-	arrangeSpaceLabel = new QLabel(QStringLiteral("×Ô¶¯ÅÅÁĞ¼ä¾à"));
-
-	SYSTEM_INFO systemInfo;
-	GetSystemInfo(&systemInfo);
-
-	threadSpin = new QSpinBox();
-	threadSpin->setRange(1, systemInfo.dwNumberOfProcessors);//»ñÈ¡´¦ÀíÆ÷Ïß³ÌÊı
-	threadLabel = new QLabel(QStringLiteral("Ïß³ÌÊı"));
-	threadLabel->setToolTip(QStringLiteral("Ö´ĞĞ¶àÏß³ÌÃüÁîÊ±ËùÓÃµ½µÄÏß³ÌÊı£¬×î´óÏß³ÌÊıÎªµçÄÔ´¦ÀíÆ÷Ïß³ÌÊı¡£"));
-
-	otherLayourt = new QGridLayout();
-	otherLayourt->setMargin(10);
-	otherLayourt->setSpacing(10);
-	otherLayourt->addWidget(thicknessLabel, 0, 0);
-	otherLayourt->addWidget(thicknessCombo, 0, 1);
-	otherLayourt->addWidget(raftLabel,1, 0);
-	otherLayourt->addWidget(raftSpin, 1, 1);
-	otherLayourt->addWidget(raftOffsetLabel, 2, 0);
-	otherLayourt->addWidget(raftOffsetSpin, 2, 1);
-	otherLayourt->addWidget(arrangeSpaceLabel, 3, 0);
-	otherLayourt->addWidget(arrange_space_spin, 3, 1);
-	otherLayourt->addWidget(threadLabel, 4, 0);
-	otherLayourt->addWidget(threadSpin, 4, 1);
-	otherWidget = new QWidget(this);
-	otherWidget->setLayout(otherLayourt);
-
-	setupTab = new QTabWidget();
-	setupTab->addTab(supportWidget, QStringLiteral("Ö§³ÅÉèÖÃ"));
-	setupTab->addTab(hollowOutWidget, QStringLiteral("³é¿ÕÉèÖÃ"));
-	setupTab->addTab(illuWidget, QStringLiteral("¹âÕÕÉèÖÃ"));
-	setupTab->addTab(otherWidget, QStringLiteral("ÆäËûÉèÖÃ"));
-
-	defultBtn = new QPushButton(QStringLiteral("Ä¬ÈÏÉèÖÃ"));
-	connect(defultBtn, SIGNAL(clicked()), this, SLOT(recoverDefult()));
-
-	cancalBtn = new QPushButton(QStringLiteral("È¡Ïû"));
-	connect(cancalBtn, SIGNAL(clicked()), this, SLOT(BtnChange()));
-
-	okBtn = new QPushButton(QStringLiteral("È·ÈÏ"));
-	connect(okBtn, SIGNAL(clicked()), this, SLOT(writeConfig()));
-	connect(okBtn, SIGNAL(clicked()), this, SLOT(BtnChange()));
-
-	mainLayout = new QGridLayout(this);
-	mainLayout->addWidget(setupTab, 0, 0, 6, 10);
-	mainLayout->addWidget(defultBtn, 7, 0);
-	mainLayout->addWidget(cancalBtn, 7, 8);
-	mainLayout->addWidget(okBtn, 7, 9);
-	mainLayout->setMargin(10);
-	mainLayout->setSpacing(10);
-
-	this->setLayout(mainLayout);
-}
-
-void SetupDialog::writeConfig()
-{
-	QString file = getFileLocation();
-	file.append("/config.ini");
-	QSettings* writeini = new QSettings(file, QSettings::IniFormat);
-	writeini->clear();
-	writeini->setValue("/illu_config/normIllu", normIlluSpin->value());
-	writeini->setValue("/illu_config/normInttersity", norm_inttersity_spin->value());
-	writeini->setValue("/illu_config/overIllu", overIlluSpin->value());
-	writeini->setValue("/illu_config/overInttersity", over_inttersity_spin->value());
-	writeini->setValue("/illu_config/overLayer", overLayerSpin->value());
-
-	writeini->setValue("/support_config/topHeight", top_height_spin->value());
-	writeini->setValue("/support_config/topRadius", top_radius_spin->value());
-	writeini->setValue("/support_config/supportRadius", support_radius_spin->value());
-	writeini->setValue("/support_config/bottomRadius", bottom_radius_spin->value());
-	writeini->setValue("/support_config/supportSpace", support_space_spin->value());
-	writeini->setValue("/support_config/supportAngle", support_angle_spin->value());
-	writeini->setValue("/support_config/leafNum", leaf_num_spin->value());
-	writeini->setValue("/support_config/modelLift", model_lift_spin->value());
-
-	writeini->setValue("/hollow_out_config/hollowOutBox", int(hollow_out_box->isChecked()));
-	writeini->setValue("/hollow_out_config/fillPattern", fill_pattern_combo->currentIndex());
-	writeini->setValue("/hollow_out_config/wallThickness", wall_thickness_spin->value());
-	writeini->setValue("/hollow_out_config/fillDensity", density_spin->value());
-
-	writeini->setValue("/other/thickness", thicknessCombo->currentIndex());
-	writeini->setValue("/other/raft", raftSpin->value());
-	writeini->setValue("/other/raftOffset", raftOffsetSpin->value());
-	writeini->setValue("/other/arrangeSpace", arrange_space_spin->value());
-	writeini->setValue("/other/thread", threadSpin->value());
-
-	delete writeini;
-
-	mainwindow->DlpPrintLoadSetup();
-}
-
-void SetupDialog::recoverDefult()
-{
-	setDefultValue();
-	writeConfig();
-}
-
-void SetupDialog::BtnChange()
-{
-	this->close();
-	mainwindow->showSetupDialog();
-}
-
-void SetupDialog::setDefultValue()
-{
-	normIlluSpin->setValue(6);
-	norm_inttersity_spin->setValue(80);
-	overIlluSpin->setValue(10);
-	over_inttersity_spin->setValue(80);
-	overLayerSpin->setValue(5);
-
-	top_height_spin->setValue(3);
-	top_radius_spin->setValue(1);
-	support_radius_spin->setValue(1.5);
-	bottom_radius_spin->setValue(2);
-	support_space_spin->setValue(10);
-	support_angle_spin->setValue(45);
-	leaf_num_spin->setValue(5);
-	model_lift_spin->setValue(4);
-
-	hollow_out_box->setChecked(false);
-	fill_pattern_combo->setCurrentIndex(0);
-	wall_thickness_spin->setValue(3);
-	density_spin->setValue(20);
-
-	thicknessCombo->setCurrentIndex(0);
-	raftSpin->setValue(10);
-	raftOffsetSpin->setValue(5);
-	arrange_space_spin->setValue(5);
-	threadSpin->setValue(threadSpin->maximum());
-}
-
-void SetupDialog::readConfig()
-{
-	QString file = getFileLocation();
-	file.append("/config.ini");
-	QFile dir(file);
-	if (dir.exists()) {
-		QSettings* readini = new QSettings(file, QSettings::IniFormat);
-		//¶ÁÈ¡´òÓ¡ÉèÖÃ
-		QString normIllu = readini->value("/illu_config/normIllu").toString();
-		normIlluSpin->setValue(normIllu.toInt());
-
-		QString normInttersity = readini->value("/illu_config/normInttersity").toString();
-		norm_inttersity_spin->setValue(normInttersity.toInt());
-
-		QString overIllu = readini->value("/illu_config/overIllu").toString();
-		overIlluSpin->setValue(overIllu.toInt());
-
-		QString overInttersity = readini->value("/illu_config/overInttersity").toString();
-		over_inttersity_spin->setValue(overInttersity.toInt());
-
-		QString overLayer = readini->value("/illu_config/overLayer").toString();
-		overLayerSpin->setValue(overLayer.toInt());
-
-
-		QString topHeight = readini->value("/support_config/topHeight").toString();
-		top_height_spin->setValue(topHeight.toDouble());
-
-		QString topRadius = readini->value("/support_config/topRadius").toString();
-		top_radius_spin->setValue(topRadius.toDouble());
-
-		QString supportRadius = readini->value("/support_config/supportRadius").toString();
-		support_radius_spin->setValue(supportRadius.toDouble());
-
-		QString bottomRadius = readini->value("/support_config/bottomRadius").toString();
-		bottom_radius_spin->setValue(bottomRadius.toDouble());
-
-		QString supportSpace = readini->value("/support_config/supportSpace").toString();
-		support_space_spin->setValue(supportSpace.toInt());
-
-		QString supportAngle = readini->value("/support_config/supportAngle").toString();
-		support_angle_spin->setValue(supportAngle.toInt());
-
-		QString leafNum = readini->value("/support_config/leafNum").toString();
-		leaf_num_spin->setValue(leafNum.toInt());
-
-		QString modelLift = readini->value("/support_config/modelLift").toString();
-		model_lift_spin->setValue(modelLift.toDouble());
-
-		
-		QString hollowOutBox = readini->value("/hollow_out_config/hollowOutBox").toString();
-		hollow_out_box->setChecked(hollowOutBox.toInt());
-
-		QString fillPattern = readini->value("/hollow_out_config/fillPattern").toString();
-		fill_pattern_combo->setCurrentIndex(fillPattern.toInt());
-
-		QString wallThickness = readini->value("/hollow_out_config/wallThickness").toString();
-		wall_thickness_spin->setValue(wallThickness.toDouble());
-
-		QString Density = readini->value("/hollow_out_config/fillDensity").toString();
-		density_spin->setValue(Density.toDouble());
-
-
-		QString thickness = readini->value("/other/thickness").toString();
-		thicknessCombo->setCurrentIndex(thickness.toInt());
-
-		QString raft = readini->value("/other/raft").toString();
-		raftSpin->setValue(raft.toInt());
-
-		QString raftOffset = readini->value("/other/raftOffset").toString();
-		raftOffsetSpin->setValue(raftOffset.toInt());
-
-		QString arrangeSpace = readini->value("/other/arrangeSpace").toString();
-		arrange_space_spin->setValue(arrangeSpace.toDouble());
-
-		QString thread = readini->value("/other/thread").toString();
-		threadSpin->setValue(thread.toInt());
-
-		delete readini;
-	}
-	else {
-		setDefultValue();
-	}
-}
+extern Setting e_setting;
 
 AboutDialog::AboutDialog()
 {
@@ -714,73 +26,73 @@ AboutDialog::AboutDialog()
 	nameLabel = new QLabel("S-Maker_DLP1.6.7  64bit");
 	nameLabel->setFont(font);
 
-	QString str(QStringLiteral("ËÙÃÀ¿Æ¼¼°æÈ¨ËùÓĞ"));
+	QString str(QStringLiteral("é€Ÿç¾ç§‘æŠ€ç‰ˆæƒæ‰€æœ‰"));
 	str.append("\n@2017-2018");
 	copyrightLabel = new QLabel(str);
 
-	versionLabel = new QLabel(QStringLiteral("°æ±¾¸üĞÂ:"));
+	versionLabel = new QLabel(QStringLiteral("ç‰ˆæœ¬æ›´æ–°:"));
 
 	textEdit = new QPlainTextEdit();
 	textEdit->setReadOnly(true);
 	textEdit->setPlainText(QStringLiteral(
-		"°æ±¾--1.6.7\n"
-		"1.Ôö¼Ó»úĞÍÑ¡Ôñ¹¦ÄÜ¡£\n"
-		"2.Ôö¼ÓDental_DLP»úĞÍ¡£\n"
-		"°æ±¾--1.6.6\n"
-		"1.Ìá¸ßÊÖ¶¯Ö§³ÅĞ§ÂÊ¡£\n"
-		"2.ÍÏ¶¯¹¦ÄÜµÄÓÅ»¯¡£\n"
-		"3.Ôö¼ÓobjÎÄ¼ş¸ñÊ½¡£\n"
-		"4.¸üĞÂÍ¼±ê¡£\n"
-		"°æ±¾--1.6.5\n"
-		"1.ÄÚ´æÓÅ»¯¡£\n"
-		"2.É¾³ıÖ§³Å¸ÄÎª×ó¼üµ¥»÷¡£\n"
-		"3.Ìí¼Óµ×°å²¹³¥²ÎÊı¡£\n"
-		"4.Õë¶ÔĞüµõÃæ°´ĞÎ×´¾ùÔÈÖ§³Å¡£\n"
-		"5.ĞŞ¸´¸´ÔÓÄ£ĞÍÖ§³ÅÈİÒ×´©¹ıµÄbug¡£\n"
-		"6.Ö§³Åµ×¶ËÓëÄ£ĞÍ½Ó´¥³É½Ç¶È¡£\n"
-		"7.ÆäËûĞŞ¸Ä¡£\n"
-		"°æ±¾--1.6.4\n"
-		"1.ÓÅ»¯½ø¶ÈÌõÏÔÊ¾¡£\n"
-		"2.Ôö¼ÓÄ£ĞÍÍÏ×§¹¦ÄÜ¡£\n"
-		"3.ÓÅ»¯×Ô¶¯Ö§³Å¡£\n"
-		"4.Ôö¼Ó·äÎÑÌî³ä¡£\n"
-		"5.ÆäËûĞŞ¸Ä¡£\n"
-		"°æ±¾--1.6.3\n"
-		"1.Ìí¼Ó¡°³·ÏúÖØ×ö¡±¹¦ÄÜ¡£\n"
-		"2.Ö§³ÅÍ·ÓëÄ£ĞÍ³É½Ç¶È¡£\n"
-		"3.Ä£ĞÍ×ª»»²Ù×÷ÊµÊ±ÏÔÊ¾¡£\n"
-		"4.Ôö¼ÓÍ¸ÊÓÍ¶Ó°ÓëÕı½»Í¶Ó°¡£\n"
-		"5.ÅÅ³ıÖ§³ÅÖ±½Ó´©¹ıÄ£ĞÍµÄbug¡£\n"
-		"6.Ö§³ÅÊ÷Ö¦²¿·Ö¼ÓÇ¿¡£\n"
-		"7.ÆäËûĞŞ¸Ä¡£\n"
-		"°æ±¾--1.6.2\n"
-		"1.Ê÷×´Ö§³Å¡£\n"
-		"2.¿Éµ¥¶ÀÌí¼ÓÖ§³Å¡£\n"
-		"3.¸Ä±äÖ§³Å±à¼­µÄ·½Ê½¡£\n"
-		"°æ±¾--1.6.1\n"
-		"1.Ìí¼Ó×Ô¶¯ÅÅÁĞ¹¦ÄÜ¡£\n"
-		"2.Ìí¼ÓÄ£ĞÍ¸´ÖÆ¹¦ÄÜ¡£\n"
-		"3.Ìí¼Ó×ø±êÖáĞÅÏ¢¡£\n"
-		"4.ĞŞ¸´Ö§³ÅäÖÈ¾Ğ§¹û²»ÕæÊµµÄbug¡£\n"
-		"5.ÓÅ»¯ÊÖ¶¯Ìí¼ÓÖ§³Å¡£\n"
-		"6.ÅÅ³ıÌí¼ÓÖ§³ÅÊ±ĞüµõÃæ¶ÔĞüµõµãµÄÓ°Ïì¡£\n"
-		"7.ÓÅ»¯ÇĞÆ¬Ê±³öÏÖ¶Ï²ãµÄÓ°Ïì¡£\n"
-		"8.µ÷Õû½çÃæµÄÂß¼­½á¹¹¡£\n"
-		"9.Ìí¼Ó¿ÉÖ±½Ó¶ÔÄ£ĞÍ½øĞĞÊÖ¶¯Ö§³ÅµÄ²Ù×÷¡£\n"
-		"10.ÓÅ»¯Í¼ĞÎäÖÈ¾Ê±ÄÚ´æÏûºÄ¡£\n"
-		"°æ±¾--1.6.0\n"
-		"1.µ÷ÕûÄ£ĞÍÊÓÍ¼äÖÈ¾Ğ§¹û¡£\n"
-		"2.äÖÈ¾ÊµÌåÖ§³Å¡£\n"
-		"3.Ö§³ÖÄ£ĞÍÆ½ÒÆ£¬Ëõ·Å£¬Ğı×ªÈı¸ö·½ÏòµÄ²Ù×÷¡£\n"
-		"4.Ôö¼ÓÖ§³Å±à¼­¹¦ÄÜ£¬ÊµÏÖÊÖ¶¯Ö§³Å£¬É¾³ıÖ§³ÅµÄ²Ù×÷¡£\n"
-		"5.¶àÏß³ÌÉú³ÉÍ¼Æ¬¡£\n"
-		"6.ÇĞÆ¬Éú³ÉµÄÎÄ¼şÎª.smµÄ×Ô¶¨ÒåµÄÎÄ¼ş¡£\n"
-		"7.·á¸»ÉèÖÃÑ¡Ïî¡£\n"
-		"8.Ôö¼Óä¯ÀÀÇĞÆ¬ÎÄ¼şµÄ¹¦ÄÜ¡£\n"
-		"9.ÊÓÍ¼ÄÚµÄÄ£ĞÍÖ§³Å¿ÉÁí´æÎªstlÄ£ĞÍ¡£\n"
-		"10.Ó¦ÓÃ³ÌĞòÖ§³Ö64bit¡£\n"
-		"11.µ÷ÕûÄÚ²¿Ö§³ÅµÄ½á¹¹¡£\n"
-		"12.½çÃæÖØĞÂµ÷Õû¡£"));
+		"ç‰ˆæœ¬--1.6.7\n"
+		"1.å¢åŠ æœºå‹é€‰æ‹©åŠŸèƒ½ã€‚\n"
+		"2.å¢åŠ Dental_DLPæœºå‹ã€‚\n"
+		"ç‰ˆæœ¬--1.6.6\n"
+		"1.æé«˜æ‰‹åŠ¨æ”¯æ’‘æ•ˆç‡ã€‚\n"
+		"2.æ‹–åŠ¨åŠŸèƒ½çš„ä¼˜åŒ–ã€‚\n"
+		"3.å¢åŠ objæ–‡ä»¶æ ¼å¼ã€‚\n"
+		"4.æ›´æ–°å›¾æ ‡ã€‚\n"
+		"ç‰ˆæœ¬--1.6.5\n"
+		"1.å†…å­˜ä¼˜åŒ–ã€‚\n"
+		"2.åˆ é™¤æ”¯æ’‘æ”¹ä¸ºå·¦é”®å•å‡»ã€‚\n"
+		"3.æ·»åŠ åº•æ¿è¡¥å¿å‚æ•°ã€‚\n"
+		"4.é’ˆå¯¹æ‚¬åŠé¢æŒ‰å½¢çŠ¶å‡åŒ€æ”¯æ’‘ã€‚\n"
+		"5.ä¿®å¤å¤æ‚æ¨¡å‹æ”¯æ’‘å®¹æ˜“ç©¿è¿‡çš„bugã€‚\n"
+		"6.æ”¯æ’‘åº•ç«¯ä¸æ¨¡å‹æ¥è§¦æˆè§’åº¦ã€‚\n"
+		"7.å…¶ä»–ä¿®æ”¹ã€‚\n"
+		"ç‰ˆæœ¬--1.6.4\n"
+		"1.ä¼˜åŒ–è¿›åº¦æ¡æ˜¾ç¤ºã€‚\n"
+		"2.å¢åŠ æ¨¡å‹æ‹–æ‹½åŠŸèƒ½ã€‚\n"
+		"3.ä¼˜åŒ–è‡ªåŠ¨æ”¯æ’‘ã€‚\n"
+		"4.å¢åŠ èœ‚çªå¡«å……ã€‚\n"
+		"5.å…¶ä»–ä¿®æ”¹ã€‚\n"
+		"ç‰ˆæœ¬--1.6.3\n"
+		"1.æ·»åŠ â€œæ’¤é”€é‡åšâ€åŠŸèƒ½ã€‚\n"
+		"2.æ”¯æ’‘å¤´ä¸æ¨¡å‹æˆè§’åº¦ã€‚\n"
+		"3.æ¨¡å‹è½¬æ¢æ“ä½œå®æ—¶æ˜¾ç¤ºã€‚\n"
+		"4.å¢åŠ é€è§†æŠ•å½±ä¸æ­£äº¤æŠ•å½±ã€‚\n"
+		"5.æ’é™¤æ”¯æ’‘ç›´æ¥ç©¿è¿‡æ¨¡å‹çš„bugã€‚\n"
+		"6.æ”¯æ’‘æ ‘æéƒ¨åˆ†åŠ å¼ºã€‚\n"
+		"7.å…¶ä»–ä¿®æ”¹ã€‚\n"
+		"ç‰ˆæœ¬--1.6.2\n"
+		"1.æ ‘çŠ¶æ”¯æ’‘ã€‚\n"
+		"2.å¯å•ç‹¬æ·»åŠ æ”¯æ’‘ã€‚\n"
+		"3.æ”¹å˜æ”¯æ’‘ç¼–è¾‘çš„æ–¹å¼ã€‚\n"
+		"ç‰ˆæœ¬--1.6.1\n"
+		"1.æ·»åŠ è‡ªåŠ¨æ’åˆ—åŠŸèƒ½ã€‚\n"
+		"2.æ·»åŠ æ¨¡å‹å¤åˆ¶åŠŸèƒ½ã€‚\n"
+		"3.æ·»åŠ åæ ‡è½´ä¿¡æ¯ã€‚\n"
+		"4.ä¿®å¤æ”¯æ’‘æ¸²æŸ“æ•ˆæœä¸çœŸå®çš„bugã€‚\n"
+		"5.ä¼˜åŒ–æ‰‹åŠ¨æ·»åŠ æ”¯æ’‘ã€‚\n"
+		"6.æ’é™¤æ·»åŠ æ”¯æ’‘æ—¶æ‚¬åŠé¢å¯¹æ‚¬åŠç‚¹çš„å½±å“ã€‚\n"
+		"7.ä¼˜åŒ–åˆ‡ç‰‡æ—¶å‡ºç°æ–­å±‚çš„å½±å“ã€‚\n"
+		"8.è°ƒæ•´ç•Œé¢çš„é€»è¾‘ç»“æ„ã€‚\n"
+		"9.æ·»åŠ å¯ç›´æ¥å¯¹æ¨¡å‹è¿›è¡Œæ‰‹åŠ¨æ”¯æ’‘çš„æ“ä½œã€‚\n"
+		"10.ä¼˜åŒ–å›¾å½¢æ¸²æŸ“æ—¶å†…å­˜æ¶ˆè€—ã€‚\n"
+		"ç‰ˆæœ¬--1.6.0\n"
+		"1.è°ƒæ•´æ¨¡å‹è§†å›¾æ¸²æŸ“æ•ˆæœã€‚\n"
+		"2.æ¸²æŸ“å®ä½“æ”¯æ’‘ã€‚\n"
+		"3.æ”¯æŒæ¨¡å‹å¹³ç§»ï¼Œç¼©æ”¾ï¼Œæ—‹è½¬ä¸‰ä¸ªæ–¹å‘çš„æ“ä½œã€‚\n"
+		"4.å¢åŠ æ”¯æ’‘ç¼–è¾‘åŠŸèƒ½ï¼Œå®ç°æ‰‹åŠ¨æ”¯æ’‘ï¼Œåˆ é™¤æ”¯æ’‘çš„æ“ä½œã€‚\n"
+		"5.å¤šçº¿ç¨‹ç”Ÿæˆå›¾ç‰‡ã€‚\n"
+		"6.åˆ‡ç‰‡ç”Ÿæˆçš„æ–‡ä»¶ä¸º.smçš„è‡ªå®šä¹‰çš„æ–‡ä»¶ã€‚\n"
+		"7.ä¸°å¯Œè®¾ç½®é€‰é¡¹ã€‚\n"
+		"8.å¢åŠ æµè§ˆåˆ‡ç‰‡æ–‡ä»¶çš„åŠŸèƒ½ã€‚\n"
+		"9.è§†å›¾å†…çš„æ¨¡å‹æ”¯æ’‘å¯å¦å­˜ä¸ºstlæ¨¡å‹ã€‚\n"
+		"10.åº”ç”¨ç¨‹åºæ”¯æŒ64bitã€‚\n"
+		"11.è°ƒæ•´å†…éƒ¨æ”¯æ’‘çš„ç»“æ„ã€‚\n"
+		"12.ç•Œé¢é‡æ–°è°ƒæ•´ã€‚"));
 
 	layout = new QGridLayout();
 	layout->addWidget(icoBtn, 0, 0, 2, 2);
@@ -810,17 +122,12 @@ MainWindow::MainWindow(QWidget *parent)
 	initUndo();
 	initAction();
 	initSetupDialog();
-	initCentralWindow();//ÒªÏÈÓÚÖĞÑë½çÃæÉÏbutton³õÊ¼»¯
-	initButton();
-	initOffsetWidget();
-	initRotateWidget();
-	initScaleWidget();
-	initProgress();
-	init_rotate();
+	initCentralWindow();//è¦å…ˆäºä¸­å¤®ç•Œé¢ä¸Šbuttonåˆå§‹åŒ–
+	m_centerTopWidget = std::unique_ptr<CenterTopWidget>(new CenterTopWidget(this));
 
 	setAcceptDrops(true);
 	setWindowTitle("DLPSlicer");
-	setAttribute(Qt::WA_QuitOnClose, true);//ÉèÖÃÖ÷´°¿Ú¹Ø±Õ¼´³ÌĞòÍË³ö
+	setAttribute(Qt::WA_QuitOnClose, true);//è®¾ç½®ä¸»çª—å£å…³é—­å³ç¨‹åºé€€å‡º
 	resize(1200, 700);
 }
 
@@ -831,12 +138,10 @@ MainWindow::~MainWindow()
 
 QString MainWindow::readStlTxt()
 {
-	QString file = getFileLocation();
-	file.append("/modelPath.ini");
-	QFile dir(file);
+	QFile dir(e_setting.ModelFile.c_str());
 	if (dir.exists()) {
-		QSettings* readini = new QSettings(file, QSettings::IniFormat);
-		//¶ÁÈ¡´òÓ¡ÉèÖÃ
+		QSettings* readini = new QSettings(e_setting.ModelFile.c_str(), QSettings::IniFormat);
+		//è¯»å–æ‰“å°è®¾ç½®
 		QString path = readini->value("/modelPath/path").toString();
 		delete readini;
 		return path;
@@ -847,44 +152,21 @@ QString MainWindow::readStlTxt()
 
 void MainWindow::stroyStlTxt(QString stl)
 {
-	QString file = getFileLocation();
-	file.append("/modelPath.ini");
-	QSettings* writeini = new QSettings(file, QSettings::IniFormat);
+	QSettings* writeini = new QSettings(e_setting.ModelFile.c_str(), QSettings::IniFormat);
 	writeini->clear();
 	writeini->setValue("/modelPath/path", stl);
 	delete writeini;
 }
 
-QString MainWindow::get_file_location()
-{
-	QString name = QStandardPaths::writableLocation(QStandardPaths::HomeLocation);
-	name.append("/.S_Maker");
-	QDir* file = new QDir(name);
-	bool ret = file->exists();
-	if (ret) {
-		return name;
-	}
-	else {
-		bool ok = file->mkdir(name);
-		if (!ok)
-			exit(2);
-		return file->dirName();
-	}
-}
-
 void MainWindow::openStl()
 {
-	//-------------½øÈë---------------
-	clickedButtonState(OPENBTN);
-	openButton->setStyleSheet(OffButton);
-	OnOff_open = true;
-	//-----------------------------
+ 	m_centerTopWidget->CenterButtonPush(OPENBTN);
 
 	QString temp, path;
 	path = readStlTxt();
 	int a = path.lastIndexOf("/");
 	QString s = path.left(a);
-	temp = QFileDialog::getOpenFileName(this, QStringLiteral("Ñ¡ÔñĞèÒª´ò¿ªµÄÎÄ¼ş"), s, "*.stl *.sm *.obj");
+	temp = QFileDialog::getOpenFileName(this, QStringLiteral("é€‰æ‹©éœ€è¦æ‰“å¼€çš„æ–‡ä»¶"), s, "*.stl *.sm *.obj");
 
 	int format = -1;
 	if(temp.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0)
@@ -897,17 +179,17 @@ void MainWindow::openStl()
 	if(format>=0){
 		stroyStlTxt(temp);
 
-		showProgress(OPENBTN);
+		m_centerTopWidget->showProgress(OPENBTN);
 		qDebug() << temp;
 		std::string file = temp.toStdString();
-		P(20);
+		m_centerTopWidget->P(20);
 		size_t id = interface1->load_model(file, format);
-		P(60);
+		m_centerTopWidget->P(60);
 		glwidget->save_valume(id);
-		P(80);
+		m_centerTopWidget->P(80);
 		MainUndoStack->push(new AddModelCommand(id, this));
-		P(100);
-		hideProgress();
+		m_centerTopWidget->P(100);
+		m_centerTopWidget->hideProgress();
 		glwidget->updateConfine();
 		glwidget->updateTranslationID();
 	}
@@ -915,15 +197,11 @@ void MainWindow::openStl()
 		showPreviewWidget1(temp);
 	}
 
-	//--------------ÍË³ö------------------
-	openButton->setStyleSheet(OnButton);
-	OnOff_open = false;
-	//-----------------------------------
+	m_centerTopWidget->CenterButtonPush(OPENBTN);
 }
 
 void MainWindow::deleteStl()
 {
-	clickedButtonState(SETUPBTN);
 	if (glwidget->selectID >= 0) {
 		deleteSupport();
 		MainUndoStack->push(new DeleteModelCommand(glwidget->selectID, this));
@@ -951,7 +229,7 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 		event->mimeData()->urls()[0].fileName().right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0)
 		event->acceptProposedAction();
 	else
-		event->ignore();//·ñÔò²»½ÓÊÜÊó±êÊÂ¼ş  
+		event->ignore();//å¦åˆ™ä¸æ¥å—é¼ æ ‡äº‹ä»¶  
 }
 
 void MainWindow::dropEvent(QDropEvent *event)
@@ -960,7 +238,7 @@ void MainWindow::dropEvent(QDropEvent *event)
 	if (urls.isEmpty())
 		return;
 
-	//´ò¿ªstlÎÄ¼ş
+	//æ‰“å¼€stlæ–‡ä»¶
 	QString fileName = urls.first().toLocalFile();
 	int format = -1;
 	if (fileName.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0)
@@ -973,16 +251,16 @@ void MainWindow::dropEvent(QDropEvent *event)
 	if (format >= 0) {
 		stroyStlTxt(fileName);
 
-		showProgress(OPENBTN);
+		m_centerTopWidget->showProgress(OPENBTN);
 		std::string file = fileName.toStdString();
-		P(20);
+		m_centerTopWidget->P(20);
 		size_t id = interface1->load_model(file, format);
-		P(60);
+		m_centerTopWidget->P(60);
 		glwidget->save_valume(id);
-		P(80);
+		m_centerTopWidget->P(80);
 		MainUndoStack->push(new AddModelCommand(id, this));
-		P(100);
-		hideProgress();
+		m_centerTopWidget->P(100);
+		m_centerTopWidget->hideProgress();
 		glwidget->updateConfine();
 
 		glwidget->updateTranslationID();
@@ -997,290 +275,135 @@ void MainWindow::_exit()
 	exit(0);
 }
 
-void MainWindow::initButton()
-{
-	//»úĞÍÑ¡Ôñ²¿·Ö
-	SelectPrinterLabel = new QLabel(QStringLiteral("Ñ¡Ôñ»úĞÍ"),this);
-	SelectPrinterLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
-	SelectPrinterLabel->setFixedSize(90, 20);
-	SelectPrinterLabel->show();
-
-	SelectPrinterCombo = new QComboBox(this);
-	SelectPrinterCombo->insertItem(0, "S288");
-	SelectPrinterCombo->insertItem(1, "S250");
-	SelectPrinterCombo->setFixedSize(100, 20);
-	if (dlprinter->printer == S288)
-		SelectPrinterCombo->setCurrentIndex(0);
-	else if (dlprinter->printer == S250)
-		SelectPrinterCombo->setCurrentIndex(1);
-	SelectPrinterCombo->show();
-	connect(SelectPrinterCombo, SIGNAL(currentIndexChanged(QString)), this, SLOT(dlprinterChange(QString)));
-
-	//left
-	openButton = new QPushButton(QIcon(":/icon/images/load_b.png"), "",this);
-	openButton->setIconSize(QSize(120, 140));
-	openButton->setStyleSheet(OnButton);
-	openButton->setFixedSize(60, 70);
-	openButton->setToolTip(QStringLiteral("´ò¿ª"));
-	openButton->show();
-	OnOff_open = false;
-	connect(openButton, SIGNAL(clicked()), this, SLOT(openStl()));
-
-	offsetButton = new QPushButton(QIcon(":/icon/images/offset_b.PNG"), "", this);
-	offsetButton->setIconSize(QSize(90, 115));
-	offsetButton->setStyleSheet(OnButton);
-	offsetButton->setEnabled(true);
-	offsetButton->setFixedSize(60, 70);
-	offsetButton->setToolTip(QStringLiteral("ÒÆ¶¯"));
-	offsetButton->show();
-	OnOff_offset = false;
-	connect(offsetButton, SIGNAL(clicked()), this, SLOT(showOffsetWidget()));
-
-	scaleButton = new QPushButton(QIcon(":/icon/images/scale_b.png"), "", this);
-	scaleButton->setIconSize(QSize(90, 115));
-	scaleButton->setStyleSheet(OnButton);
-	scaleButton->setEnabled(true);
-	scaleButton->setFixedSize(60, 70);
-	scaleButton->setToolTip(QStringLiteral("Ëõ·Å"));
-	scaleButton->show();
-	OnOff_scale = false;
-	connect(scaleButton, SIGNAL(clicked()), this, SLOT(showScaleWidget()));
-
-	rotateButton = new QPushButton(QIcon(":/icon/images/rotate_b.png"), "", this);
-	rotateButton->setIconSize(QSize(90, 115));
-	rotateButton->setStyleSheet(OnButton);
-	rotateButton->setEnabled(true);
-	rotateButton->setFixedSize(60, 70);
-	rotateButton->setToolTip(QStringLiteral("Ğı×ª"));
-	rotateButton->show();
-	OnOff_rotate = false;
-	connect(rotateButton, SIGNAL(clicked()), this, SLOT(showRotateWidget()));
-
-	//right
-	supportButton = new QPushButton(QIcon(":/icon/images/support_b.png"), "", this);
-	supportButton->setIconSize(QSize(90, 115));
-	supportButton->setStyleSheet(OnButton);
-	supportButton->setFixedSize(60, 70);
-	supportButton->setToolTip(QStringLiteral("Ö§³Å"));
-	supportButton->show();
-	OnOff_support = false;
-	connect(supportButton, SIGNAL(clicked()), this, SLOT(generateSupport()));
-
-	supportEditButton = new QPushButton(QIcon(":/icon/images/supportEdit_b.png"), "", this);
-	supportEditButton->setIconSize(QSize(90, 115));
-	supportEditButton->setStyleSheet(OnButton);
-	supportEditButton->setFixedSize(60, 70);
-	supportEditButton->setToolTip(QStringLiteral("Ö§³Å±à¼­"));
-	supportEditButton->show();
-	OnOff_supportEdit = false;
-	connect(supportEditButton, SIGNAL(clicked()), this, SLOT(SupportEdit()));
-
-	sliceButton = new QPushButton(QIcon(":/icon/images/slice_b.png"), "", this);
-	sliceButton->setIconSize(QSize(90, 115));
-	sliceButton->setStyleSheet(OnButton);
-	sliceButton->setFixedSize(60, 70);
-	sliceButton->setToolTip(QStringLiteral("ÇĞÆ¬"));
-	sliceButton->show();
-	OnOff_slice = false;
-	connect(sliceButton, SIGNAL(clicked()), this, SLOT(slice()));
-
-	setupButton = new QPushButton(QIcon(":/icon/images/setup_b.png"), "", this);
-	setupButton->setIconSize(QSize(90, 115));
-	setupButton->setStyleSheet(OnButton);
-	setupButton->setFixedSize(60, 70);
-	setupButton->setToolTip(QStringLiteral("ÉèÖÃ"));
-	setupButton->show();
-	OnOff_setup = false;
-	connect(setupButton, SIGNAL(clicked()), this, SLOT(showSetupDialog()));
-}
-
-void MainWindow::clickedButtonState(int btn)
-{
-	if (OnOff_offset && btn != OFFSETBTN) {
-		offsetWidget->hide();
-		OnOff_offset = false;
-		offsetButton->setStyleSheet(OnButton);
-	}
-	else if (OnOff_rotate && btn!=ROTATEBTN) {
-		init_rotate();
-		rotateWidget->hide();
-		OnOff_rotate = false;
-		rotateButton->setStyleSheet(OnButton);
-	}
-	else if (OnOff_scale && btn != SCALEBTN) {
-		scaleWidget->hide();
-		OnOff_scale = false;
-		scaleButton->setStyleSheet(OnButton);
-	}
-	else if (OnOff_open && btn != OPENBTN) {
-		OnOff_open = false;
-		openButton->setStyleSheet(OnButton);
-	}
-	else if (OnOff_support && btn != SUPPORTBTN) {
-		OnOff_support = false;
-		supportButton->setStyleSheet(OnButton);
-	}
-	else if (OnOff_supportEdit && btn != SUPPORTEDITBTN) {
-		SupportEdit();
-		OnOff_supportEdit = false;
-		supportEditButton->setStyleSheet(OnButton);
-	}
-	else if (OnOff_setup && btn != SETUPBTN) {
-		OnOff_setup = false;
-		setupButton->setStyleSheet(OnButton);
-	}
-}
-
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
 	QSize size = event->size();
-	int w = size.width();
-	int h = size.height();
-
-	SelectPrinterLabel->move(w / 2 - 110, 30);
-	SelectPrinterCombo->move(w / 2 - 20, 30);
-
-	//left
-	openButton->move(10, h/2 - 240);
-	offsetButton->move(10, h/2 - 160);
-	scaleButton->move(10, h/2 - 80);
-	rotateButton->move(10, h/2);
-
-	//rigft
-	supportButton->move(w - 70, h / 2 - 240);
-	supportEditButton->move(w - 70, h / 2 - 160);
-	sliceButton->move(w - 70, h / 2 - 80);
-	setupButton->move(w - 70, h / 2);
-
-	offsetWidget->move(75, h / 2 - 160-10);
-	rotateWidget->move(75, h / 2 -10);
-	scaleWidget->move(75, h / 2 - 80 - 30);
-	progressWidget->move(w / 2 - 150, h / 2 - 50);
+	m_centerTopWidget->resize(size);
 }
 
 void MainWindow::initAction()
 {
-	//¡°ÎÄ¼ş¡±Ö÷²Ëµ¥
-	QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("ÎÄ¼ş(F)"));
+	//â€œæ–‡ä»¶â€ä¸»èœå•
+	QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("æ–‡ä»¶(F)"));
 
-	QAction* newAct = new QAction(QStringLiteral("ĞÂ½¨ÏîÄ¿"), this);
+	QAction* newAct = new QAction(QStringLiteral("æ–°å»ºé¡¹ç›®"), this);
 	fileMenu->addAction(newAct);
 	connect(newAct, SIGNAL(triggered()), this, SLOT(newJob()));
 
-	QAction* openAct = new QAction(QStringLiteral("´ò¿ªÎÄ¼ş"), this);
+	QAction* openAct = new QAction(QStringLiteral("æ‰“å¼€æ–‡ä»¶"), this);
 	fileMenu->addAction(openAct);
 	connect(openAct, SIGNAL(triggered()), this, SLOT(openStl()));
 
-	QAction* deleteAct = new QAction(QStringLiteral("É¾³ıÄ£ĞÍ"), this);
+	QAction* deleteAct = new QAction(QStringLiteral("åˆ é™¤æ¨¡å‹"), this);
 	fileMenu->addAction(deleteAct);
 	connect(deleteAct, SIGNAL(triggered()), this, SLOT(deleteStl()));
 
 	fileMenu->addSeparator();
 
-	QAction* exitAct = new QAction(QStringLiteral("ÍË³ö"), this);
+	QAction* exitAct = new QAction(QStringLiteral("é€€å‡º"), this);
 	fileMenu->addAction(exitAct);
 	connect(exitAct, SIGNAL(triggered()), this, SLOT(_exit()));
 
-	//¡°±à¼­¡±Ö÷²Ëµ¥
-	QMenu* editMenu = menuBar()->addMenu(QStringLiteral("±à¼­(E)"));
+	//â€œç¼–è¾‘â€ä¸»èœå•
+	QMenu* editMenu = menuBar()->addMenu(QStringLiteral("ç¼–è¾‘(E)"));
 
-	QAction *undoAction = MainUndoGroup->createUndoAction(this, QStringLiteral("³·Ïú"));
+	QAction *undoAction = MainUndoGroup->createUndoAction(this, QStringLiteral("æ’¤é”€"));
 	undoAction->setIcon(QIcon(":/icon/images/undo.png"));
 	undoAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Z));
 
-	QAction *redoAction = MainUndoGroup->createRedoAction(this, QStringLiteral("ÖØ×ö"));
+	QAction *redoAction = MainUndoGroup->createRedoAction(this, QStringLiteral("é‡åš"));
 	redoAction->setIcon(QIcon(":/icon/images/redo.png"));
 	redoAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Y));
 
 	editMenu->addAction(undoAction);
 	editMenu->addAction(redoAction);
 
-	QAction* clearUndoAction = new QAction(QStringLiteral("Çå¿Õ³·ÏúÕ»"));
+	QAction* clearUndoAction = new QAction(QStringLiteral("æ¸…ç©ºæ’¤é”€æ ˆ"));
 	editMenu->addAction(clearUndoAction);
 	connect(clearUndoAction, SIGNAL(triggered()), this, SLOT(clearUndoStack()));
 
 	editMenu->addSeparator();
 
-	QAction* repairAct = new QAction(QStringLiteral("Ä£ĞÍĞŞ¸´"), this);
+	QAction* repairAct = new QAction(QStringLiteral("æ¨¡å‹ä¿®å¤"), this);
 	editMenu->addAction(repairAct);
 	repairAct->setDisabled(true);
 
-	QAction* autoAct = new QAction(QStringLiteral("×Ô¶¯ÅÅÁĞ"), this);
+	QAction* autoAct = new QAction(QStringLiteral("è‡ªåŠ¨æ’åˆ—"), this);
 	editMenu->addAction(autoAct);
 	connect(autoAct, SIGNAL(triggered()), this, SLOT(autoArrange()));
 
-	QAction*saveViewAct = new QAction(QStringLiteral("½ØÍ¼"), this);
+	QAction*saveViewAct = new QAction(QStringLiteral("æˆªå›¾"), this);
 	editMenu->addAction(saveViewAct);
 	connect(saveViewAct, SIGNAL(triggered()), this, SLOT(saveView()));
 
-	QAction* duplicateAct = new QAction(QStringLiteral("¸´ÖÆ"), this);
+	QAction* duplicateAct = new QAction(QStringLiteral("å¤åˆ¶"), this);
 	editMenu->addAction(duplicateAct);
 	connect(duplicateAct, SIGNAL(triggered()), this, SLOT(_duplicate()));
 
-	//¡°Ö§³Å¡±Ö÷²Ëµ¥
-	QMenu* supportMenu = menuBar()->addMenu(QStringLiteral("Ö§³Å(S)"));
+	//â€œæ”¯æ’‘â€ä¸»èœå•
+	QMenu* supportMenu = menuBar()->addMenu(QStringLiteral("æ”¯æ’‘(S)"));
 
-	QAction* supportAct = new QAction(QStringLiteral("Ö§³Å"), this);
+	QAction* supportAct = new QAction(QStringLiteral("æ”¯æ’‘"), this);
 	supportMenu->addAction(supportAct);
 	connect(supportAct, SIGNAL(triggered()), this, SLOT(generateSupport()));
 
-	QAction* deleteSupportAct = new QAction(QStringLiteral("É¾³ıÖ§³Å"));
+	QAction* deleteSupportAct = new QAction(QStringLiteral("åˆ é™¤æ”¯æ’‘"));
 	supportMenu->addAction(deleteSupportAct);
 	connect(deleteSupportAct, SIGNAL(triggered()), this, SLOT(deleteSupport()));
 
-	QAction* supportAllAct = new QAction(QStringLiteral("Ö§³ÅËùÓĞÄ£ĞÍ"));
+	QAction* supportAllAct = new QAction(QStringLiteral("æ”¯æ’‘æ‰€æœ‰æ¨¡å‹"));
 	supportMenu->addAction(supportAllAct);
 	connect(supportAllAct, SIGNAL(triggered()), this, SLOT(generateAllSupport()));
 
-	QAction* deleteAllSupportAct = new QAction(QStringLiteral("É¾³ıËùÓĞÖ§³Å"));
+	QAction* deleteAllSupportAct = new QAction(QStringLiteral("åˆ é™¤æ‰€æœ‰æ”¯æ’‘"));
 	supportMenu->addAction(deleteAllSupportAct);
 	connect(deleteAllSupportAct, SIGNAL(triggered()), this, SLOT(deleteAllSupport()));
 
-    //¡°ÊÓÍ¼¡±Ö÷²Ëµ¥
-	QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("ÊÓÍ¼(V)"));
+    //â€œè§†å›¾â€ä¸»èœå•
+	QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("è§†å›¾(V)"));
 
-	QAction* defaultAct = new QAction(QIcon(":/icon/images/iso.png"), QStringLiteral("Ä¬ÈÏÊÓÍ¼"), this);
+	QAction* defaultAct = new QAction(QIcon(":/icon/images/iso.png"), QStringLiteral("é»˜è®¤è§†å›¾"), this);
 	viewMenu->addAction(defaultAct);
 	connect(defaultAct, SIGNAL(triggered()), this, SLOT(defaultView()));
 
-	QAction* overlookAct = new QAction(QIcon(":/icon/images/top.png"),QStringLiteral("¸©ÊÓÍ¼"), this);
+	QAction* overlookAct = new QAction(QIcon(":/icon/images/top.png"),QStringLiteral("ä¿¯è§†å›¾"), this);
 	viewMenu->addAction(overlookAct);
 	connect(overlookAct, SIGNAL(triggered()), this, SLOT(overlookView()));
 
-	QAction* leftAct = new QAction(QIcon(":/icon/images/left.png"), QStringLiteral("×óÊÓÍ¼"), this);
+	QAction* leftAct = new QAction(QIcon(":/icon/images/left.png"), QStringLiteral("å·¦è§†å›¾"), this);
 	viewMenu->addAction(leftAct);
 	connect(leftAct, SIGNAL(triggered()), this, SLOT(leftView()));
 
-	QAction* rightAct = new QAction(QIcon(":/icon/images/right.png"), QStringLiteral("ÓÒÊÓÍ¼"), this);
+	QAction* rightAct = new QAction(QIcon(":/icon/images/right.png"), QStringLiteral("å³è§†å›¾"), this);
 	viewMenu->addAction(rightAct);
 	connect(rightAct, SIGNAL(triggered()), this, SLOT(rightView()));
 
-	QAction* frontAct = new QAction(QIcon(":/icon/images/front.png"), QStringLiteral("Ç°ÊÓÍ¼"), this);
+	QAction* frontAct = new QAction(QIcon(":/icon/images/front.png"), QStringLiteral("å‰è§†å›¾"), this);
 	viewMenu->addAction(frontAct);
 	connect(frontAct, SIGNAL(triggered()), this, SLOT(frontView()));
 
-	QAction* behindAct = new QAction(QIcon(":/icon/images/back.png"), QStringLiteral("ºóÊÓÍ¼"), this);
+	QAction* behindAct = new QAction(QIcon(":/icon/images/back.png"), QStringLiteral("åè§†å›¾"), this);
 	viewMenu->addAction(behindAct);
 	connect(behindAct, SIGNAL(triggered()), this, SLOT(behindView()));
 
 	viewMenu->addSeparator();
 
-	QAction* persperctiveAct = new QAction(QStringLiteral("Í¸ÊÓÍ¶Ó°"), this);
+	QAction* persperctiveAct = new QAction(QStringLiteral("é€è§†æŠ•å½±"), this);
 	viewMenu->addAction(persperctiveAct);
 	connect(persperctiveAct, SIGNAL(triggered()), this, SLOT(setPersperctive()));
 
-	QAction* orthogonalityAct = new QAction(QStringLiteral("Õı½»Í¶Ó°"), this);
+	QAction* orthogonalityAct = new QAction(QStringLiteral("æ­£äº¤æŠ•å½±"), this);
 	viewMenu->addAction(orthogonalityAct);
 	connect(orthogonalityAct, SIGNAL(triggered()), this, SLOT(setOrthogonality()));
 
-	//¡°°ïÖú¡±Ö÷²Ëµ¥
-	QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("°ïÖú(H)"));
+	//â€œå¸®åŠ©â€ä¸»èœå•
+	QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("å¸®åŠ©(H)"));
 
-	QAction* updateAct = new QAction(QStringLiteral("¼ì²é¸üĞÂ"), this);
+	QAction* updateAct = new QAction(QStringLiteral("æ£€æŸ¥æ›´æ–°"), this);
 	helpMenu->addAction(updateAct);
 	connect(updateAct, SIGNAL(triggered()), this, SLOT(checkUpdate()));
 
-	QAction* messageAct = new QAction(QStringLiteral("°æ±¾ĞÅÏ¢"), this);
+	QAction* messageAct = new QAction(QStringLiteral("ç‰ˆæœ¬ä¿¡æ¯"), this);
 	helpMenu->addAction(messageAct);
 	connect(messageAct, SIGNAL(triggered()), this, SLOT(showAboutDialog()));
 }
@@ -1289,61 +412,6 @@ void MainWindow::initCentralWindow()
 {
 	glwidget = new GlWidget(this, dlprinter,interface1->model,interface1->dlprint);
 	setCentralWidget(glwidget);
-}
-
-void MainWindow::initOffsetWidget()
-{
-	QLabel* offset_title = new QLabel(QStringLiteral("  Æ½  ÒÆ"));
-	offset_title->setStyleSheet(labelStyle);
-	QLabel* x_offset_label = new QLabel("  X");
-	x_offset_label->setStyleSheet("color: rgb(225,0,0); background-color: rgba(225,225,225,0);");
-	QLabel* y_offset_label = new QLabel("  Y");
-	y_offset_label->setStyleSheet("color: rgb(0,225,0); background-color: rgba(225,225,225,0);");
-	QLabel* z_offset_label = new QLabel("  Z");
-	z_offset_label->setStyleSheet("color: rgb(0,0,225); background-color: rgba(225,225,225,0);");
-	x_offset_spin = new QDoubleSpinBox();
-	x_offset_spin->setRange(-1000, 1000);
-	x_offset_spin->setSingleStep(1);
-	x_offset_spin->setStyleSheet(spinStyle);
-	x_offset_spin->setSuffix("mm");
-	connect(x_offset_spin, SIGNAL(valueChanged(double)), this, SLOT(xoffsetValueChange(double)));
-
-	y_offset_spin = new QDoubleSpinBox();
-	y_offset_spin->setRange(-1000, 1000);
-	y_offset_spin->setSingleStep(1);
-	y_offset_spin->setStyleSheet(spinStyle);
-	y_offset_spin->setSuffix("mm");
-	connect(y_offset_spin, SIGNAL(valueChanged(double)), this, SLOT(yoffsetValueChange(double)));
-
-	z_offset_spin = new QDoubleSpinBox();
-	z_offset_spin->setRange(-1000, 1000);
-	z_offset_spin->setSingleStep(1);
-	z_offset_spin->setStyleSheet(spinStyle);
-	z_offset_spin->setSuffix("mm");
-	connect(z_offset_spin, SIGNAL(valueChanged(double)), this, SLOT(zoffsetValueChange(double)));
-
-	QPushButton* ZPosZeroBtn = new QPushButton(QStringLiteral("Ìùµ×"));
-	connect(ZPosZeroBtn, SIGNAL(clicked()), this, SLOT(ZPosZero()));
-
-	QGridLayout* mainlayout = new QGridLayout(this);
-	mainlayout->setMargin(7);
-	mainlayout->setSpacing(7);
-	mainlayout->addWidget(offset_title, 0, 1, 1, 2);
-	mainlayout->addWidget(x_offset_label, 1, 0);
-	mainlayout->addWidget(x_offset_spin, 1, 1, 1, 3);
-	mainlayout->addWidget(y_offset_label, 2, 0);
-	mainlayout->addWidget(y_offset_spin, 2, 1, 1, 3);
-	mainlayout->addWidget(z_offset_label, 3, 0);
-	mainlayout->addWidget(z_offset_spin, 3, 1, 1, 3);
-	mainlayout->addWidget(ZPosZeroBtn, 4, 0, 1, 4);
-	QWidget* w = new QWidget();
-	w->setLayout(mainlayout);
-	offsetWidget = new QStackedWidget(this);
-	offsetWidget->setStyleSheet("background-color: rgba(225,225,225,100);");
-	//offsetWidget->setMask(QPolygon(anomalyRect1));
-	offsetWidget->setMinimumSize(180, 150);
-	offsetWidget->addWidget(w);
-	offsetWidget->hide();
 }
 
 void MainWindow::ZPosZero()
@@ -1368,19 +436,19 @@ void MainWindow::ZPosZero()
 
 void MainWindow::setOffsetValue(ModelInstance* instance)
 {
-	x_offset_spin->setValue(instance->offset.x);
-	y_offset_spin->setValue(instance->offset.y);
-	z_offset_spin->setValue(instance->z_translation);
+	m_centerTopWidget->x_offset_spin->setValue(instance->offset.x);
+	m_centerTopWidget->y_offset_spin->setValue(instance->offset.y);
+	m_centerTopWidget->z_offset_spin->setValue(instance->z_translation);
 }
 
 void MainWindow::AddOffsetValue(double x, double y, double z)
 {
 	if (x != 0)
-		x_offset_spin->setValue(x_offset_spin->value() + x);
+		m_centerTopWidget->x_offset_spin->setValue(m_centerTopWidget->x_offset_spin->value() + x);
 	if (y != 0)
-		y_offset_spin->setValue(y_offset_spin->value() + y);
+		m_centerTopWidget->y_offset_spin->setValue(m_centerTopWidget->y_offset_spin->value() + y);
 	if (z != 0)
-		z_offset_spin->setValue(z_offset_spin->value() + z);
+		m_centerTopWidget->z_offset_spin->setValue(m_centerTopWidget->z_offset_spin->value() + z);
 }
 
 void MainWindow::xoffsetValueChange(double value)
@@ -1389,7 +457,7 @@ void MainWindow::xoffsetValueChange(double value)
 		ModelInstance* instance = IdToInstance();
 		if (instance->offset.x != value) {
 			double x = value - instance->offset.x;
-			if (fabs(x) >= 0.01) {//·ÀÖ¹Ï¸Î¢Îó²î
+			if (fabs(x) >= 0.01) {//é˜²æ­¢ç»†å¾®è¯¯å·®
 				TreeSupport* s1 = NULL;
 				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
 					MainUndoStack->beginMacro(tr(""));
@@ -1446,26 +514,9 @@ void MainWindow::zoffsetValueChange(double value)
 	}
 }
 
-void MainWindow::showOffsetWidget()
-{
-	clickedButtonState(OFFSETBTN);
-	if (OnOff_offset) {
-		offsetButton->setStyleSheet(OnButton);
-		offsetWidget->hide(); 
-		OnOff_offset = false;
-	}
-	else {
-		if (glwidget->selectID >= 0)
-			setOffsetValue(interface1->find_instance(glwidget->selectID));
-		offsetButton->setStyleSheet(OffButton);
-		offsetWidget->show();
-		OnOff_offset = true;
-	}
-}
-
 void MainWindow::AddRotateValue(double angle, int x, int y, int z)
 {
-	//Ö»Ö§³ÖÒ»¸ö·½ÏòµÄ½Ç¶ÈÖµ£¬ÇÒ±ÈÀıÖµÎª1
+	//åªæ”¯æŒä¸€ä¸ªæ–¹å‘çš„è§’åº¦å€¼ï¼Œä¸”æ¯”ä¾‹å€¼ä¸º1
 	TreeSupport* s1 = NULL;
 	if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
 		MainUndoStack->beginMacro(tr("rotate delete supports"));
@@ -1477,78 +528,25 @@ void MainWindow::AddRotateValue(double angle, int x, int y, int z)
 		MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, angle, x, y, z, this));
 }
 
-
-void MainWindow::initRotateWidget()
-{
-	QLabel* rotate_title = new QLabel(QStringLiteral("  Ğı  ×ª"));
-	rotate_title->setStyleSheet(labelStyle);
-	QLabel* x_rotate_label = new QLabel("  X");
-	x_rotate_label->setStyleSheet("color: rgb(225,0,0); background-color: rgba(225,225,225,0);");
-	QLabel* y_rotate_label = new QLabel("  Y");
-	y_rotate_label->setStyleSheet("color: rgb(0,255,0); background-color: rgba(225,225,225,0);");
-	QLabel* z_rotate_label = new QLabel("  Z");
-	z_rotate_label->setStyleSheet("color: rgb(0,0,225); background-color: rgba(225,225,225,0);");
-	x_rotate_spin = new QDoubleSpinBox();
-	x_rotate_spin->setRange(-360.0, 360.0);
-	x_rotate_spin->setSingleStep(5.0);
-	x_rotate_spin->setSuffix(QStringLiteral("¡ã"));
-	x_rotate_spin->setStyleSheet(spinStyle);
-	connect(x_rotate_spin, SIGNAL(valueChanged(double)), this, SLOT(xRotateValueChange(double)));
-
-	y_rotate_spin = new QDoubleSpinBox();
-	y_rotate_spin->setRange(-360.0, 360.0);
-	y_rotate_spin->setSingleStep(5.0);
-	y_rotate_spin->setSuffix(QStringLiteral("¡ã"));
-	y_rotate_spin->setStyleSheet(spinStyle);
-	connect(y_rotate_spin, SIGNAL(valueChanged(double)), this, SLOT(yRotateValueChange(double)));
-
-	z_rotate_spin = new QDoubleSpinBox();
-	z_rotate_spin->setRange(-360.0, 360.0);
-	z_rotate_spin->setSingleStep(5.0);
-	z_rotate_spin->setSuffix(QStringLiteral("¡ã"));
-	z_rotate_spin->setStyleSheet(spinStyle);
-	connect(z_rotate_spin, SIGNAL(valueChanged(double)), this, SLOT(zRotateValueChange(double)));
-
-	QGridLayout* mainlayout = new QGridLayout(this);
-	mainlayout->setMargin(7);
-	mainlayout->setSpacing(7);
-	mainlayout->addWidget(rotate_title, 0, 1, 1, 2);
-	mainlayout->addWidget(x_rotate_label, 1, 0);
-	mainlayout->addWidget(x_rotate_spin, 1, 1, 1, 3);
-	mainlayout->addWidget(y_rotate_label, 2, 0);
-	mainlayout->addWidget(y_rotate_spin, 2, 1, 1, 3);
-	mainlayout->addWidget(z_rotate_label, 3, 0);
-	mainlayout->addWidget(z_rotate_spin, 3, 1, 1, 3);
-	QWidget* w = new QWidget();
-	w->setLayout(mainlayout);
-	rotateWidget = new QStackedWidget(this);
-	rotateWidget->setStyleSheet("background-color: rgba(225,225,225,100);");
-	rotateWidget->setMinimumSize(130, 100);
-	//rotateWidget->setMask(QPolygon(anomalyRect1));
-	rotateWidget->addWidget(w);
-	rotateWidget->hide();
-}
-
-
 void MainWindow::setRotateValue(ModelInstance* instance)
 {
-	x_rotate_spin->setValue(x_rotate);
-	y_rotate_spin->setValue(y_rotate);
-	z_rotate_spin->setValue(z_rotate);
+	m_centerTopWidget->x_rotate_spin->setValue(m_centerTopWidget->x_rotate);
+	m_centerTopWidget->y_rotate_spin->setValue(m_centerTopWidget->y_rotate);
+	m_centerTopWidget->z_rotate_spin->setValue(m_centerTopWidget->z_rotate);
 }
 
 void MainWindow::xRotateValueChange(double angle)
 {
 	if (glwidget->selectID >= 0) {
-		double x = angle - x_rotate;
+		double x = angle - m_centerTopWidget->x_rotate;
 		
 		if (angle == 360 || angle == -360)
 		{
-			x_rotate = 0;
-			x_rotate_spin->setValue(0);
+			m_centerTopWidget->x_rotate = 0;
+			m_centerTopWidget->x_rotate_spin->setValue(0);
 		}
 		else
-			x_rotate = angle;
+			m_centerTopWidget->x_rotate = angle;
 
 		if (fabs(x) > 0.01) {
 		
@@ -1569,15 +567,15 @@ void MainWindow::xRotateValueChange(double angle)
 void MainWindow::yRotateValueChange(double angle)
 {
 	if (glwidget->selectID >= 0) {
-		double y = angle - y_rotate;
+		double y = angle - m_centerTopWidget->y_rotate;
 		
 		if (angle == 360 || angle == -360)
 		{
-			y_rotate = 0;
-			y_rotate_spin->setValue(0);
+			m_centerTopWidget->y_rotate = 0;
+			m_centerTopWidget->y_rotate_spin->setValue(0);
 		}
 		else
-			y_rotate = angle;
+			m_centerTopWidget->y_rotate = angle;
 
 		if (fabs(y) > 0.01) {
 			TreeSupport* s1 = NULL;
@@ -1597,15 +595,15 @@ void MainWindow::yRotateValueChange(double angle)
 void MainWindow::zRotateValueChange(double angle)
 {
 	if (glwidget->selectID >= 0) {
-		double z = angle - z_rotate;
+		double z = angle - m_centerTopWidget->z_rotate;
 		
 		if (angle == 360 || angle == -360)
 		{
-			z_rotate = 0;
-			z_rotate_spin->setValue(0);
+			m_centerTopWidget->z_rotate = 0;
+			m_centerTopWidget->z_rotate_spin->setValue(0);
 		}
 		else
-			z_rotate = angle;
+			m_centerTopWidget->z_rotate = angle;
 
 		if (fabs(z) > 0.01) {
 			TreeSupport* s1 = NULL;
@@ -1622,136 +620,33 @@ void MainWindow::zRotateValueChange(double angle)
 	}
 }
 
-void MainWindow::showRotateWidget()
-{
-	clickedButtonState(ROTATEBTN);
-	if (OnOff_rotate) {
-		rotateButton->setStyleSheet(OnButton);
-		rotateWidget->hide();
-		OnOff_rotate = false;
-	}
-	else {
-		init_rotate();
-		rotateButton->setStyleSheet(OffButton);
-		rotateWidget->show();
-		OnOff_rotate = true;
-	}
-}
-
 void MainWindow::AddScaleValue(double x, double y, double z)
 {
 	if (x != 0)
-		x_scale_spin->setValue(x_scale_spin->value() + x);
+		m_centerTopWidget->x_scale_spin->setValue(m_centerTopWidget->x_scale_spin->value() + x);
 	if (y != 0)
-		y_scale_spin->setValue(y_scale_spin->value() + y);
+		m_centerTopWidget->y_scale_spin->setValue(m_centerTopWidget->y_scale_spin->value() + y);
 	if (z != 0)
-		z_scale_spin->setValue(z_scale_spin->value() + z);
-}
-
-void MainWindow::initScaleWidget()
-{
-	QLabel* scale_title = new QLabel(QStringLiteral("  Ëõ   ·Å"));
-	scale_title->setStyleSheet(labelStyle);
-	QLabel* x_scale_label = new QLabel(" X");
-	x_scale_label->setStyleSheet("color: rgb(225,0,0); background-color: rgba(225,225,225,0);");
-	QLabel* y_scale_label = new QLabel(" Y");
-	y_scale_label->setStyleSheet("color: rgb(0,255,0); background-color: rgba(225,225,225,0);");
-	QLabel* z_scale_label = new QLabel(" Z");
-	z_scale_label->setStyleSheet("color: rgb(0,0,225); background-color: rgba(225,225,225,0);");
-	x_scale_spin = new QDoubleSpinBox();
-	x_scale_spin->setRange(1,100000);
-	x_scale_spin->setSingleStep(5);
-	x_scale_spin->setStyleSheet(spinStyle);
-	x_scale_spin->setSuffix("%");
-	connect(x_scale_spin, SIGNAL(valueChanged(double)), this, SLOT(xScaleValueChange(double)));
-
-	y_scale_spin = new QDoubleSpinBox();
-	y_scale_spin->setRange(1, 100000);
-	y_scale_spin->setSingleStep(5);
-	y_scale_spin->setSuffix("%");
-	y_scale_spin->setDisabled(true);
-	y_scale_spin->setStyleSheet(spinStyle);
-	connect(y_scale_spin, SIGNAL(valueChanged(double)), this, SLOT(yScaleValueChange(double)));
-
-	z_scale_spin = new QDoubleSpinBox();
-	z_scale_spin->setRange(1, 100000);
-	z_scale_spin->setSingleStep(5);
-	z_scale_spin->setSuffix("%");
-	z_scale_spin->setDisabled(true);
-	z_scale_spin->setStyleSheet(spinStyle);
-	connect(z_scale_spin, SIGNAL(valueChanged(double)), this, SLOT(zScaleValueChange(double)));
-
-	x_size_label = new QDoubleSpinBox();
-	x_size_label->setRange(0, 1000);
-	x_size_label->setDisabled(true);
-	x_size_label->setSuffix("mm");
-	x_size_label->setStyleSheet(spinStyle);
-	//connect(x_size_spin, SIGNAL(valueChanged(double)), this, SLOT(xSizeValueChange(double)));
-
-	y_size_label = new QDoubleSpinBox();
-	y_size_label->setRange(0, 1000);
-	y_size_label->setDisabled(true);
-	y_size_label->setSuffix("mm");
-	y_size_label->setStyleSheet(spinStyle);
-	//connect(y_size_spin, SIGNAL(valueChanged(double)), this, SLOT(ySizeValueChange(double)));
-
-	z_size_label = new QDoubleSpinBox();
-	z_size_label->setRange(0, 1000);
-	z_size_label->setDisabled(true);
-	z_size_label->setSuffix("mm");
-	z_size_label->setStyleSheet(spinStyle);
-	//connect(z_size_spin, SIGNAL(valueChanged(double)), this, SLOT(zSizeValueChange(double)));
-
-	unify_scale = new QCheckBox();
-	unify_scale->setCheckState(Qt::Checked);
-	unify_scale->setStyleSheet(labelStyle);
-	connect(unify_scale, SIGNAL(stateChanged(int)), this, SLOT(setUnifyScale(int)));
-
-	QLabel* unify_scale_label = new QLabel(QStringLiteral("Í³Ò»Ëõ·Å"));
-	unify_scale_label->setStyleSheet(labelStyle);
- 
-	QGridLayout* mainlayout = new QGridLayout(this);
-	mainlayout->setMargin(7);
-	mainlayout->setSpacing(8);
-	mainlayout->addWidget(scale_title, 0, 3, 1, 3);
-	mainlayout->addWidget(x_scale_label, 1, 1);
-	mainlayout->addWidget(x_size_label, 1, 2, 1, 3);
-	mainlayout->addWidget(x_scale_spin, 1, 5, 1, 3);
-	mainlayout->addWidget(y_scale_label, 2, 1);
-	mainlayout->addWidget(y_size_label, 2, 2, 1, 3);
-	mainlayout->addWidget(y_scale_spin, 2, 5, 1, 3);
-	mainlayout->addWidget(z_scale_label, 3, 1);
-	mainlayout->addWidget(z_size_label, 3, 2, 1, 3);
-	mainlayout->addWidget(z_scale_spin, 3, 5, 1, 3);
-	mainlayout->addWidget(unify_scale, 4, 5);
-	mainlayout->addWidget(unify_scale_label, 4, 6, 1, 2);
-	QWidget* w = new QWidget();
-	w->setLayout(mainlayout);
-	scaleWidget = new QStackedWidget(this);
-	scaleWidget->setStyleSheet("background-color: rgba(225,225,225,100);");
-	scaleWidget->setMinimumSize(200, 140);
-	//scaleWidget->setMask(QPolygon(anomalyRect2));
-	scaleWidget->addWidget(w);
-	scaleWidget->hide();
+		m_centerTopWidget->z_scale_spin->setValue(m_centerTopWidget->z_scale_spin->value() + z);
 }
 
 void MainWindow::setScaleValue(ModelInstance* instance)
 {
-	x_scale_spin->setValue(instance->scaling_vector.x*100);
-	y_scale_spin->setValue(instance->scaling_vector.y*100);
-	z_scale_spin->setValue(instance->scaling_vector.z*100);
+	m_centerTopWidget->x_scale_spin->setValue(instance->scaling_vector.x * 100);
+	m_centerTopWidget->y_scale_spin->setValue(instance->scaling_vector.y * 100);
+	m_centerTopWidget->z_scale_spin->setValue(instance->scaling_vector.z * 100);
 }
 
 void MainWindow::setSizeValue(ModelInstance* instance)
 {
-	//µÃµ½ÊµÀıµÄ°üÎ§ºĞ
+	//å¾—åˆ°å®ä¾‹çš„åŒ…å›´ç›’
 	TriangleMesh mesh = instance->get_object()->volumes[0]->mesh;
 	instance->transform_mesh(&mesh);
 	BoundingBoxf3 box = mesh.bounding_box();
 
-	x_size_label->setValue(box.size().x);
-	y_size_label->setValue(box.size().y);
-	z_size_label->setValue(box.size().z);
+	m_centerTopWidget->x_size_label->setValue(box.size().x);
+	m_centerTopWidget->y_size_label->setValue(box.size().y);
+	m_centerTopWidget->z_size_label->setValue(box.size().z);
 }
 
 void MainWindow::xScaleValueChange(double value)
@@ -1763,7 +658,7 @@ void MainWindow::xScaleValueChange(double value)
 		double y = instance->scaling_vector.y*(x / instance->scaling_vector.x);
 		double z = instance->scaling_vector.z*(x / instance->scaling_vector.x);
 		if (fabs(x) > 0.01) {
-			if (unify_scale->checkState() == Qt::Unchecked) {
+			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked) {
 				TreeSupport* s1 = NULL;
 				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
 					MainUndoStack->beginMacro(tr("scale delete supports"));
@@ -1800,7 +695,7 @@ void MainWindow::yScaleValueChange(double value)
 		double x = instance->scaling_vector.x*(y / instance->scaling_vector.y);
 		double z = instance->scaling_vector.z*(y / instance->scaling_vector.y);
 		if (fabs(y) > 0.01) {
-			if (unify_scale->checkState() == Qt::Unchecked) {
+			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked) {
 				TreeSupport* s1 = NULL;
 				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
 					MainUndoStack->beginMacro(tr(""));
@@ -1835,7 +730,7 @@ void MainWindow::zScaleValueChange(double value)
 		double x = instance->scaling_vector.x*(z / instance->scaling_vector.z);
 		double y = instance->scaling_vector.y*(z / instance->scaling_vector.z);
 		if (fabs(z) > 0.01) {
-			if (unify_scale->checkState() == Qt::Unchecked) {
+			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked) {
 				TreeSupport* s1 = NULL;
 				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
 					MainUndoStack->beginMacro(tr(""));
@@ -1858,69 +753,6 @@ void MainWindow::zScaleValueChange(double value)
 					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, y, z, this));
 			}
 		}
-	}
-}
-
-void MainWindow::setUnifyScale(int state)
-{
-	switch (state)
-	{
-	case Qt::Unchecked:
-		y_scale_spin->setEnabled(true);
-		z_scale_spin->setEnabled(true);
-		//y_size_spin->setEnabled(true);
-		//z_size_spin->setEnabled(true);
-		break;
-
-	case Qt::Checked:
-		y_scale_spin->setDisabled(true);
-		z_scale_spin->setDisabled(true);
-		//y_size_spin->setDisabled(true);
-		//z_size_spin->setDisabled(true);
-		break;
-
-	default:
-		break;
-	}
-}
-
-void MainWindow::showScaleWidget()
-{
-	clickedButtonState(SCALEBTN);
-	if (OnOff_scale) {
-		scaleButton->setStyleSheet(OnButton);
-		scaleWidget->hide();
-		OnOff_scale = false;
-	}
-	else {
-		if (glwidget->selectID >= 0) {
-			ModelInstance* i = interface1->find_instance(glwidget->selectID);
-			setScaleValue(i);
-			setSizeValue(i);
-		}
-		scaleButton->setStyleSheet(OffButton);
-		scaleWidget->show();
-		OnOff_scale = true;
-	}
-}
-
-void MainWindow::showSetupDialog()
-{
-	if (!OnOff_setup) {
-		//-------------------½øÈë-----------
-		clickedButtonState(SETUPBTN);
-		OnOff_setup = true;
-		setupButton->setStyleSheet(OffButton);
-		//--------------------------------------
-		setupDialog = new SetupDialog(this);
-		setupDialog->exec();
-		delete setupDialog;
-	}
-	else {
-		//---------------ÍË³ö------------
-		OnOff_setup = false;
-		setupButton->setStyleSheet(OnButton);
-		//-----------------------------
 	}
 }
 
@@ -1954,7 +786,7 @@ void MainWindow::behindView()
 	glwidget->ChangeView(glwidget->BEHIND);
 }
 
-void MainWindow::newJob()//ĞÂ½¨ÏîÄ¿
+void MainWindow::newJob()//æ–°å»ºé¡¹ç›®
 {
 	interface1->clear_model();
 	interface1->delete_all_support();
@@ -2008,42 +840,35 @@ ModelInstance* MainWindow::IdToInstance()
 
 void MainWindow::generateSupport()
 {
-	//----------------½øÈë-----------------
-	clickedButtonState(SUPPORTBTN);
-	supportButton->setStyleSheet(OffButton);
-	OnOff_support = true;
-	//-------------------------------
+	m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
 
 	if (glwidget->selectID >= 0) {
-		showProgress(SUPPORTBTN);
-		P(10);
+		m_centerTopWidget->showProgress(SUPPORTBTN);
+		m_centerTopWidget->P(10);
 		TreeSupport* s = new TreeSupport();
 		TreeSupport* s1 = new TreeSupport();
 		if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-			interface1->generate_id_support(glwidget->selectID, s, progress);
+			interface1->generate_id_support(glwidget->selectID, s, m_centerTopWidget->progress);
 			MainUndoStack->beginMacro(tr(""));
 			MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, s, this, progress));
+			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, s, this, m_centerTopWidget->progress));
 			MainUndoStack->endMacro();
 		}
 		else {
 			MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, 0, 0, interface1->dlprint->config.model_lift, this));
-			interface1->generate_id_support(glwidget->selectID, s, progress);
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, s, this, progress));
+			interface1->generate_id_support(glwidget->selectID, s, m_centerTopWidget->progress);
+			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, s, this, m_centerTopWidget->progress));
 		}
-		P(100);
-		hideProgress();
+		m_centerTopWidget->P(100);
+		m_centerTopWidget->hideProgress();
 
 	}
 	else
 	{
-		QMessageBox::about(this, QStringLiteral("ÌáÊ¾"), QStringLiteral("ÇëÑ¡ÖĞÒ»¸öÄ£ĞÍ¡£"));
+		QMessageBox::about(this, QStringLiteral("æç¤º"), QStringLiteral("è¯·é€‰ä¸­ä¸€ä¸ªæ¨¡å‹ã€‚"));
 	}
 
-	//----------------ÍË³ö-----------------
-	supportButton->setStyleSheet(OnButton);
-	OnOff_support = false;
-	//-------------------------------------
+	m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
 }
 
 void MainWindow::generateAllSupport()
@@ -2053,24 +878,24 @@ void MainWindow::generateAllSupport()
 			if ((*i)->exist) {
 				size_t id = interface1->find_id(*i);
 
-				showProgress(SUPPORTBTN);
-				P(10);
+				m_centerTopWidget->showProgress(SUPPORTBTN);
+				m_centerTopWidget->P(10);
 				TreeSupport* s = new TreeSupport();
 				TreeSupport* s1 = new TreeSupport();
 				if (interface1->dlprint->chilck_tree_support(id, s1)) {
-					interface1->generate_id_support(id, s, progress);
+					interface1->generate_id_support(id, s, m_centerTopWidget->progress);
 					MainUndoStack->beginMacro(tr(""));
 					MainUndoStack->push(new deleteSupportsCommand(id, s1, this));
-					MainUndoStack->push(new addSupportsCommand(id, s, this, progress));
+					MainUndoStack->push(new addSupportsCommand(id, s, this, m_centerTopWidget->progress));
 					MainUndoStack->endMacro();
 				}
 				else {
 					MainUndoStack->push(new offsetValueChangeCommand(id, 0, 0, interface1->dlprint->config.model_lift, this));
-					interface1->generate_id_support(id, s, progress);
-					MainUndoStack->push(new addSupportsCommand(id, s, this, progress));
+					interface1->generate_id_support(id, s, m_centerTopWidget->progress);
+					MainUndoStack->push(new addSupportsCommand(id, s, this, m_centerTopWidget->progress));
 				}
-				P(100);
-				hideProgress();
+				m_centerTopWidget->P(100);
+				m_centerTopWidget->hideProgress();
 			}
 		}
 	}
@@ -2120,7 +945,7 @@ void MainWindow::DlpPrintLoadSetup()
 void MainWindow::saveView()
 {
 	QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("±£´æÇĞÆ¬ÎÄ¼ş"), desktop, "histogram file(*.bmp)");
+	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("ä¿å­˜åˆ‡ç‰‡æ–‡ä»¶"), desktop, "histogram file(*.bmp)");
 	if (path.size() > 0) {
 		QByteArray a = path.toLocal8Bit();
 		char* _path = a.data();
@@ -2130,18 +955,13 @@ void MainWindow::saveView()
 
 void MainWindow::SupportEdit()
 {
-	clickedButtonState(SUPPORTEDITBTN);
-
-	if (!OnOff_supportEdit)
+	if (!m_centerTopWidget->m_supportEditBtn->c_isChecked())
 	{
-		//---------------------½øÈë-------------
-		OnOff_supportEdit = true;
-		supportEditButton->setStyleSheet(OffButton);
-		//-------------------------------------
+		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 
 		if (glwidget->selectID >= 0) {
 
-			//Éú³ÉÖ§³Å±à¼­¡°³·ÏúÖØ×ö¡±Õ»²¢¼¤»î
+			//ç”Ÿæˆæ”¯æ’‘ç¼–è¾‘â€œæ’¤é”€é‡åšâ€æ ˆå¹¶æ¿€æ´»
 			SupportEditUndoStack = new QUndoStack(this);
 			MainUndoGroup->addStack(SupportEditUndoStack);
 			MainUndoGroup->setActiveStack(SupportEditUndoStack);
@@ -2150,18 +970,15 @@ void MainWindow::SupportEdit()
 		}
 		else
 		{
-			QMessageBox::about(this, QStringLiteral("ÌáÊ¾"), QStringLiteral("ÇëÑ¡ÖĞÒ»¸öÒÑÉú³ÉÖ§³ÅµÄÄ£ĞÍ¡£"));
-			//----------------ÍË³ö----------------
-			OnOff_supportEdit = false;
-			supportEditButton->setStyleSheet(OnButton);
-			//-----------------------------------
+			QMessageBox::about(this, QStringLiteral("æç¤º"), QStringLiteral("è¯·é€‰ä¸­ä¸€ä¸ªå·²ç”Ÿæˆæ”¯æ’‘çš„æ¨¡å‹ã€‚"));
+			m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 			return;
 		}
 	}
 	else {
-		//-----------ÍË³öÖ§³Å±à¼­Ä£Ê½£¬¸üĞÂÖ§³Åµã------------
-		showProgress(SUPPORTEDITBTN);
-		progress->setValue(10);
+		//-----------é€€å‡ºæ”¯æ’‘ç¼–è¾‘æ¨¡å¼ï¼Œæ›´æ–°æ”¯æ’‘ç‚¹------------
+		m_centerTopWidget->showProgress(SUPPORTEDITBTN);
+		m_centerTopWidget->progress->setValue(10);
 
 		auto p = interface1->dlprint->treeSupports.find(glwidget->selectID);
 		TreeSupport* t = new TreeSupport();
@@ -2193,94 +1010,79 @@ void MainWindow::SupportEdit()
 		}
 
 		t->generate_tree_support(glwidget->find_model(glwidget->selectID),interface1->dlprint->config.leaf_num,
-			interface1->dlprint->config.threads,progress,interface1->dlprint->config.support_top_height);
+			interface1->dlprint->config.threads, m_centerTopWidget->progress,interface1->dlprint->config.support_top_height);
 		
 		if (p != interface1->dlprint->treeSupports.end()) {
 			MainUndoStack->beginMacro(tr(""));
 			MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID,(*p).second,this));
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, t, this,progress));
+			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, t, this, m_centerTopWidget->progress));
 			MainUndoStack->endMacro();
 		}
 		else {
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, t, this,progress));
+			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, t, this, m_centerTopWidget->progress));
 		}
-		hideProgress();
+		m_centerTopWidget->hideProgress();
 		//------------------------------------------------------------
 
-		//É¾³ıÖ§³Å±à¼­¡°³·ÏúÖØ×ö¡±Õ»,¼¤»îÖ÷Õ»
+		//åˆ é™¤æ”¯æ’‘ç¼–è¾‘â€œæ’¤é”€é‡åšâ€æ ˆ,æ¿€æ´»ä¸»æ ˆ
 		delete SupportEditUndoStack;
 		MainUndoGroup->setActiveStack(MainUndoStack);
 
 		glwidget->supportEditChange();
-		//Çå¿Õ
+		//æ¸…ç©º
 		treeSupportsExist.clear();
 
-		//----------------ÍË³ö----------------
-		OnOff_supportEdit = false;
-		supportEditButton->setStyleSheet(OnButton);
-		//-----------------------------------
+		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 	}
 }
 
 void MainWindow::slice()
 {
-	//---------------½øÈë---------------
-	clickedButtonState(SLICEBTN);
-	OnOff_slice = true;
-	sliceButton->setStyleSheet(OffButton);
+	m_centerTopWidget->CenterButtonPush(SLICEBTN);
 	//-------------------------------------
 
 	if (interface1->model->objects.size() == 0) {
-		//----------------ÍË³ö--------------
-		OnOff_slice = false;
-		sliceButton->setStyleSheet(OnButton);
-		//-----------------------------------
+		m_centerTopWidget->CenterButtonPush(SLICEBTN);
 		return;
 	}
 
 	if (!glwidget->checkConfine()) {
 		QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("±£´æÇĞÆ¬ÎÄ¼ş"), desktop, "histogram file(*.sm)");
+		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("ä¿å­˜åˆ‡ç‰‡æ–‡ä»¶"), desktop, "histogram file(*.sm)");
 		if (path.size() > 0) {
-			//ÔÚÓÃ»§Ä¿Â¼ÏÂ½¨Á¢Ò»¸ö±£´æÇĞÆ¬µÄÎÄ¼ş¼Ğ
-			QString name = getFileLocation();
-			name.append("/images");
-			clearDir(name);
+			//åœ¨ç”¨æˆ·ç›®å½•ä¸‹å»ºç«‹ä¸€ä¸ªä¿å­˜åˆ‡ç‰‡çš„æ–‡ä»¶å¤¹
+			clearDir(e_setting.ZipTempPath.c_str());
 
-			QDir* file = new QDir(name);
-			bool ret = file->exists();
-			if (!ret) {
-				bool ok = file->mkdir(name);
-				if (!ok)
+			QDir file(e_setting.ZipTempPath.c_str());
+			if (!file.exists()) {
+				if (!file.mkdir(e_setting.ZipTempPath.c_str()))
 					exit(2);
 			}
-
-			//±£´æÒ»ÕÅ½ØÍ¼
-			QString view = name;
+			
+			//ä¿å­˜ä¸€å¼ æˆªå›¾
+			QString view(e_setting.ZipTempPath.c_str());
 			view.append("/A_Front.bmp");
-			QByteArray a = view.toLocal8Bit();
-			char* _path = a.data();
+			char* _path = view.toLocal8Bit().data();
 			glwidget->saveOneView(_path);
-
-			showProgress(SLICEBTN);
-
-			P(10);
+			
+			m_centerTopWidget->showProgress(SLICEBTN);
+			
+			m_centerTopWidget->P(10);
 			interface1->generate_all_inside_support();
-			P(20);
-			interface1->dlprint->slice(glwidget->return_support_model(),progress);
-			P(98);
-			interface1->dlprint->savePNG(name);
-			P(99);
-			JlCompress::compressDir(path, name);
-			P(100);
+			m_centerTopWidget->P(20);
+			interface1->dlprint->slice(glwidget->return_support_model(), m_centerTopWidget->progress);
+			m_centerTopWidget->P(98);
+			interface1->dlprint->savePNG(e_setting.ZipTempPath.c_str());
+			m_centerTopWidget->P(99);
+			JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
+			m_centerTopWidget->P(100);
 
-			//Çå¿ÕÇĞÆ¬ÎÄ¼ş¼Ğ
-			clearDir(name);
-			delete file;
+			//æ¸…ç©ºåˆ‡ç‰‡æ–‡ä»¶å¤¹
+			clearDir(e_setting.ZipTempPath.c_str());
 
-			hideProgress();
+			m_centerTopWidget->hideProgress();
 
-			switch (QMessageBox::question(this, QStringLiteral("ÌáÊ¾"), QStringLiteral("ÇĞÆ¬Íê³É£¬ÊÇ·ñÔ¤ÀÀÇĞÆ¬ÎÄ¼ş£¿"), QMessageBox::Cancel, QMessageBox::Ok))
+			switch (QMessageBox::question(this, QStringLiteral("æç¤º"), QStringLiteral("åˆ‡ç‰‡å®Œæˆï¼Œæ˜¯å¦é¢„è§ˆåˆ‡ç‰‡æ–‡ä»¶ï¼Ÿ"), QMessageBox::Cancel, QMessageBox::Ok))
 			{
 			case QMessageBox::Ok:
 				showPreviewWidget1(path);
@@ -2294,133 +1096,37 @@ void MainWindow::slice()
 		}
 	}
 	else {
-		QMessageBox::about(this, QStringLiteral("ÌáÊ¾"), QStringLiteral("Ä£ĞÍ³¬¹ı±ß½ç£¬ÎŞ·¨ÇĞÆ¬¡£"));
+		QMessageBox::about(this, QStringLiteral("æç¤º"), QStringLiteral("æ¨¡å‹è¶…è¿‡è¾¹ç•Œï¼Œæ— æ³•åˆ‡ç‰‡ã€‚"));
 	}
 
-	//----------------ÍË³ö--------------
-	OnOff_slice = false;
-	sliceButton->setStyleSheet(OnButton);
-	//-----------------------------------
-}
-
-void MainWindow::initProgress()
-{
-	progressLabel = new QLabel;
-	QFont font("ZYSong18030", 15);
-	progressLabel->setFont(font);
-	progressLabel->setStyleSheet("color: white");
-	progressLabel->setText("waiting ......");
-	progress = new QProgressBar;
-	progress->setOrientation(Qt::Horizontal);
-
-	QString strStyle = "QProgressBar {border-radius: 5px ; text-align: center; background: rgb(200, 200, 200);}"
-		"QProgressBar::chunk {border-radius:5px;border:1px solid black;background: rgb(200,50,0)}";
-	progress->setStyleSheet(strStyle);
-	progress->setRange(0, 100);
-	QGridLayout* layout = new QGridLayout();
-	layout->setMargin(10);
-	layout->setSpacing(2);
-	layout->addWidget(progressLabel, 0, 2);
-	layout->addWidget(progress, 1, 0, 2, 5);
-	QWidget* widget = new QWidget();
-	widget->setLayout(layout);
-	progressWidget = new QStackedWidget(this);
-	progressWidget->setStyleSheet("background-color: rgba(100,100,100,225);");
-	progressWidget->setMask(QPolygon(progressRect));
-	progressWidget->setMinimumSize(QSize(300, 80));
-	progressWidget->addWidget(widget);
-	progressWidget->hide();
-
-}
-
-void MainWindow::showProgress(int btn)
-{
-	switch (btn)
-	{
-	case OPENBTN:
-		progressLabel->setText(QStringLiteral("¶ÁÈ¡Ä£ĞÍ"));
-		break;
-
-	case SUPPORTBTN:
-		progressLabel->setText(QStringLiteral("Éú³ÉÖ§³Å"));
-		break;
-
-	case SLICEBTN:
-		progressLabel->setText(QStringLiteral("ÇĞÆ¬"));
-		break;
-	case SUPPORTEDITBTN:
-		progressLabel->setText(QStringLiteral("ÖØĞÂÉú³ÉÖ§³Å"));
-
-	default:
-		break;
-	}
-	progressWidget->show();
-	progress->reset();
-	P(0);
-}
-
-void MainWindow::hideProgress()
-{
-	progressWidget->hide();
-}
-
-void MainWindow::P(size_t i)
-{
-	progress->setValue(i);
-	QCoreApplication::processEvents();
-}
-
-bool MainWindow::clearDir( QString &path)
-{
-	if (path.isEmpty()) {
-		return false;
-	}
-	QDir dir(path);
-	if (!dir.exists()) {
-		return true;
-	}
-	dir.setFilter(QDir::AllEntries | QDir::NoDotAndDotDot); //ÉèÖÃ¹ıÂË  
-	QFileInfoList fileList = dir.entryInfoList(); // »ñÈ¡ËùÓĞµÄÎÄ¼şĞÅÏ¢  
-	foreach(QFileInfo file, fileList) { //±éÀúÎÄ¼şĞÅÏ¢  
-		if (file.isFile()) { // ÊÇÎÄ¼ş£¬É¾³ı  
-			file.dir().remove(file.fileName());
-		}
-		else if(file.isDir()){ // µİ¹éÉ¾³ı  
-			clearDir(file.absoluteFilePath());
-		}
-	}
-	return dir.rmpath(dir.absolutePath()); // É¾³ıÎÄ¼ş¼Ğ  
+	m_centerTopWidget->CenterButtonPush(SLICEBTN);
 }
 
 void MainWindow::showPreviewWidget1(QString zipPath)
 {
-	//½âÑ¹zip°üµ½ÓÃ»§Ä¿Â¼ÏÂ
-	QString name = getFileLocation();
-	name.append("/images");
-	clearDir(name);
+	//è§£å‹zipåŒ…åˆ°ç”¨æˆ·ç›®å½•ä¸‹
+	clearDir(e_setting.ZipTempPath.c_str());
 
-	QDir file(name);
-	bool ret = file.exists();
-	if (!ret) {
-		bool ok = file.mkdir(name);
-		if (!ok)
+	QDir file(e_setting.ZipTempPath.c_str());
+	if (!file.exists()) {
+		if (!file.mkdir(e_setting.ZipTempPath.c_str()))
 			exit(2);
 	}
 
 	if (extractZipPath(zipPath)) {
-		JlCompress::extractDir(zipPath, name);
-
+		JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
+	
 		previewDialog = new PreviewDialog();
-		if (previewDialog->readIni(name)) {
+		if (previewDialog->readIni(e_setting.ZipTempPath.c_str())) {
 			previewDialog->exec();
 			delete previewDialog;
 		}
 	}
 	else {
-		QString text(QStringLiteral("´ò¿ªÎÄ¼ş"));
+		QString text(QStringLiteral("æ‰“å¼€æ–‡ä»¶"));
 		text.append(zipPath);
-		text.append(QStringLiteral("Ê§°Ü£¡"));
-		QMessageBox::about(this, QStringLiteral("¾¯¸æ"), text);
+		text.append(QStringLiteral("å¤±è´¥ï¼"));
+		QMessageBox::about(this, QStringLiteral("è­¦å‘Š"), text);
 	}
 }
 
@@ -2447,7 +1153,7 @@ void MainWindow::saveModelSupport()
 {
 	if (interface1->model->objects.size() > 0) {
 		QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("±£´æÇĞÆ¬ÎÄ¼ş"), desktop, "histogram file(*.stl)");
+		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("ä¿å­˜åˆ‡ç‰‡æ–‡ä»¶"), desktop, "histogram file(*.stl)");
 		if (!path.isEmpty()) {
 			TriangleMesh mesh = glwidget->saveSupport();
 			interface1->wirteStlBinary(path.toStdString(), mesh);
@@ -2464,7 +1170,7 @@ void MainWindow::showAboutDialog()
 
 void MainWindow::autoArrange()
 {
-	//Î´É¾³ıÖ§³Å£¿£¿£¿
+	//æœªåˆ é™¤æ”¯æ’‘ï¼Ÿï¼Ÿï¼Ÿ
 	Pointfs positions = interface1->autoArrange(interface1->dlprint->config.arrange_space);
 
 	glwidget->clearSupportBuffer();
@@ -2475,7 +1181,7 @@ void MainWindow::autoArrange()
 			if ((*i)->exist) {
 				size_t id = interface1->find_id(*i);
 				
-				//½«ËùÓĞÊµÀıÔÚxy·½ÏòÉÏÖØĞÂÅÅÁĞ
+				//å°†æ‰€æœ‰å®ä¾‹åœ¨xyæ–¹å‘ä¸Šé‡æ–°æ’åˆ—
 				Pointf p = positions.back();
 				positions.pop_back();
 				double x = p.x - (*i)->offset.x;
@@ -2533,9 +1239,9 @@ void MainWindow::_duplicate()
 {
 	if (glwidget->selectID >= 0) {
 		bool ret;
-		int num = QInputDialog::getInt(this, QStringLiteral("¸´ÖÆ"), QStringLiteral("ÇëÊäÈë¸´ÖÆÄ£ĞÍµÄ¸öÊı£º"), 1, 1, 50, 1, &ret);
+		int num = QInputDialog::getInt(this, QStringLiteral("å¤åˆ¶"), QStringLiteral("è¯·è¾“å…¥å¤åˆ¶æ¨¡å‹çš„ä¸ªæ•°ï¼š"), 1, 1, 50, 1, &ret);
 		if (ret) {
-			//switch (QMessageBox::question(this, QStringLiteral("ÌáÊ¾"), QStringLiteral("¸´ÖÆºó½øĞĞ×Ô¶¯ÅÅÁĞ£¿"), QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes))
+			//switch (QMessageBox::question(this, QStringLiteral("æç¤º"), QStringLiteral("å¤åˆ¶åè¿›è¡Œè‡ªåŠ¨æ’åˆ—ï¼Ÿ"), QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes))
 			//{
 			//case QMessageBox::Yes:
 				duplicate(num,true);
@@ -2548,7 +1254,7 @@ void MainWindow::_duplicate()
 	}
 	else
 	{
-		QMessageBox::about(this, QStringLiteral("ÌáÊ¾"), QStringLiteral("ÇëÑ¡ÖĞÒ»¸öÄ£ĞÍ½øĞĞ¸´ÖÆ¡£"));
+		QMessageBox::about(this, QStringLiteral("æç¤º"), QStringLiteral("è¯·é€‰ä¸­ä¸€ä¸ªæ¨¡å‹è¿›è¡Œå¤åˆ¶ã€‚"));
 		return;
 	}
 }
@@ -2574,7 +1280,7 @@ void MainWindow::deleteModelBuffer(size_t id)
 	interface1->find_instance(id)->setExist(false);
 }
 
-//´«ÈëÒÆ¶¯µÄ¾àÀëÊıÖµ
+//ä¼ å…¥ç§»åŠ¨çš„è·ç¦»æ•°å€¼
 void MainWindow::offsetValueChange(size_t id,double x, double y, double z)
 {
 	ModelInstance* i = interface1->find_instance(id);
@@ -2589,7 +1295,7 @@ void MainWindow::offsetValueChange(size_t id,double x, double y, double z)
 	glwidget->updateConfine();
 }
 
-//´«ÈëËõ·ÅµÄ±ÈÀıÖµ
+//ä¼ å…¥ç¼©æ”¾çš„æ¯”ä¾‹å€¼
 void MainWindow::scaleValueChange(size_t id, double x, double y, double z)
 {
 	ModelInstance* i = interface1->find_instance(id);
@@ -2606,7 +1312,7 @@ void MainWindow::scaleValueChange(size_t id, double x, double y, double z)
 	glwidget->updateConfine();
 }
 
-//´«ÈëĞı×ªµÄ½Ç¶ÈµÄÊıÖµ
+//ä¼ å…¥æ—‹è½¬çš„è§’åº¦çš„æ•°å€¼
 void MainWindow::rotateValueChange(size_t id, double angle, int x, int y, int z)
 {
 	ModelInstance* i = interface1->find_instance(id);
@@ -2620,17 +1326,17 @@ void MainWindow::rotateValueChange(size_t id, double angle, int x, int y, int z)
 
 void MainWindow::addSupports(size_t id, TreeSupport* s, QProgressBar* progress)
 {
-	//Ö§³ÅÊıÖµ´æÈëtreeSupports
+	//æ”¯æ’‘æ•°å€¼å­˜å…¥treeSupports
 	interface1->dlprint->insertSupports(id, s);
-	//äÖÈ¾Ö§³Å
+	//æ¸²æŸ“æ”¯æ’‘
 	glwidget->initTreeSupport_id(id, s, progress);
 }
 
 void MainWindow::deleteSupports(size_t id)
 {
-	//É¾³ıtreeSupportsÖĞµÄÖ¸¶¨Ö§³Å
+	//åˆ é™¤treeSupportsä¸­çš„æŒ‡å®šæ”¯æ’‘
 	interface1->dlprint->delete_tree_support(id);
-	//É¾³ıÖ§³Å»º´æÇø
+	//åˆ é™¤æ”¯æ’‘ç¼“å­˜åŒº
 	glwidget->delSupportBuffer(id);
 }
 
@@ -2639,7 +1345,7 @@ void MainWindow::clearUndoStack()
 	MainUndoGroup->activeStack()->clear();
 }
 
-//Ö§³Å±à¼­¿ÉÒÔ100¸öµãÎªÒ»¸öÇø¼ä£¬Ã¿´ÎÉ¾¼õ²Ù×÷×î¶àÖ»¶Ô100¸öµã½øĞĞ³õÊ¼»¯£¬Çø¼äµã¹ıÉÙ»áÏûºÄ¹ı¶àÄÚ´æ??????
+//æ”¯æ’‘ç¼–è¾‘å¯ä»¥100ä¸ªç‚¹ä¸ºä¸€ä¸ªåŒºé—´ï¼Œæ¯æ¬¡åˆ å‡æ“ä½œæœ€å¤šåªå¯¹100ä¸ªç‚¹è¿›è¡Œåˆå§‹åŒ–ï¼ŒåŒºé—´ç‚¹è¿‡å°‘ä¼šæ¶ˆè€—è¿‡å¤šå†…å­˜??????
 void MainWindow::addOneSupport(Pointf3 p)
 {
 	Pointf3Exist temp = { true,p };
@@ -2678,24 +1384,11 @@ void MainWindow::setOrthogonality()
 	glwidget->setOrthogonality();
 }
 
-void MainWindow::init_rotate()
-{
-	x_rotate = 0;
-	y_rotate = 0;
-	z_rotate = 0;
-	x_rotate_spin->setValue(x_rotate);
-	y_rotate_spin->setValue(y_rotate);
-	z_rotate_spin->setValue(z_rotate);
-}
-
 void MainWindow::initDlprinter()
 {
-	QString file = getFileLocation();
-	file.append("/dlprinter.ini");
-	QFile dir(file);
-	if (dir.exists()) {
-		QSettings* readini = new QSettings(file, QSettings::IniFormat);
-		//¶ÁÈ¡´òÓ¡ÉèÖÃ
+	if (QFile(e_setting.DlprinterFile.c_str()).exists()) {
+		QSettings* readini = new QSettings(e_setting.DlprinterFile.c_str(), QSettings::IniFormat);
+		//è¯»å–æ‰“å°è®¾ç½®
 		QString name = readini->value("/dlprinter/name").toString();
 		delete readini;
 		if (name == "S288")
@@ -2719,9 +1412,7 @@ void MainWindow::initSetupDialog()
 
 void MainWindow::dlprinterChange(QString name)
 {
-	QString file = getFileLocation();
-	file.append("/dlprinter.ini");
-	QSettings* writeini = new QSettings(file, QSettings::IniFormat);
+	QSettings* writeini = new QSettings(e_setting.DlprinterFile.c_str(), QSettings::IniFormat);
 	writeini->clear();
 	
 	if (name == "S288") {
@@ -2735,36 +1426,22 @@ void MainWindow::dlprinterChange(QString name)
 		dlprinter->readPrinter();
 	}
 	delete writeini;
-
+	
 	glwidget->dlprinterChange();
 	glwidget->updateConfine();
 	glwidget->update();
 }
 
-void MainWindow::checkUpdate()
+void MainWindow::showSetupDialog()
 {
-	process = new QProcess();
-	//connect(process, SIGNAL(started()), SLOT(started()));
-	connect(process, SIGNAL(finished(int, QProcess::ExitStatus)), this, SLOT(UpdateFinished(int)));
-	//connect(process, SIGNAL(stateChanged(QProcess::ProcessState)), SLOT(stateChanged()));
+	m_centerTopWidget->CenterButtonPush(SETUPBTN);
 
-	QString path = QCoreApplication::applicationDirPath();
-	qDebug() << path;
-	process->start(path + "/updater.exe");
-	//process->start("cmd");
+	if (m_centerTopWidget->m_setupBtn->c_isChecked()) {
+		setupDialog = new SetupDialog(this);
+		setupDialog->exec();
+		delete setupDialog;
+	}
 
-	if (!process->waitForStarted())
-		qDebug() << "failure!";
-	else
-		qDebug() << "success!";
-}
-
-void MainWindow::UpdateFinished(int a)
-{
-	qDebug() << "updateFinised: " << a;
-	delete process;
-	//Õı³£¸üĞÂ
-	//if (a == 1)
-	//	_exit();
+	m_centerTopWidget->CenterButtonPush(SETUPBTN);
 }
 

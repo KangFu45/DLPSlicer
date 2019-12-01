@@ -92,11 +92,11 @@ namespace Slic3r {
 						//³é¿Õ
 						if (config.hollow_out.value) {
 
-							std::unique_ptr<Fill> fill(Fill::new_from_type(ip3DHoneycomb));
+							//std::unique_ptr<Fill> fill(Fill::new_from_type(ip3DHoneycomb));
 
 
-							fill->bounding_box.merge(Point::new_scale(bb.min.x, bb.min.y));
-							fill->bounding_box.merge(Point::new_scale(bb.max.x, bb.max.y));
+							//fill->bounding_box.merge(Point::new_scale(bb.min.x, bb.min.y));
+							//fill->bounding_box.merge(Point::new_scale(bb.max.x, bb.max.y));
 
 							//fill->min_spacing = this->config.get_abs_value("infill_extrusion_width", this->config.layer_height.value);
 							//fill->min_spacing = 3;
@@ -105,7 +105,7 @@ namespace Slic3r {
 							//fill->angle = 45;
 							//fill->angle = Geometry::deg2rad(this->config.fill_angle.value);
 
-							fill->density = this->config.fill_density.value / 100;
+							//fill->density = this->config.fill_density.value / 100;
 							//fill->density = 0.5;
 							//qDebug() << "dendity:  " << fill->density;
 
@@ -131,13 +131,16 @@ namespace Slic3r {
 									double wall = double(config.fill_density / 100) * 2;
 									wall = wall <= 0.1 ? 0.1 : wall;
 
-									pattern.push_back(generate_honeycomb_pattern(fill->bounding_box, wall, space));
+									BoundingBox box;
+									box.merge(Point::new_scale(bb.min.x, bb.min.y));
+									box.merge(Point::new_scale(bb.max.x, bb.max.y));
+									pattern.push_back(generate_honeycomb_pattern(box, wall, space));
 								}
 
 								parallelize<size_t>(
 									0,
 									_layers.size() - 1,
-									boost::bind(&DLPrint::_infill_layer, this, _1, fill.get(), pattern),
+									boost::bind(&DLPrint::_infill_layer, this, _1, pattern),
 									this->config.threads
 									);
 							}
@@ -210,7 +213,7 @@ namespace Slic3r {
 		}
 	}
 
-	void DLPrint::_infill_layer(size_t i, const Fill* _fill, ExPolygons pattern)
+	void DLPrint::_infill_layer(size_t i, ExPolygons pattern)
 	{
 		Layer &layer = this->_layers[i];
 

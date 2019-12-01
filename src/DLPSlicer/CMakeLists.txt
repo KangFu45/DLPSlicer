@@ -9,7 +9,6 @@ FILE(GLOB BSpline_HEAD_FILES "slic3r_src/BSpline/./*.h")
 FILE(GLOB Fill_SRC_FILES "slic3r_src/libslic3r/Fill/./*.cpp")
 FILE(GLOB Fill_HEAD_FILES "slic3r_src/libslic3r/Fill/./*.hpp")
 
-
 #设置输出路径
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_CURRENT_BINARY_DIR}/../release)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_CURRENT_BINARY_DIR}/../debug) 
@@ -40,12 +39,13 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../Clipper)
 link_directories(DLPSlicer ${PROJECT_SOURCE_DIR}/lib-64/lib/quazip)
 link_directories(DLPSlicer ${PROJECT_SOURCE_DIR}/lib-64/lib/glut)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../IConfig)
 add_definitions("/bigobj")
 
-add_executable(DLPSlicer ${Slic3rLib_SRC_FILES} ${Slic3rLib_HEAD_FILES} ${QRC_FILES} ${SRC_FILES} ${HEAD_FILES}
+add_executable(DLPSlicer ${Slic3rLib_SRC_FILES} ${Slic3rLib_HEAD_FILES} ${QRC_FILES} ${SRC_FILES} ${HEAD_FILES} 
 	${BSpline_SRC_FILES} ${BSpline_HEAD_FILES} ${Fill_SRC_FILES} ${Fill_HEAD_FILES})
 
-target_link_libraries(DLPSlicer admesh clipper poly2tri polypartition)
+target_link_libraries(DLPSlicer admesh clipper poly2tri polypartition IConfig)
 target_link_libraries(DLPSlicer glu32.lib opengl32.lib)
 #链接第三方库
 target_link_libraries(DLPSlicer optimized quazip.lib)

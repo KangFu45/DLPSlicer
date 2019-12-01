@@ -5,7 +5,6 @@
 #include "libslic3r.h"
 #include "ExPolygon.hpp"
 #include "ExPolygonCollection.hpp"
-#include "Fill/Fill.hpp"
 #include "Model.hpp"
 #include "Point.hpp"
 #include "PrintConfig.hpp"
@@ -120,7 +119,7 @@ namespace Slic3r {
 		//日期：2017
 		//功能：填充层。
 		//参数2：层数
-		void _infill_layer(size_t i, const Fill* _fill, ExPolygons pattern);
+		void _infill_layer(size_t i, ExPolygons pattern);
 
 		//日期：2017
 		//功能：求取包围盒射线上点集合。

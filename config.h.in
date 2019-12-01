@@ -1,0 +1,6 @@
+//#cmakedefine USE_MYMATH
+// does the platform provide pow function?
+//#cmakedefine HAVE_POW
+// the configured options and settings for Tutorial
+#define DLPSlicer_VERSION_MAJOR @DLPSlicer_VERSION_MAJOR@
+#define DLPSlicer_VERSION_MINOR @DLPSlicer_VERSION_MINOR@

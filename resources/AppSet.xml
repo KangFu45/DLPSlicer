@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<config>
+  <App Name="DLPSlicer" Version="1.6.1v"/>
+  <Path>
+    <UserFile path="C:/Users/Administrator/AppData/Local/DLPSlicer"/>
+  </Path>
+  <LaserScan K="198" maxPower="500" minSpeed="100" maxSpeed="100000" serialPort="COM1"/> 
+</config>
