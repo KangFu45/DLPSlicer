@@ -30,6 +30,14 @@ typedef std::vector<ModelObject*> ModelObjectPtrs;
 typedef std::vector<ModelVolume*> ModelVolumePtrs;
 typedef std::vector<ModelInstance*> ModelInstancePtrs;
 
+inline void model_center(TriangleMesh& mesh)
+{
+	Pointf _origin((mesh.stl.stats.max.x - mesh.stl.stats.min.x) / 2 + mesh.stl.stats.min.x,
+		(mesh.stl.stats.max.y - mesh.stl.stats.min.y) / 2 + mesh.stl.stats.min.y);
+
+	mesh.translate(-_origin.x, -_origin.y, -mesh.stl.stats.min.z);
+}
+
 
 /// Model Class representing the print bed content
 /// Description of a triangular model with multiple materials, multiple instances with various affine transformations
@@ -38,185 +46,202 @@ typedef std::vector<ModelInstance*> ModelInstancePtrs;
 /// all objects may share multiple materials.
 class Model
 {
-    public:
-    ModelMaterialMap materials;
-    ///< Materials are owned by a model and referenced by objects through t_model_material_id.
-    ///< Single material may be shared by multiple models.
+public:
+	ModelMaterialMap materials;
+	///< Materials are owned by a model and referenced by objects through t_model_material_id.
+	///< Single material may be shared by multiple models.
 
-    ModelObjectPtrs objects;
-    ///< Objects are owned by a model. Each object may have multiple instances
-    ///< , each instance having its own transformation (shift, scale, rotation).
+	ModelObjectPtrs objects;
+	///< Objects are owned by a model. Each object may have multiple instances
+	///< , each instance having its own transformation (shift, scale, rotation).
 
-    std::map<std::string, std::string> metadata;
-    ///< Model metadata <name, value>, this is needed for 3MF format read/write.
+	std::map<std::string, std::string> metadata;
+	///< Model metadata <name, value>, this is needed for 3MF format read/write.
 
-    /// Model constructor.
-    Model();
+	/// Model constructor.
+	Model();
 
-    /// Model constructor.
-    /// \param other Model the model to be copied
-    Model(const Model &other);
+	/// Model constructor.
+	/// \param other Model the model to be copied
+	Model(const Model& other);
 
-    /// = Operator overloading.
-    /// \param other Model the model to be copied
-    /// \return Model& the current Model to enable operator cascading
-    Model& operator= (Model other);
+	/// = Operator overloading.
+	/// \param other Model the model to be copied
+	/// \return Model& the current Model to enable operator cascading
+	Model& operator= (Model other);
 
-    /// Swap objects and materials with another model.
-    /// \param other Model the model to be swapped with
-    void swap(Model &other);
+	/// Swap objects and materials with another model.
+	/// \param other Model the model to be swapped with
+	void swap(Model& other);
 
-    /// Model destructor
-    ~Model();
+	/// Model destructor
+	~Model();
 
-    /// Read a model from file.
-    /// This function supports the following formats (STL, OBJ, AMF), It auto-detects the file format from the file name suffix.
-    /// \param  input_file std::string the file path expressed in UTF-8
-    /// \return Model the read Model
-    static Model read_from_file(std::string input_file);
+	/// Read a model from file.
+	/// This function supports the following formats (STL, OBJ, AMF), It auto-detects the file format from the file name suffix.
+	/// \param  input_file std::string the file path expressed in UTF-8
+	/// \return Model the read Model
+	static Model read_from_file(std::string input_file);
 
-    /// Create a new object and add it to the current Model.
-    /// \return ModelObject* a pointer to the new Model
-    ModelObject* add_object();
+	/// Create a new object and add it to the current Model.
+	/// \return ModelObject* a pointer to the new Model
+	ModelObject* add_object();
 
-    /// Create a new object and add it to the current Model.
-    /// This function copies another model object
-    /// \param other ModelObject the ModelObject to be copied
-    /// \param copy_volumes if you also want to copy volumes of the other object. By default = true
-    /// \return ModelObject* a pointer to the new ModelObject
-    ModelObject* add_object(const ModelObject &other, bool copy_volumes = true);
+	/// Create a new object and add it to the current Model.
+	/// This function copies another model object
+	/// \param other ModelObject the ModelObject to be copied
+	/// \param copy_volumes if you also want to copy volumes of the other object. By default = true
+	/// \return ModelObject* a pointer to the new ModelObject
+	ModelObject* add_object(const ModelObject& other, bool copy_volumes = true);
 
-    /// Delete a ModelObject from the current Model.
-    /// \param idx size_t the index of the desired ModelObject
-    void delete_object(size_t idx);
+	/// Delete a ModelObject from the current Model.
+	/// \param idx size_t the index of the desired ModelObject
+	void delete_object(size_t idx);
 
-    /// Delete all ModelObjects found in the current Model.
-    void clear_objects();
+	/// Delete all ModelObjects found in the current Model.
+	void clear_objects();
 
-    /// Add a new ModelMaterial to the model.
-    /// \param material_id t_model_material_id the id of the new ModelMaterial to be added
-    /// \return ModelMaterial* a pointer to the new ModelMaterial
-    ModelMaterial* add_material(t_model_material_id material_id);
+	/// Add a new ModelMaterial to the model.
+	/// \param material_id t_model_material_id the id of the new ModelMaterial to be added
+	/// \return ModelMaterial* a pointer to the new ModelMaterial
+	ModelMaterial* add_material(t_model_material_id material_id);
 
-    /// Add a new ModelMaterial to the current Model.
-    /// This function copies another ModelMaterial, It also delete the current ModelMaterial carrying the same
-    /// material id in the map.
-    /// \param material_id t_model_material_id the id of the new ModelMaterial to be added
-    /// \param other ModelMaterial the model material to be copied
-    /// \return ModelMaterial* a pointer to the new ModelMaterial
-    ModelMaterial* add_material(t_model_material_id material_id, const ModelMaterial &other);
+	/// Add a new ModelMaterial to the current Model.
+	/// This function copies another ModelMaterial, It also delete the current ModelMaterial carrying the same
+	/// material id in the map.
+	/// \param material_id t_model_material_id the id of the new ModelMaterial to be added
+	/// \param other ModelMaterial the model material to be copied
+	/// \return ModelMaterial* a pointer to the new ModelMaterial
+	ModelMaterial* add_material(t_model_material_id material_id, const ModelMaterial& other);
 
-    /// Get the ModelMaterial object instance having a certain material id.
-    /// Returns null if the ModelMaterial object instance is not found.
-    /// \param material_id t_model_material_id the id of the needed ModelMaterial object instance
-    /// \return ModelMaterial* a pointer to the ModelMaterial object instance or null if not found
-    ModelMaterial* get_material(t_model_material_id material_id);
+	/// Get the ModelMaterial object instance having a certain material id.
+	/// Returns null if the ModelMaterial object instance is not found.
+	/// \param material_id t_model_material_id the id of the needed ModelMaterial object instance
+	/// \return ModelMaterial* a pointer to the ModelMaterial object instance or null if not found
+	ModelMaterial* get_material(t_model_material_id material_id);
 
-    /// Delete a ModelMaterial carrying a certain material id if found.
-    /// \param material_id t_model_material_id the id of the ModelMaterial to be deleted
-    void delete_material(t_model_material_id material_id);
+	/// Delete a ModelMaterial carrying a certain material id if found.
+	/// \param material_id t_model_material_id the id of the ModelMaterial to be deleted
+	void delete_material(t_model_material_id material_id);
 
-    /// Delete all the ModelMaterial objects found in the current Model.
-    void clear_materials();
+	/// Delete all the ModelMaterial objects found in the current Model.
+	void clear_materials();
 
-    /// Check if any ModelObject has no ModelInstances.
-    /// \return bool true means there exists at least one ModelObject with no ModelInstance objects
-    bool has_objects_with_no_instances() const;
+	/// Check if any ModelObject has no ModelInstances.
+	/// \return bool true means there exists at least one ModelObject with no ModelInstance objects
+	bool has_objects_with_no_instances() const;
 
-    /// Add a new ModelInstance to each ModelObject having no ModelInstance objects
-    /// \return bool
-    bool add_default_instances();
+	/// Add a new ModelInstance to each ModelObject having no ModelInstance objects
+	/// \return bool
+	bool add_default_instances();
 
-    /// Get the bounding box of the transformed instances.
-    /// \return BoundingBoxf3 a bounding box object.
-    BoundingBoxf3 bounding_box() const;
+	/// Get the bounding box of the transformed instances.
+	/// \return BoundingBoxf3 a bounding box object.
+	BoundingBoxf3 bounding_box() const;
 
-    /// Repair the ModelObjects of the current Model.
-    /// This function calls repair function on each TriangleMesh of each model object volume
-    void repair();
+	/// Repair the ModelObjects of the current Model.
+	/// This function calls repair function on each TriangleMesh of each model object volume
+	void repair();
 
-    /// Center the total bounding box of the instances around a point.
-    /// This transformation works in the XY plane only and no transformation in Z is performed.
-    /// \param point pointf object to center the model instances of model objects around
-    void center_instances_around_point(const Pointf &point);
+	/// Center the total bounding box of the instances around a point.
+	/// This transformation works in the XY plane only and no transformation in Z is performed.
+	/// \param point pointf object to center the model instances of model objects around
+	void center_instances_around_point(const Pointf& point);
 
-    void align_instances_to_origin();
+	void align_instances_to_origin();
 
-    /// Translate each ModelObject with x, y, z units.
-    /// \param x coordf_t units in the x direction
-    /// \param y coordf_t units in the y direction
-    /// \param z coordf_t units in the z direction
-    void translate(coordf_t x, coordf_t y, coordf_t z);
+	/// Translate each ModelObject with x, y, z units.
+	/// \param x coordf_t units in the x direction
+	/// \param y coordf_t units in the y direction
+	/// \param z coordf_t units in the z direction
+	void translate(coordf_t x, coordf_t y, coordf_t z);
 
-    /// Flatten all ModelInstances to a single mesh
-    /// after performing instance transformations (if the object was rotated or translated).
-    /// \return TriangleMesh a single TriangleMesh object
-    TriangleMesh mesh() const;
+	/// Flatten all ModelInstances to a single mesh
+	/// after performing instance transformations (if the object was rotated or translated).
+	/// \return TriangleMesh a single TriangleMesh object
+	TriangleMesh mesh() const;
 
-    /// Flatten all ModelVolumes to a single mesh without any extra processing (i.e. without applying any instance duplication and/or transformation).
-    /// \return TriangleMesh a single TriangleMesh object
-    TriangleMesh raw_mesh() const;
+	/// Flatten all ModelVolumes to a single mesh without any extra processing (i.e. without applying any instance duplication and/or transformation).
+	/// \return TriangleMesh a single TriangleMesh object
+	TriangleMesh raw_mesh() const;
 
-    /// Arrange ModelInstances. ModelInstances of the same ModelObject do not preserve their relative positions.一些模型无法保证其实例的相对位置
-    /// It uses the given BoundingBoxf as a hint, but falls back to free arrangement if it's not possible to fit all the parts in it.
-    /// \param sizes Pointfs& number of parts 其他模型实例的水平位置信息
-    /// \param dist coordf_t distance between cells 实例之间的间隔
-    /// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill 加载进入实例的包围盒
-    /// \param out Pointfs& vector of the output positions 新加入实例后的位置排列信息
-    /// \return bool whether the function finished arranging objects or it is impossible to arrange
-    bool _arrange(const Pointfs &sizes, coordf_t dist, const BoundingBoxf* bb, Pointfs &out) const;
+	/// Arrange ModelInstances. ModelInstances of the same ModelObject do not preserve their relative positions.一些模型无法保证其实例的相对位置
+	/// It uses the given BoundingBoxf as a hint, but falls back to free arrangement if it's not possible to fit all the parts in it.
+	/// \param sizes Pointfs& number of parts 其他模型实例的水平位置信息
+	/// \param dist coordf_t distance between cells 实例之间的间隔
+	/// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill 加载进入实例的包围盒
+	/// \param out Pointfs& vector of the output positions 新加入实例后的位置排列信息
+	/// \return bool whether the function finished arranging objects or it is impossible to arrange
+	bool _arrange(const Pointfs& sizes, coordf_t dist, const BoundingBoxf* bb, Pointfs& out) const;
 
 
-	//*******************************
 	//日期：2018.3.12
 	//功能：模型自动排列功能（重写）
 	//参数1：所有模型的二维方框
 	//参数2：模型间的安全距离
 	//参数3：模型的摆放的范围
 	//参数4：模型的位置信息
-	//*******************************
 	void arrange(const Pointfs& sizes, coordf_t dist, const BoundingBoxf* bb, Pointfs& out);
 
-    /// Arrange ModelObjects preserving their ModelInstance count but altering their ModelInstance positions.
-    /// \param dist coordf_t distance between cells
-    /// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill
-    /// \return bool whether the function finished arranging objects or it is impossible to arrange
+	/// Arrange ModelObjects preserving their ModelInstance count but altering their ModelInstance positions.
+	/// \param dist coordf_t distance between cells
+	/// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill
+	/// \return bool whether the function finished arranging objects or it is impossible to arrange
 	Pointfs arrange_objects(coordf_t dist, const BoundingBoxf* bb = NULL);
 
-    /// Duplicate the ModelInstances of each ModelObject as a whole preserving their relative positions保留相对位置.
-    /// This function croaks if the duplicated objects do not fit the print bed.
-    /// \param copies_num size_t number of copies
-    /// \param dist coordf_t distance between cells
-    /// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill
-    void duplicate(size_t copies_num, coordf_t dist, const BoundingBoxf* bb = NULL);
+	/// Duplicate the ModelInstances of each ModelObject as a whole preserving their relative positions保留相对位置.
+	/// This function croaks if the duplicated objects do not fit the print bed.
+	/// \param copies_num size_t number of copies
+	/// \param dist coordf_t distance between cells
+	/// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill
+	void duplicate(size_t copies_num, coordf_t dist, const BoundingBoxf* bb = NULL);
 
-    /// Duplicate each entire ModelInstances of the each ModelObject as a whole.
-    /// This function will append more instances to each object
-    /// and then calls arrange_objects() function to automatically rearrange everything.
-    /// \param copies_num size_t number of copies
-    /// \param dist coordf_t distance between cells
-    /// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill
-    void duplicate_objects(size_t copies_num, coordf_t dist, const BoundingBoxf* bb = NULL);
-
-
-    /// Duplicate a single ModelObject and arranges them on a grid.
-    /// Grid duplication is not supported with multiple objects. It throws an exception if there is more than one ModelObject.
-    /// It also throws an exception if there are no ModelObjects in the current Model.
-    /// \param x size_t number of duplicates in x direction
-    /// \param y size_t offset  number of duplicates in y direction
-    /// \param dist coordf_t distance supposed to be between the duplicated ModelObjects
-    void duplicate_objects_grid(size_t x, size_t y, coordf_t dist);
-
-    /// This function calls the print_info() function of each ModelObject.
-    void print_info() const;
-
-    /// Check to see if the current Model has characteristics of having multiple parts (usually multiple volumes, etc).
-    /// \return bool
-    bool looks_like_multipart_object() const;
+	/// Duplicate each entire ModelInstances of the each ModelObject as a whole.
+	/// This function will append more instances to each object
+	/// and then calls arrange_objects() function to automatically rearrange everything.
+	/// \param copies_num size_t number of copies
+	/// \param dist coordf_t distance between cells
+	/// \param bb BoundingBoxf* (optional) pointer to the bounding box of the area to fill
+	void duplicate_objects(size_t copies_num, coordf_t dist, const BoundingBoxf* bb = NULL);
 
 
-    /// Take all of the ModelObjects in the current Model and combines them into a single ModelObject
-    void convert_multipart_object();
+	/// Duplicate a single ModelObject and arranges them on a grid.
+	/// Grid duplication is not supported with multiple objects. It throws an exception if there is more than one ModelObject.
+	/// It also throws an exception if there are no ModelObjects in the current Model.
+	/// \param x size_t number of duplicates in x direction
+	/// \param y size_t offset  number of duplicates in y direction
+	/// \param dist coordf_t distance supposed to be between the duplicated ModelObjects
+	void duplicate_objects_grid(size_t x, size_t y, coordf_t dist);
+
+	/// This function calls the print_info() function of each ModelObject.
+	void print_info() const;
+
+	/// Check to see if the current Model has characteristics of having multiple parts (usually multiple volumes, etc).
+	/// \return bool
+	bool looks_like_multipart_object() const;
+
+
+	/// Take all of the ModelObjects in the current Model and combines them into a single ModelObject
+	void convert_multipart_object();
+
+	//-------------------------------------------------------
+
+	ModelObject* find_object(size_t id);
+
+	ModelInstance* find_instance(size_t id);
+
+	ModelInstance* addInstance(size_t id);
+
+	void model_lift(double distance);
+
+	void delete_model(size_t id);
+
+	void wirteStlBinary(const std::string& outFile, TriangleMesh& supportMesh);
+
+	size_t find_id(ModelInstance* instance);
+
+	size_t load_model(std::string file, int format);
+
 };
 
 /// Model Material class

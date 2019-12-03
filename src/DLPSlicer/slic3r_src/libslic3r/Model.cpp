@@ -597,6 +597,92 @@ Model::convert_multipart_object()
         this->delete_object(0);
 }
 
+//----------------------------------------------------------
+
+ModelObject* Model::find_object(size_t id) { return objects[id / InstanceNum]; };
+
+ModelInstance* Model::find_instance(size_t id) { return objects[id / InstanceNum]->instances[id % InstanceNum]; };
+
+ModelInstance* Model::addInstance(size_t id) {
+	size_t a = id / InstanceNum;
+	ModelObject* o = find_object(id);
+	ModelInstance* i = find_instance(id);
+	return o->add_instance(*i);
+}
+
+void Model::model_lift(double distance) {
+	for (auto o = objects.begin(); o != objects.end(); ++o) {
+		for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+			(*i)->z_translation += distance;
+		}
+	}
+}
+
+void Model::delete_model(size_t id) {
+	size_t a = id / InstanceNum;
+	size_t i = id % InstanceNum;//模型对象实例的id
+	ModelObject* o = find_object(id);
+	if (o != NULL) {
+		if (o->instances.size() == 1) {
+			delete_object(a);
+		}
+		else
+			o->delete_instance(i);
+	}
+}
+
+void Model::wirteStlBinary(const std::string& outFile, TriangleMesh& supportMesh) {
+	TriangleMesh m = mesh();
+	m.merge(supportMesh);
+	m.write_binary(outFile);
+}
+
+size_t Model::find_id(ModelInstance* instance) {
+	for (auto o = objects.begin(); o != objects.end(); ++o) {
+		int a = std::distance(objects.begin(), o);
+		for (auto n = (*o)->instances.begin(); n != (*o)->instances.end(); ++n) {
+			if (*n == instance)
+				return a * InstanceNum + std::distance((*o)->instances.begin(), n);
+		}
+	}
+	return -1;
+}
+
+size_t Model::load_model(std::string file, int format)
+{
+	//添加一个已有模型对象的实例
+	for (auto object = objects.begin(); object != objects.end(); ++object) {
+		if ((*object)->input_file == file) {
+			return find_id((*object)->add_instance());
+		}
+	}
+	//添加一个模型对象
+	ModelObject* temp = add_object();
+	TriangleMesh* T = new TriangleMesh();
+
+	if (format == 0)
+		IO::STL::read(file, T);
+	else if (format == 1) {
+		IO::OBJ::read(file, T);
+	}
+	//else if (format == 2)
+	//	IO::AMF::read(file, T);
+
+	T->repair();
+
+	temp->name = file;
+	temp->input_file = file;
+	temp->add_volume(*T);
+	model_center(temp->volumes[0]->mesh);
+
+	delete T;
+
+	return find_id(temp->add_instance());
+}
+
+
+//-----------------------------------------------------------
+
 ModelMaterial::ModelMaterial(Model *model) : model(model) {}
 ModelMaterial::ModelMaterial(Model *model, const ModelMaterial &other)
     : attributes(other.attributes), config(other.config), model(model)

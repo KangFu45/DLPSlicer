@@ -39,10 +39,7 @@ namespace Slic3r {
 
 const auto SLIC3R_VERSION = "1.3.0-dev";
 
-//*********************
-//日期：2018.3.13
 //功能：一个模型的实例数。
-//**********************
 const int InstanceNum = 1000;
 
 typedef long coord_t;

@@ -3,10 +3,13 @@
 #include <vector>
 #include "tool.h"
 
-GlWidget::GlWidget(MainWindow* parent, DLPrinter* _dlprinter, Model* _model, DLPrint* _dlprint)
-	: mainWindow(parent), m_program(0), selectID(-1), translationID(-1), supportEdit(false), _Depth(false), autoSupportMesh(NULL), supportEditBuffer(NULL),
+#include <qdir.h>
+#include <qfileinfo.h>
+
+GlWidget::GlWidget(DLPrinter* _dlprinter, Model* _model, DLPrint* _dlprint, std::vector<Pointf3Exist>& ps)
+	: translationID(-1), supportEdit(false), _Depth(false), autoSupportMesh(NULL), supportEditBuffer(NULL),
 	oneBallBuffer(NULL), viewport(ORTHOGONALITY), front(false), back(false), left(false), right(false), up(false), down(false), dlprinter(_dlprinter),
-	model(_model),dlprint(_dlprint)
+	m_model(_model),dlprint(_dlprint), treeSupportsExist(&ps)
 {
 	setDefaultView();
 	read_basics_mesh();
@@ -214,7 +217,6 @@ void GlWidget::resizeGL(int w, int h)
 		m_proj.ortho(-w / 2, w / 2, -h / 2, h / 2, -10000.0f, 10000.0f);
 }
 
-//*****************************************************************************
 //函数：m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 6 * sizeof(GLfloat));
 //功能：读取缓冲区的规则。
 //参数1：属性的id
@@ -222,8 +224,6 @@ void GlWidget::resizeGL(int w, int h)
 //参数3：读取数组的起始位置
 //参数4：读取一个顶点的一个属性的距离（一小步）
 //参数5：读取一个顶点的所有属性的距离（一大步）
-//******************************************************************************
-
 void GlWidget::drawModel()//渲染模型
 {
 	for (auto m = modelBuffers.begin(); m != modelBuffers.end(); ++m) {
@@ -235,7 +235,7 @@ void GlWidget::drawModel()//渲染模型
 		m_program->setAttributeBuffer(1, GL_FLOAT, 3 * sizeof(GLfloat), 3, 6 * sizeof(GLfloat));
 
 		//-------------设置模型矩阵------------
-		ModelInstance* instance = mainWindow->interface1->find_instance(mb->id);
+		ModelInstance* instance = m_model->find_instance(mb->id);
 		//得到原始模型中心
 		BoundingBoxf3 box = instance->get_object()->volumes[0]->mesh.bounding_box();
 		Pointf3 origin((box.max.x + box.min.x) / 2, (box.max.y + box.min.y) / 2, (box.max.z + box.min.z) / 2);
@@ -275,7 +275,7 @@ void GlWidget::drawModel()//渲染模型
 void GlWidget::addModelBuffer(ModelInstance* instance)//添加模型缓冲区
 {
 	//-------取得模型对象渲染数据---------
-	size_t id = mainWindow->interface1->find_id(instance);
+	size_t id = m_model->find_id(instance);
 	auto v = volumes.find(id / InstanceNum);
 	if (v != volumes.end()) {
 		ModelBuffer* mb = new ModelBuffer;
@@ -473,9 +473,9 @@ void GlWidget::wheelEvent(QWheelEvent *event)
 	update();
 }
 
-void GlWidget::mouseMoveEvent(QMouseEvent *event)
+void GlWidget::mouseMoveEvent(QMouseEvent* event)
 {
-	if (event->buttons()&Qt::RightButton)
+	if (event->buttons() & Qt::RightButton)
 	{
 		int x = event->pos().x() - xLastPos;
 		int y = event->pos().y() - yLastPos;
@@ -499,7 +499,7 @@ void GlWidget::mouseMoveEvent(QMouseEvent *event)
 		setEye();
 		update();
 	}
-	else if (event->buttons()&Qt::MiddleButton)
+	else if (event->buttons() & Qt::MiddleButton)
 	{
 		Pointf3 p1(xLastPos, yLastPos, 0);
 		Pointf3 p2(event->pos().x(), event->pos().y(), 0);
@@ -514,7 +514,7 @@ void GlWidget::mouseMoveEvent(QMouseEvent *event)
 
 		glGetIntegerv(GL_VIEWPORT, viewport);   /* 获取三个矩阵 */
 
-		QMatrix4x4 m = m_camera*m_world;
+		QMatrix4x4 m = m_camera * m_world;
 		mvmatrix = m.data();
 		projmatrix = m_proj.data();
 
@@ -552,7 +552,7 @@ void GlWidget::mouseMoveEvent(QMouseEvent *event)
 		update();
 	}
 
-	if (!supportEdit && event->buttons() == Qt::LeftButton&&translationID != -1) {
+	if (!supportEdit && event->buttons() == Qt::LeftButton && translationID != -1) {
 
 		int x = event->pos().x() - xLastPos;
 		int y = yLastPos - event->pos().y();
@@ -562,36 +562,36 @@ void GlWidget::mouseMoveEvent(QMouseEvent *event)
 		double _h, x_ratio, y_ratio;
 		if (translationID == translateMesh_X->id) {
 			_h = _horizonAngle - 90;
-			x_ratio = cosf((_h / 180.0)*PI);
-			y_ratio = sinf((_h / 180.0)*PI);
-			mainWindow->AddOffsetValue((x*x_ratio + y*y_ratio) / _scale, 0, 0);
+			x_ratio = cosf((_h / 180.0) * PI);
+			y_ratio = sinf((_h / 180.0) * PI);
+			offsetValueChange((x * x_ratio + y * y_ratio) / _scale, 0, 0, true);
 		}
 		else if (translationID == translateMesh_Y->id) {
 			_h = _horizonAngle - 180;
-			x_ratio = cosf((_h / 180.0)*PI);
-			y_ratio = sinf((_h / 180.0)*PI);
-			mainWindow->AddOffsetValue(0, -(x*x_ratio + y*y_ratio) / _scale, 0);
+			x_ratio = cosf((_h / 180.0) * PI);
+			y_ratio = sinf((_h / 180.0) * PI);
+			offsetValueChange(0, -(x * x_ratio + y * y_ratio) / _scale, 0, true);
 		}
 		else if (translationID == translateMesh_Z->id)
-			mainWindow->AddOffsetValue(0, 0, y / _scale);
+			offsetValueChange(0, 0, y / _scale, true);
 		else if (translationID == scaleMesh_X->id) {
 			_h = _horizonAngle + 90;
-			x_ratio = cosf((_h / 180.0)*PI);
-			y_ratio = sinf((_h / 180.0)*PI);
-			mainWindow->AddScaleValue((x*x_ratio + y*y_ratio) / _scale, 0, 0);
+			x_ratio = cosf((_h / 180.0) * PI);
+			y_ratio = sinf((_h / 180.0) * PI);
+			scaleValueChange((x * x_ratio + y * y_ratio) / _scale, 0, 0, true);
 		}
 		else if (translationID == scaleMesh_Y->id) {
 			_h = _horizonAngle + 180;
-			x_ratio = cosf((_h / 180.0)*PI);
-			y_ratio = sinf((_h / 180.0)*PI);
-			mainWindow->AddScaleValue(0, -(x*x_ratio + y*y_ratio) / _scale, 0);
+			x_ratio = cosf((_h / 180.0) * PI);
+			y_ratio = sinf((_h / 180.0) * PI);
+			scaleValueChange(0, -(x * x_ratio + y * y_ratio) / _scale, 0, true);
 		}
 		else if (translationID == scaleMesh_Z->id) {
-			mainWindow->AddScaleValue(0, 0, -y / _scale);
+			scaleValueChange(0, 0, -y / _scale, true);
 		}
 		else if (translationID == rotateMesh_Z->id || translationID == rotateMesh_X->id || translationID == rotateMesh_Y->id)
 		{
-			ModelInstance* i = mainWindow->interface1->find_instance(selectID);
+			ModelInstance* i = m_model->find_instance(selectID);
 
 			Pointf3 p;
 
@@ -604,7 +604,7 @@ void GlWidget::mouseMoveEvent(QMouseEvent *event)
 
 			glGetIntegerv(GL_VIEWPORT, viewport);   /* 获取三个矩阵 */
 
-			QMatrix4x4 m = m_camera*m_world;
+			QMatrix4x4 m = m_camera * m_world;
 			mvmatrix = m.data();
 			projmatrix = m_proj.data();
 
@@ -626,21 +626,21 @@ void GlWidget::mouseMoveEvent(QMouseEvent *event)
 
 			if (translationID == rotateMesh_Z->id) {
 				if (_verticalAngle > 0)
-					mainWindow->AddRotateValue(angle2 - angle1, 0, 0, 1);
+					rotateValueChange(angle2 - angle1, 0, 0, 1, true);
 				else
-					mainWindow->AddRotateValue(angle1 - angle2, 0, 0, 1);
+					rotateValueChange(angle1 - angle2, 0, 0, 1, true);
 			}
 			else if (translationID == rotateMesh_X->id) {
 				if ((_horizonAngle >= 0 && _horizonAngle < 180) || (_horizonAngle <= -180 && _horizonAngle > -360))
-					mainWindow->AddRotateValue(angle1 - angle2, 0, 1, 0);
+					rotateValueChange(angle1 - angle2, 0, 1, 0, true);
 				else
-					mainWindow->AddRotateValue(angle2 - angle1, 0, 1, 0);
+					rotateValueChange(angle2 - angle1, 0, 1, 0, true);
 			}
 			else if (translationID == rotateMesh_Y->id) {
 				if ((_horizonAngle >= 90 && _horizonAngle < 270) || (_horizonAngle <= -90 && _horizonAngle > -270))
-					mainWindow->AddRotateValue(angle1 - angle2, 1, 0, 0);
+					rotateValueChange(angle1 - angle2, 1, 0, 0, true);
 				else
-					mainWindow->AddRotateValue(angle2 - angle1, 1, 0, 0);
+					rotateValueChange(angle2 - angle1, 1, 0, 0, true);
 			}
 		}
 
@@ -714,26 +714,18 @@ void GlWidget::ReadDepth()
 					}
 				}
 			}
-			if (normal_angle(face.normal)<0) {
-				zeroOneSupport();
-			}
+			if (normal_angle(face.normal)<0)
+				oneSupport = Pointf3{ 0,0,0 };
 		}
-		else {
-			zeroOneSupport();
-		}
-		initOneSupport();
+		else
+			oneSupport = Pointf3{ 0,0,0 };
+
+			initOneSupport();
 
 		_Depth = false;
 		update();
 	}
 	_Depth = false;
-}
-
-void GlWidget::zeroOneSupport() 
-{
-	oneSupport.x = 0;
-	oneSupport.y = 0;
-	oneSupport.z = 0;
 }
 
 void GlWidget::addOneSupport()
@@ -743,10 +735,10 @@ void GlWidget::addOneSupport()
 		if (!(oneSupport.x == 0 && oneSupport.y == 0 && oneSupport.z == 0))
 		{
 			//添加一个支撑点并初始化渲染
-			mainWindow->addOneSupport(oneSupport);
+			addOneSupport(oneSupport);
 		}
 	}
-	zeroOneSupport();
+	oneSupport = Pointf3{ 0,0,0 };
 	initOneSupport();
 	update();
 }
@@ -791,7 +783,7 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 		glTranslatef(center.x(), center.y(), center.z());
 
 		//得到模型实例
-		ModelInstance* i = mainWindow->interface1->find_instance(selectID);
+		ModelInstance* i = m_model->find_instance(selectID);
 
 		//半径
 		double radius = sqrtf(((i->box.max.x - i->box.min.x) / 2)*((i->box.max.x - i->box.min.x) / 2) +
@@ -917,13 +909,13 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 		stl_facet f;
 
 		//?????????
-		for (auto p = mainWindow->treeSupportsExist.begin(); p != mainWindow->treeSupportsExist.end(); ++p) {
+		for (auto p = treeSupportsExist->begin(); p != treeSupportsExist->end(); ++p) {
 			if ((*p).exist) {
 				mesh = ball;
 				mesh.translate((*p).p.x, (*p).p.y, (*p).p.z);
 
 				//采用流水线方式在选中模式中渲染支撑点
-				glLoadName(std::distance(mainWindow->treeSupportsExist.begin(), p));
+				glLoadName(std::distance(treeSupportsExist->begin(), p));
 
 				glBegin(GL_TRIANGLES);
 
@@ -955,7 +947,7 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 			if (id >= 0) {
 				qDebug() << "delete oneSupport: " << id;
 				//删除一个支撑点（支撑点的位置关系生成id）并初始化渲染
-				mainWindow->deleteOneSupport(id);
+				deleteOneSupport(id);
 			}
 		}
 		update();
@@ -964,16 +956,15 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 
 void GlWidget::mouseReleaseEvent(QMouseEvent *event)
 {
-	//qDebug() << event->buttons();  NoBotton
 	if (translationID != -1) {
 		translationID = -1;
 		update();
 	}
 }
 
-void GlWidget::mouseDoubleClickEvent(QMouseEvent *event)
+void GlWidget::mouseDoubleClickEvent(QMouseEvent* event)
 {
-	if (!supportEdit&&event->buttons() == Qt::LeftButton) {
+	if (!supportEdit && event->buttons() == Qt::LeftButton) {
 		GLint x = event->x();
 		GLint y = event->y();
 
@@ -1008,10 +999,10 @@ void GlWidget::mouseDoubleClickEvent(QMouseEvent *event)
 		glTranslatef(center.x(), center.y(), center.z());
 
 		stl_facet f;
-		for (auto o = model->objects.begin(); o != model->objects.end(); ++o) {
+		for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 				if ((*i)->exist) {
-					glLoadName(mainWindow->interface1->find_id(*i));
+					glLoadName(m_model->find_id(*i));
 					TriangleMesh mesh = (*o)->volumes[0]->mesh;
 					(*i)->transform_mesh(&mesh);
 					glBegin(GL_TRIANGLES);
@@ -1042,12 +1033,12 @@ void GlWidget::mouseDoubleClickEvent(QMouseEvent *event)
 			}
 			if (selectID != id) {
 				selectID = id;
-				mainWindow->modelSelect();
+				emit signal_modelSelect();
 			}
 		}
-		else {
+		else
 			selectID = -1;
-		}
+
 		update();
 
 	}
@@ -1117,7 +1108,7 @@ void GlWidget::ChangeView(int view)
 
 void GlWidget::initTreeSupport_id(size_t id, TreeSupport* s, QProgressBar* progress)
 {
-	double height = mainWindow->interface1->dlprint->config.support_top_height;//写死的顶端与底端的高度
+	double height = dlprint->config.support_top_height;//写死的顶端与底端的高度
 
 	Pointfs _circle = dlprint->circle;
 
@@ -1643,7 +1634,7 @@ void GlWidget::supportEditChange()
 	supportEdit = !supportEdit;
 	if (autoSupportMesh == NULL) {
 		//保存待支撑模型
-		ModelInstance* instance = mainWindow->interface1->find_instance(selectID);
+		ModelInstance* instance = m_model->find_instance(selectID);
 		if (instance != NULL) {
 			autoSupportMesh = new TriangleMesh(instance->get_object()->volumes[0]->mesh);
 			instance->transform_mesh(autoSupportMesh);
@@ -1658,14 +1649,14 @@ void GlWidget::supportEditChange()
 				temp.p.x = (*i).x;
 				temp.p.y = (*i).y;
 				temp.p.z = (*i).z;
-				mainWindow->treeSupportsExist.push_back(temp);
+				treeSupportsExist->push_back(temp);
 			}
 			//增加悬吊面上的支撑点
 			for (auto i = (*p).second->support_point_face.begin(); i != (*p).second->support_point_face.end(); ++i) {
 				temp.p.x = (*i).x;
 				temp.p.y = (*i).y;
 				temp.p.z = (*i).z;
-				mainWindow->treeSupportsExist.push_back(temp);
+				treeSupportsExist->push_back(temp);
 			}
 			initSupportEditBufferAll();
 		}
@@ -1862,7 +1853,7 @@ void GlWidget::updateConfine()
 	GLfloat WF = GLfloat(W / 2);
 
 	front = false; back = false; left = false; right = false; up = false; down = false;
-	for (auto o = model->objects.begin(); o != model->objects.end(); ++o) {
+	for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 			if ((*i)->exist) {
 				TriangleMesh mesh = (*o)->volumes[0]->mesh;
@@ -1993,11 +1984,11 @@ void GlWidget::initSupportEditBuffer(size_t i)
 
 	TriangleMesh meshs;
 	//指向区间尾部的后一位
-	auto end=mainWindow->treeSupportsExist.end();
-	if (i * 100 + 99 < mainWindow->treeSupportsExist.size())
-		end = mainWindow->treeSupportsExist.begin() + i * 100 + 100;
+	auto end = treeSupportsExist->end();
+	if (i * 100 + 99 < treeSupportsExist->size())
+		end = treeSupportsExist->begin() + i * 100 + 100;
 
-	for (auto p = mainWindow->treeSupportsExist.begin()+i*100; p != end; ++p) {
+	for (auto p = treeSupportsExist->begin() + i * 100; p != end; ++p) {
 		//不存在的点不会被渲染
 		if ((*p).exist) {
 			TriangleMesh mesh = ball;
@@ -2044,8 +2035,8 @@ void GlWidget::initSupportEditBuffer(size_t i)
 
 void GlWidget::initSupportEditBufferAll()
 {
-	size_t c = mainWindow->treeSupportsExist.size() / 100;
-	if (mainWindow->treeSupportsExist.size() % 100 != 0)
+	size_t c = treeSupportsExist->size() / 100;
+	if (treeSupportsExist->size() % 100 != 0)
 		++c;
 
 	for (int i = 0; i < c; ++i)
@@ -2074,7 +2065,7 @@ void GlWidget::bindSupportEditBuffer()
 
 TriangleMesh GlWidget::find_model(size_t id)
 {
-	ModelInstance* i = mainWindow->interface1->find_instance(id);
+	ModelInstance* i = m_model->find_instance(id);
 	ModelObject* o = i->get_object();
 	TriangleMesh mesh = o->volumes[0]->mesh;
 	i->transform_mesh(&mesh);
@@ -2086,7 +2077,7 @@ void GlWidget::save_valume(size_t id)
 	size_t i = id / InstanceNum;
 	//判断模型对象是否有渲染数据，没有则创建
 	if (volumes.find(i) == volumes.end()) {
-		TriangleMesh mesh = mainWindow->interface1->find_object(id)->volumes[0]->mesh;
+		TriangleMesh mesh = m_model->find_object(id)->volumes[0]->mesh;
 		stl_render s;
 		s.size = mesh.stl.stats.number_of_facets;
 		GLfloat* v = new GLfloat[s.size * 3 * 2 * 3];
@@ -2329,7 +2320,7 @@ void GlWidget::drawTranslationMesh()
 {
 	if (selectID >= 0 && !supportEdit) {
 		//得到模型实例
-		ModelInstance* i = mainWindow->interface1->find_instance(selectID);
+		ModelInstance* i = m_model->find_instance(selectID);
 
 		//半径
 		double radius = sqrtf(((i->box.max.x - i->box.min.x) / 2)*((i->box.max.x - i->box.min.x) / 2) +
@@ -2461,7 +2452,7 @@ void GlWidget::renderTranslationMesh_1(TriangleMesh mesh, int id, Vectorf3 direc
 
 void GlWidget::updateTranslationID()
 {
-	int ids = model->objects.size()*InstanceNum;
+	int ids = m_model->objects.size()*InstanceNum;
 	//translation
 	translateMesh_X->id = ids;
 
@@ -2489,4 +2480,70 @@ void GlWidget::dlprinterChange()
 	initPlatform();
 	initConfine();
 	initCoord();
+}
+
+//支撑编辑可以100个点为一个区间，每次删减操作最多只对100个点进行初始化，区间点过少会消耗过多内存??????
+void GlWidget::addOneSupport(Pointf3 p)
+{
+	Pointf3Exist temp = { true,p };
+	treeSupportsExist->push_back(temp);
+
+	size_t id = treeSupportsExist->size();
+	auto i = treeSupportsExist->begin() + id;
+	(*i).exist = true;
+	initSupportEditBuffer(id / 100);
+	update();
+}
+
+void GlWidget::deleteOneSupport(size_t id)
+{
+	auto p = treeSupportsExist->begin() + id;
+	(*p).exist = false;
+	initSupportEditBuffer(id / 100);
+	update();
+}
+
+//传入缩放的比例值
+void GlWidget::scaleValueChange(double x, double y, double z, bool back)
+{
+	ModelInstance* i = m_model->find_instance(selectID);
+	if (x != 0) i->scaling_vector.x += x;
+	if (y != 0) i->scaling_vector.y += y;
+	if (z != 0) i->scaling_vector.z += z;
+
+	i->update_attribute();
+	updateConfine();
+
+	if (back)
+		emit signal_scaleChange();
+}
+
+//传入旋转的角度的数值
+void GlWidget::rotateValueChange(double angle, int x, int y, int z, bool back)
+{
+	ModelInstance* i = m_model->find_instance(selectID);
+	QMatrix4x4 m;
+	m.rotate(angle, x, y, z);
+	i->rotation_M = m * i->rotation_M;
+
+	i->update_attribute();
+	updateConfine();
+
+	if (back)
+		emit signal_rotateChange();
+}
+
+//传入移动的距离数值
+void GlWidget::offsetValueChange(double x, double y, double z, bool back)
+{
+	ModelInstance* i = m_model->find_instance(selectID);
+	if (x != 0)i->offset.x += x;
+	if (y != 0)i->offset.y += y;
+	if (z != 0)i->z_translation += z;
+
+	i->update_attribute();
+	updateConfine();
+
+	if (back)
+		emit signal_offsetChange();
 }

@@ -88,6 +88,22 @@ namespace Slic3r {
 		//参数1：层数
 		void saveOnePNG(size_t num);
 
+		void delete_all_inside_support(){
+			while (!inside_supports.empty()){
+				auto s = inside_supports.begin();
+				delete (*s).second;
+				inside_supports.erase(s);
+			}
+		}
+
+		void delete_all_support(){
+			while (!treeSupports.empty()){
+				auto s = treeSupports.begin();
+				//delete (*s).second;//不要删除实际数据，等redo手动删除
+				treeSupports.erase(s);
+			}
+		}
+
 	private:
 		Model* model;													//模型
 		BoundingBoxf3 bb;												//包围盒

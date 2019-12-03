@@ -1,13 +1,19 @@
 ﻿#include "mainwindow.h"
-#include "qmenubar.h"
-#include "qevent.h"
-#include "qdebug.h"
-#include "qregion.h"
-#include "qsettings.h"
-#include "quazip/JlCompress.h"
+
+#include <qmenubar.h>
+#include <qevent.h>
+#include <qdebug.h>
+#include <qregion.h>
+#include <qsettings.h>
 #include <qplaintextedit.h>
-#include <QInputDialog>
-#include "qtimer.h"
+#include <qinputdialog.h>
+#include <qtimer.h>
+#include <qfiledialog.h>
+#include <qstandardpaths.h>
+
+#include <quazip/JlCompress.h>
+
+#include "IO.hpp"
 #include "tool.h"
 
 //ERROR:setting.h放在.cpp文件夹下会报错
@@ -118,12 +124,17 @@ MainWindow::MainWindow(QWidget *parent)
 	: QMainWindow(parent)
 {
 	initDlprinter();
-	interface1 = new Interface(dlprinter);
-	initUndo();
 	initAction();
+	m_dlprint = new DLPrint(m_model, dlprinter);
 	initSetupDialog();
-	initCentralWindow();//要先于中央界面上button初始化
+	glwidget = new GlWidget(dlprinter, m_model, m_dlprint, treeSupportsExist);
+	setCentralWidget(glwidget);//要先于中央界面上button初始化
 	m_centerTopWidget = std::unique_ptr<CenterTopWidget>(new CenterTopWidget(this));
+
+	connect(glwidget, &GlWidget::signal_modelSelect, this, &MainWindow::slot_modelSelect);
+	connect(glwidget, &GlWidget::signal_offsetChange, this, &MainWindow::slot_offsetChange);
+	connect(glwidget, &GlWidget::signal_rotateChange, this, &MainWindow::slot_rotateChange);
+	connect(glwidget, &GlWidget::signal_scaleChange, this, &MainWindow::slot_scaleChange);
 
 	setAcceptDrops(true);
 	setWindowTitle("DLPSlicer");
@@ -183,11 +194,11 @@ void MainWindow::openStl()
 		qDebug() << temp;
 		std::string file = temp.toStdString();
 		m_centerTopWidget->P(20);
-		size_t id = interface1->load_model(file, format);
+		size_t id = m_model->load_model(file, format);
 		m_centerTopWidget->P(60);
 		glwidget->save_valume(id);
 		m_centerTopWidget->P(80);
-		MainUndoStack->push(new AddModelCommand(id, this));
+		addModelBuffer(id);
 		m_centerTopWidget->P(100);
 		m_centerTopWidget->hideProgress();
 		glwidget->updateConfine();
@@ -204,7 +215,7 @@ void MainWindow::deleteStl()
 {
 	if (glwidget->selectID >= 0) {
 		deleteSupport();
-		MainUndoStack->push(new DeleteModelCommand(glwidget->selectID, this));
+		deleteModelBuffer(glwidget->selectID);
 
 		glwidget->updateConfine();
 		glwidget->selectID = -1;
@@ -254,11 +265,11 @@ void MainWindow::dropEvent(QDropEvent *event)
 		m_centerTopWidget->showProgress(OPENBTN);
 		std::string file = fileName.toStdString();
 		m_centerTopWidget->P(20);
-		size_t id = interface1->load_model(file, format);
+		size_t id = m_model->load_model(file, format);
 		m_centerTopWidget->P(60);
 		glwidget->save_valume(id);
 		m_centerTopWidget->P(80);
-		MainUndoStack->push(new AddModelCommand(id, this));
+		//MainUndoStack->push(new AddModelCommand(id, this));
 		m_centerTopWidget->P(100);
 		m_centerTopWidget->hideProgress();
 		glwidget->updateConfine();
@@ -277,8 +288,7 @@ void MainWindow::_exit()
 
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
-	QSize size = event->size();
-	m_centerTopWidget->resize(size);
+	m_centerTopWidget->resize(event->size());
 }
 
 void MainWindow::initAction()
@@ -306,21 +316,6 @@ void MainWindow::initAction()
 
 	//“编辑”主菜单
 	QMenu* editMenu = menuBar()->addMenu(QStringLiteral("编辑(E)"));
-
-	QAction *undoAction = MainUndoGroup->createUndoAction(this, QStringLiteral("撤销"));
-	undoAction->setIcon(QIcon(":/icon/images/undo.png"));
-	undoAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Z));
-
-	QAction *redoAction = MainUndoGroup->createRedoAction(this, QStringLiteral("重做"));
-	redoAction->setIcon(QIcon(":/icon/images/redo.png"));
-	redoAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Y));
-
-	editMenu->addAction(undoAction);
-	editMenu->addAction(redoAction);
-
-	QAction* clearUndoAction = new QAction(QStringLiteral("清空撤销栈"));
-	editMenu->addAction(clearUndoAction);
-	connect(clearUndoAction, SIGNAL(triggered()), this, SLOT(clearUndoStack()));
 
 	editMenu->addSeparator();
 
@@ -399,38 +394,21 @@ void MainWindow::initAction()
 	//“帮助”主菜单
 	QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("帮助(H)"));
 
-	QAction* updateAct = new QAction(QStringLiteral("检查更新"), this);
-	helpMenu->addAction(updateAct);
-	connect(updateAct, SIGNAL(triggered()), this, SLOT(checkUpdate()));
-
 	QAction* messageAct = new QAction(QStringLiteral("版本信息"), this);
 	helpMenu->addAction(messageAct);
 	connect(messageAct, SIGNAL(triggered()), this, SLOT(showAboutDialog()));
 }
 
-void MainWindow::initCentralWindow()
-{
-	glwidget = new GlWidget(this, dlprinter,interface1->model,interface1->dlprint);
-	setCentralWidget(glwidget);
-}
-
 void MainWindow::ZPosZero()
 {
 	if (glwidget->selectID >= 0) {
-		ModelInstance* instance = IdToInstance();
+		ModelInstance* instance = m_model->find_instance(glwidget->selectID);
 		TriangleMesh mesh = instance->get_object()->volumes[0]->mesh;
 		instance->transform_mesh(&mesh);
 		BoundingBoxf3 box = mesh.bounding_box();
 
-		TreeSupport* s1 = NULL;
-		if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-			MainUndoStack->beginMacro(tr(""));
-			MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-			MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, 0, 0, -box.min.z, this));
-			MainUndoStack->endMacro();
-		}
-		else
-			MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, 0, 0, -box.min.z, this));
+		m_dlprint->delete_tree_support(glwidget->selectID);
+		glwidget->offsetValueChange(glwidget->selectID, 0, 0, -box.min.z);
 	}
 }
 
@@ -443,30 +421,20 @@ void MainWindow::setOffsetValue(ModelInstance* instance)
 
 void MainWindow::AddOffsetValue(double x, double y, double z)
 {
-	if (x != 0)
-		m_centerTopWidget->x_offset_spin->setValue(m_centerTopWidget->x_offset_spin->value() + x);
-	if (y != 0)
-		m_centerTopWidget->y_offset_spin->setValue(m_centerTopWidget->y_offset_spin->value() + y);
-	if (z != 0)
-		m_centerTopWidget->z_offset_spin->setValue(m_centerTopWidget->z_offset_spin->value() + z);
+	m_centerTopWidget->x_offset_spin->setValue(m_centerTopWidget->x_offset_spin->value() + x);
+	m_centerTopWidget->y_offset_spin->setValue(m_centerTopWidget->y_offset_spin->value() + y);
+	m_centerTopWidget->z_offset_spin->setValue(m_centerTopWidget->z_offset_spin->value() + z);
 }
 
 void MainWindow::xoffsetValueChange(double value)
 {
 	if (glwidget->selectID >= 0) {
-		ModelInstance* instance = IdToInstance();
+		ModelInstance* instance = m_model->find_instance(glwidget->selectID);
 		if (instance->offset.x != value) {
 			double x = value - instance->offset.x;
 			if (fabs(x) >= 0.01) {//防止细微误差
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr(""));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, x, 0, 0, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, x, 0, 0, this));
+				m_dlprint->delete_tree_support(glwidget->selectID);
+				glwidget->offsetValueChange(glwidget->selectID, x, 0, 0);
 			}
 		}
 	}
@@ -475,19 +443,12 @@ void MainWindow::xoffsetValueChange(double value)
 void MainWindow::yoffsetValueChange(double value)
 {
 	if(glwidget->selectID >= 0) {
-		ModelInstance* instance = IdToInstance();
+		ModelInstance* instance = m_model->find_instance(glwidget->selectID);
 		if (instance->offset.y != value) {
 			double y = value - instance->offset.y;
 			if (fabs(y) >= 0.01) {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr(""));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, y, 0, 0, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, 0, y, 0, this));
+				m_dlprint->delete_tree_support(glwidget->selectID);
+				glwidget->offsetValueChange(glwidget->selectID, 0, y, 0);
 			}
 		}
 	}
@@ -496,19 +457,12 @@ void MainWindow::yoffsetValueChange(double value)
 void MainWindow::zoffsetValueChange(double value)
 {
 	if(glwidget->selectID >= 0) {
-		ModelInstance* instance = IdToInstance();
+		ModelInstance* instance = m_model->find_instance(glwidget->selectID);
 		if (instance->z_translation != value) {
 			double z = value - instance->z_translation;
 			if (fabs(z) >= 0.01) {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr(""));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, z, 0, 0, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, 0, 0, z, this));
+				m_dlprint->delete_tree_support(glwidget->selectID);
+				glwidget->offsetValueChange(glwidget->selectID, 0, 0, z);
 			}
 		}
 	}
@@ -518,14 +472,9 @@ void MainWindow::AddRotateValue(double angle, int x, int y, int z)
 {
 	//只支持一个方向的角度值，且比例值为1
 	TreeSupport* s1 = NULL;
-	if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-		MainUndoStack->beginMacro(tr("rotate delete supports"));
-		MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-		MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, angle, x, y, z, this));
-		MainUndoStack->endMacro();
-	}
-	else
-		MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, angle, x, y, z, this));
+	if (m_dlprint->chilck_tree_support(glwidget->selectID, s1))
+		m_dlprint->delete_tree_support(glwidget->selectID);
+	glwidget->rotateValueChange(glwidget->selectID, angle, x, y, z);
 }
 
 void MainWindow::setRotateValue(ModelInstance* instance)
@@ -549,17 +498,8 @@ void MainWindow::xRotateValueChange(double angle)
 			m_centerTopWidget->x_rotate = angle;
 
 		if (fabs(x) > 0.01) {
-		
-			TreeSupport* s1 = NULL;
-			if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-				MainUndoStack->beginMacro(tr(""));
-				MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-				MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, x, 1, 0, 0, this));
-				MainUndoStack->endMacro();
-			}
-			else
-				MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, x, 1, 0, 0, this));
-
+			m_dlprint->delete_tree_support(glwidget->selectID);
+			glwidget->rotateValueChange(glwidget->selectID, x, 1, 0, 0);
 		}
 	}
 }
@@ -578,16 +518,8 @@ void MainWindow::yRotateValueChange(double angle)
 			m_centerTopWidget->y_rotate = angle;
 
 		if (fabs(y) > 0.01) {
-			TreeSupport* s1 = NULL;
-			if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-				MainUndoStack->beginMacro(tr(""));
-				MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-				MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, y, 0, 1, 0, this));
-				MainUndoStack->endMacro();
-			}
-			else
-				MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, y, 0, 1, 0, this));
-	
+			m_dlprint->delete_tree_support(glwidget->selectID);
+			glwidget->rotateValueChange(glwidget->selectID, y, 0, 1, 0);
 		}
 	}
 }
@@ -606,16 +538,8 @@ void MainWindow::zRotateValueChange(double angle)
 			m_centerTopWidget->z_rotate = angle;
 
 		if (fabs(z) > 0.01) {
-			TreeSupport* s1 = NULL;
-			if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-				MainUndoStack->beginMacro(tr(""));
-				MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-				MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, z, 0, 0, 1, this));
-				MainUndoStack->endMacro();
-			}
-			else
-				MainUndoStack->push(new rotateValueChangeCommand(glwidget->selectID, z, 0, 0, 1, this));
-
+			m_dlprint->delete_tree_support(glwidget->selectID);
+			glwidget->rotateValueChange(glwidget->selectID, z, 0, 0, 1);
 		}
 	}
 }
@@ -652,36 +576,17 @@ void MainWindow::setSizeValue(ModelInstance* instance)
 void MainWindow::xScaleValueChange(double value)
 {
 	if (glwidget->selectID >= 0) {
-		ModelInstance* instance = IdToInstance();
+		ModelInstance* instance = m_model->find_instance(glwidget->selectID);
 		double xScale = value / 100;
 		double x = xScale - instance->scaling_vector.x;
 		double y = instance->scaling_vector.y*(x / instance->scaling_vector.x);
 		double z = instance->scaling_vector.z*(x / instance->scaling_vector.x);
 		if (fabs(x) > 0.01) {
-			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked) {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr("scale delete supports"));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, 0, 0, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, 0, 0, this));
-
-			}
-			else {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr("scale delete supports"));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, y, z, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, y, z, this));
-
-			}
+			m_dlprint->delete_tree_support(glwidget->selectID);
+			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked)
+				glwidget->scaleValueChange(glwidget->selectID, x, 0, 0);
+			else 
+				glwidget->scaleValueChange(glwidget->selectID, x, y, z);
 		}
 	}
 }
@@ -689,34 +594,17 @@ void MainWindow::xScaleValueChange(double value)
 void MainWindow::yScaleValueChange(double value)
 {
 	if (glwidget->selectID >= 0) {
-		ModelInstance* instance = IdToInstance();
+		ModelInstance* instance = m_model->find_instance(glwidget->selectID);
 		double yScale = value / 100;
 		double y = yScale - instance->scaling_vector.y;
 		double x = instance->scaling_vector.x*(y / instance->scaling_vector.y);
 		double z = instance->scaling_vector.z*(y / instance->scaling_vector.y);
 		if (fabs(y) > 0.01) {
-			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked) {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr(""));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, 0, y, 0, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, 0, y, 0, this));
-			}
-			else {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr("scale delete supports"));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, y, z, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, y, z, this));
-			}
+			m_dlprint->delete_tree_support(glwidget->selectID);
+			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked) 
+				glwidget->scaleValueChange(glwidget->selectID, 0, y, 0);
+			else 
+				glwidget->scaleValueChange(glwidget->selectID, x, y, z);
 		}
 	}
 }
@@ -724,119 +612,52 @@ void MainWindow::yScaleValueChange(double value)
 void MainWindow::zScaleValueChange(double value)
 {
 	if (glwidget->selectID >= 0) {
-		ModelInstance* instance = IdToInstance();
+		ModelInstance* instance = m_model->find_instance(glwidget->selectID);
 		double zScale = value / 100;
 		double z = zScale - instance->scaling_vector.z;
 		double x = instance->scaling_vector.x*(z / instance->scaling_vector.z);
 		double y = instance->scaling_vector.y*(z / instance->scaling_vector.z);
 		if (fabs(z) > 0.01) {
-			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked) {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr(""));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, 0, 0, z, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, 0, 0, z, this));
-			}
-			else {
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-					MainUndoStack->beginMacro(tr("scale delete supports"));
-					MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, y, z, this));
-					MainUndoStack->endMacro();
-				}
-				else
-					MainUndoStack->push(new scaleValueChangeCommand(glwidget->selectID, x, y, z, this));
-			}
+			m_dlprint->delete_tree_support(glwidget->selectID);
+			if (m_centerTopWidget->unify_scale->checkState() == Qt::Unchecked)
+				glwidget->scaleValueChange(glwidget->selectID, 0, 0, z);
+			else 
+				glwidget->scaleValueChange(glwidget->selectID, x, y, z);
 		}
 	}
-}
-
-void MainWindow::defaultView()
-{
-	glwidget->ChangeView(glwidget->DEFAULT);
-}
-
-void MainWindow::overlookView()
-{
-	glwidget->ChangeView(glwidget->OVERLOOK);
-}
-
-void MainWindow::leftView()
-{
-	glwidget->ChangeView(glwidget->LEFT);
-}
-
-void MainWindow::rightView()
-{
-	glwidget->ChangeView(glwidget->RIGHT);
-}
-
-void MainWindow::frontView()
-{
-	glwidget->ChangeView(glwidget->FRONT);
-}
-
-void MainWindow::behindView()
-{
-	glwidget->ChangeView(glwidget->BEHIND);
 }
 
 void MainWindow::newJob()//新建项目
 {
-	interface1->clear_model();
-	interface1->delete_all_support();
+	m_model->clear_materials();
+	m_model->clear_objects();
+	m_dlprint->delete_all_support();
 	glwidget->clearModelBuffer();
 	glwidget->clear_volumes();
 	glwidget->clearSupportBuffer();
-	clearUndoStack();
 }
 
 void MainWindow::deleteSupport()
 {
-	TreeSupport* s1 = NULL;
-	if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-		MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, 0, 0, -interface1->dlprint->config.model_lift, this));
-		MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-	}
+	m_dlprint->delete_tree_support(glwidget->selectID);
 }
 
 void MainWindow::deleteAllSupport()
 {
-	for (ModelObjectPtrs::const_iterator o = interface1->model->objects.begin(); o != interface1->model->objects.end(); ++o) {
+	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-			if ((*i)->exist) {
-				size_t id = interface1->find_id(*i);
-
-				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(id, s1)) {
-					MainUndoStack->push(new offsetValueChangeCommand(id, 0, 0, -interface1->dlprint->config.model_lift, this));
-					MainUndoStack->push(new deleteSupportsCommand(id, s1, this));
-				}
-			}
+			if ((*i)->exist)
+				m_dlprint->delete_tree_support(m_model->find_id(*i));
 		}
 	}
 }
 
-void MainWindow::modelSelect()
+void MainWindow::slot_modelSelect()
 {
-	ModelInstance* instance = IdToInstance();
-	setOffsetValue(instance);
-	setRotateValue(instance);
-	setScaleValue(instance);
-	setSizeValue(instance);
+	slot_offsetChange();
+	slot_rotateChange();
+	slot_scaleChange();
 }
-
-
-ModelInstance* MainWindow::IdToInstance()
-{
-	return interface1->find_instance(glwidget->selectID);
-}
-
 
 void MainWindow::generateSupport()
 {
@@ -847,53 +668,41 @@ void MainWindow::generateSupport()
 		m_centerTopWidget->P(10);
 		TreeSupport* s = new TreeSupport();
 		TreeSupport* s1 = new TreeSupport();
-		if (interface1->dlprint->chilck_tree_support(glwidget->selectID, s1)) {
-			interface1->generate_id_support(glwidget->selectID, s, m_centerTopWidget->progress);
-			MainUndoStack->beginMacro(tr(""));
-			MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID, s1, this));
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, s, this, m_centerTopWidget->progress));
-			MainUndoStack->endMacro();
-		}
-		else {
-			MainUndoStack->push(new offsetValueChangeCommand(glwidget->selectID, 0, 0, interface1->dlprint->config.model_lift, this));
-			interface1->generate_id_support(glwidget->selectID, s, m_centerTopWidget->progress);
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, s, this, m_centerTopWidget->progress));
-		}
+		if (m_dlprint->chilck_tree_support(glwidget->selectID, s1))
+			deleteSupports(glwidget->selectID);
+		else
+			glwidget->offsetValueChange(glwidget->selectID, 0, 0, m_dlprint->config.model_lift);
+
+		generate_id_support(glwidget->selectID, s, m_centerTopWidget->m_progressBar);
+		addSupports(glwidget->selectID, s, m_centerTopWidget->m_progressBar);
 		m_centerTopWidget->P(100);
 		m_centerTopWidget->hideProgress();
 
 	}
 	else
-	{
 		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("请选中一个模型。"));
-	}
 
 	m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
 }
 
 void MainWindow::generateAllSupport()
 {
-	for (ModelObjectPtrs::const_iterator o = interface1->model->objects.begin(); o != interface1->model->objects.end(); ++o) {
+	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 			if ((*i)->exist) {
-				size_t id = interface1->find_id(*i);
+				size_t id = m_model->find_id(*i);
 
 				m_centerTopWidget->showProgress(SUPPORTBTN);
 				m_centerTopWidget->P(10);
 				TreeSupport* s = new TreeSupport();
 				TreeSupport* s1 = new TreeSupport();
-				if (interface1->dlprint->chilck_tree_support(id, s1)) {
-					interface1->generate_id_support(id, s, m_centerTopWidget->progress);
-					MainUndoStack->beginMacro(tr(""));
-					MainUndoStack->push(new deleteSupportsCommand(id, s1, this));
-					MainUndoStack->push(new addSupportsCommand(id, s, this, m_centerTopWidget->progress));
-					MainUndoStack->endMacro();
-				}
-				else {
-					MainUndoStack->push(new offsetValueChangeCommand(id, 0, 0, interface1->dlprint->config.model_lift, this));
-					interface1->generate_id_support(id, s, m_centerTopWidget->progress);
-					MainUndoStack->push(new addSupportsCommand(id, s, this, m_centerTopWidget->progress));
-				}
+				if (m_dlprint->chilck_tree_support(id, s1))
+					deleteSupports(id);
+				else
+					glwidget->offsetValueChange(id, 0, 0, m_dlprint->config.model_lift);
+
+				generate_id_support(id, s, m_centerTopWidget->m_progressBar);
+				addSupports(id, s, m_centerTopWidget->m_progressBar);
 				m_centerTopWidget->P(100);
 				m_centerTopWidget->hideProgress();
 			}
@@ -903,7 +712,7 @@ void MainWindow::generateAllSupport()
 
 void MainWindow::DlpPrintLoadSetup()
 {
-	DLPrintConfig* config = &interface1->dlprint->config;
+	DLPrintConfig* config = &m_dlprint->config;
 	config->normIlluTime.setInt(setupDialog->normIlluSpin->value());
 	config->norm_inttersity.setInt(setupDialog->norm_inttersity_spin->value());
 	config->overIlluTime = setupDialog->overIlluSpin->value();
@@ -959,15 +768,8 @@ void MainWindow::SupportEdit()
 	{
 		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 
-		if (glwidget->selectID >= 0) {
-
-			//生成支撑编辑“撤销重做”栈并激活
-			SupportEditUndoStack = new QUndoStack(this);
-			MainUndoGroup->addStack(SupportEditUndoStack);
-			MainUndoGroup->setActiveStack(SupportEditUndoStack);
-
+		if (glwidget->selectID >= 0)
 			glwidget->supportEditChange();
-		}
 		else
 		{
 			QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("请选中一个已生成支撑的模型。"));
@@ -978,9 +780,9 @@ void MainWindow::SupportEdit()
 	else {
 		//-----------退出支撑编辑模式，更新支撑点------------
 		m_centerTopWidget->showProgress(SUPPORTEDITBTN);
-		m_centerTopWidget->progress->setValue(10);
+		m_centerTopWidget->m_progressBar->setValue(10);
 
-		auto p = interface1->dlprint->treeSupports.find(glwidget->selectID);
+		auto p = m_dlprint->treeSupports.find(glwidget->selectID);
 		TreeSupport* t = new TreeSupport();
 
 		stl_vertex v;
@@ -990,7 +792,7 @@ void MainWindow::SupportEdit()
 				v.y = (*i).p.y;
 				v.z = (*i).p.z;
 
-				if (p != interface1->dlprint->treeSupports.end()) {
+				if (p != m_dlprint->treeSupports.end()) {
 					if ((*p).second->support_point.size() != 0) {
 						for (auto i1 = (*p).second->support_point.begin(); i1 != (*p).second->support_point.end(); ++i1) {
 							if (equal_vertex(*i1, v)) {
@@ -1009,29 +811,22 @@ void MainWindow::SupportEdit()
 			}
 		}
 
-		t->generate_tree_support(glwidget->find_model(glwidget->selectID),interface1->dlprint->config.leaf_num,
-			interface1->dlprint->config.threads, m_centerTopWidget->progress,interface1->dlprint->config.support_top_height);
+		t->generate_tree_support(glwidget->find_model(glwidget->selectID),m_dlprint->config.leaf_num,
+			m_dlprint->config.threads, m_centerTopWidget->m_progressBar,m_dlprint->config.support_top_height);
 		
-		if (p != interface1->dlprint->treeSupports.end()) {
-			MainUndoStack->beginMacro(tr(""));
-			MainUndoStack->push(new deleteSupportsCommand(glwidget->selectID,(*p).second,this));
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, t, this, m_centerTopWidget->progress));
-			MainUndoStack->endMacro();
-		}
-		else {
-			MainUndoStack->push(new addSupportsCommand(glwidget->selectID, t, this, m_centerTopWidget->progress));
-		}
+		if (p != m_dlprint->treeSupports.end()) 
+			deleteSupports(glwidget->selectID);
+		else
+			glwidget->offsetValueChange(glwidget->selectID, 0, 0, m_dlprint->config.model_lift);
+
+		generate_id_support(glwidget->selectID, t, m_centerTopWidget->m_progressBar);
+		addSupports(glwidget->selectID, t, m_centerTopWidget->m_progressBar);
 		m_centerTopWidget->hideProgress();
 		//------------------------------------------------------------
-
-		//删除支撑编辑“撤销重做”栈,激活主栈
-		delete SupportEditUndoStack;
-		MainUndoGroup->setActiveStack(MainUndoStack);
 
 		glwidget->supportEditChange();
 		//清空
 		treeSupportsExist.clear();
-
 		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 	}
 }
@@ -1039,9 +834,8 @@ void MainWindow::SupportEdit()
 void MainWindow::slice()
 {
 	m_centerTopWidget->CenterButtonPush(SLICEBTN);
-	//-------------------------------------
 
-	if (interface1->model->objects.size() == 0) {
+	if (m_model->objects.size() == 0) {
 		m_centerTopWidget->CenterButtonPush(SLICEBTN);
 		return;
 	}
@@ -1068,11 +862,11 @@ void MainWindow::slice()
 			m_centerTopWidget->showProgress(SLICEBTN);
 			
 			m_centerTopWidget->P(10);
-			interface1->generate_all_inside_support();
+			generate_all_inside_support();
 			m_centerTopWidget->P(20);
-			interface1->dlprint->slice(glwidget->return_support_model(), m_centerTopWidget->progress);
+			m_dlprint->slice(glwidget->return_support_model(), m_centerTopWidget->m_progressBar);
 			m_centerTopWidget->P(98);
-			interface1->dlprint->savePNG(e_setting.ZipTempPath.c_str());
+			m_dlprint->savePNG(e_setting.ZipTempPath.c_str());
 			m_centerTopWidget->P(99);
 			JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
 			m_centerTopWidget->P(100);
@@ -1151,12 +945,12 @@ bool MainWindow::extractZipPath(QString zipPath)
 
 void MainWindow::saveModelSupport()
 {
-	if (interface1->model->objects.size() > 0) {
+	if (m_model->objects.size() > 0) {
 		QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
 		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), desktop, "histogram file(*.stl)");
 		if (!path.isEmpty()) {
 			TriangleMesh mesh = glwidget->saveSupport();
-			interface1->wirteStlBinary(path.toStdString(), mesh);
+			m_model->wirteStlBinary(path.toStdString(), mesh);
 		}
 	}
 }
@@ -1170,25 +964,33 @@ void MainWindow::showAboutDialog()
 
 void MainWindow::autoArrange()
 {
+	double L = double(dlprinter->length / 2);
+	double W = double(dlprinter->width / 2);
+
+	BoundingBoxf box;
+	box.min.x = -L;
+	box.min.y = -W;
+	box.max.x = L;
+	box.max.y = W;
+	box.defined = true;
 	//未删除支撑？？？
-	Pointfs positions = interface1->autoArrange(interface1->dlprint->config.arrange_space);
+	Pointfs positions = m_model->arrange_objects(m_dlprint->config.arrange_space, &box);
 
 	glwidget->clearSupportBuffer();
 
-	MainUndoStack->beginMacro(tr(""));
-	for (ModelObjectPtrs::const_iterator o = interface1->model->objects.begin(); o != interface1->model->objects.end(); ++o) {
+	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 	    for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 			if ((*i)->exist) {
-				size_t id = interface1->find_id(*i);
+				size_t id = m_model->find_id(*i);
 				
 				//将所有实例在xy方向上重新排列
 				Pointf p = positions.back();
 				positions.pop_back();
 				double x = p.x - (*i)->offset.x;
 				double y = p.y - (*i)->offset.y;
-				MainUndoStack->push(new offsetValueChangeCommand(id, x, y, 0, this));
+				glwidget->offsetValueChange(id, x, y, 0);
 				TreeSupport* s1 = NULL;
-				if (interface1->dlprint->chilck_tree_support(id, s1)) {
+				if (m_dlprint->chilck_tree_support(id, s1)) {
 					s1->support_offset(x, y);
 					glwidget->initTreeSupport_id(id, s1, NULL);
 				}
@@ -1196,21 +998,19 @@ void MainWindow::autoArrange()
 	    }
 	    (*o)->invalidate_bounding_box();
 	}
-	MainUndoStack->endMacro();
 }
 
 void MainWindow::duplicate(size_t num, bool arrange)
 {
-	MainUndoStack->beginMacro(tr(""));
 	int distance = 0;
 
 	TreeSupport* s1 = NULL;
-	bool ret = interface1->dlprint->chilck_tree_support(glwidget->selectID, s1);
+	bool ret = m_dlprint->chilck_tree_support(glwidget->selectID, s1);
 
 	for (int i = 0; i < num; ++i) {
-		ModelInstance* s = interface1->addInstance(glwidget->selectID);
-		size_t id = interface1->find_id(s);
-		MainUndoStack->push(new AddModelCommand(id, this));
+		ModelInstance* s = m_model->addInstance(glwidget->selectID);
+		size_t id = m_model->find_id(s);
+		addModelBuffer(id);
 		if (ret) {
 			TreeSupport* ss = new TreeSupport();
 			ss->support_point = s1->support_point;
@@ -1220,7 +1020,7 @@ void MainWindow::duplicate(size_t num, bool arrange)
 			ss->tree_support_branch = s1->tree_support_branch;
 			ss->tree_support_leaf = s1->tree_support_leaf;
 			ss->tree_support_node = s1->tree_support_node;
-			MainUndoStack->push(new addSupportsCommand(id, ss, this, NULL));
+			addSupports(id, ss, NULL);
 		}
 
 		//if (!arrange) {
@@ -1229,9 +1029,7 @@ void MainWindow::duplicate(size_t num, bool arrange)
 		//	s->offset.y += distance;
 		//}
 	}
-	//if(arrange)
-		autoArrange();
-	MainUndoStack->endMacro();
+	autoArrange();
 }
 
 
@@ -1259,17 +1057,9 @@ void MainWindow::_duplicate()
 	}
 }
 
-void MainWindow::initUndo()
-{
-	MainUndoGroup = new QUndoGroup(this);
-	MainUndoStack = new QUndoStack(this);
-	MainUndoGroup->addStack(MainUndoStack);
-	MainUndoGroup->setActiveStack(MainUndoStack);
-}
-
 void MainWindow::addModelBuffer(size_t id)
 {
-	ModelInstance* instance = interface1->find_instance(id);
+	ModelInstance* instance = m_model->find_instance(id);
 	glwidget->addModelBuffer(instance);
 	instance->setExist();
 }
@@ -1277,57 +1067,13 @@ void MainWindow::addModelBuffer(size_t id)
 void MainWindow::deleteModelBuffer(size_t id)
 {
 	glwidget->delModelBuffer(id);
-	interface1->find_instance(id)->setExist(false);
-}
-
-//传入移动的距离数值
-void MainWindow::offsetValueChange(size_t id,double x, double y, double z)
-{
-	ModelInstance* i = interface1->find_instance(id);
-	i->offset.x += x;
-	i->offset.y += y;
-	i->z_translation += z;
-
-	if (glwidget->selectID == id)
-		setOffsetValue(i);
-
-	i->update_attribute();
-	glwidget->updateConfine();
-}
-
-//传入缩放的比例值
-void MainWindow::scaleValueChange(size_t id, double x, double y, double z)
-{
-	ModelInstance* i = interface1->find_instance(id);
-	i->scaling_vector.x += x;
-	i->scaling_vector.y += y;
-	i->scaling_vector.z += z;
-
-	if (glwidget->selectID == id) {
-		setScaleValue(i);
-		setSizeValue(i);
-	}
-
-	i->update_attribute();
-	glwidget->updateConfine();
-}
-
-//传入旋转的角度的数值
-void MainWindow::rotateValueChange(size_t id, double angle, int x, int y, int z)
-{
-	ModelInstance* i = interface1->find_instance(id);
-	QMatrix4x4 m;
-	m.rotate(angle, x, y, z);
-	i->rotation_M = m*i->rotation_M;
-	
-	i->update_attribute();
-	glwidget->updateConfine();
+	m_model->find_instance(id)->setExist(false);
 }
 
 void MainWindow::addSupports(size_t id, TreeSupport* s, QProgressBar* progress)
 {
 	//支撑数值存入treeSupports
-	interface1->dlprint->insertSupports(id, s);
+	m_dlprint->insertSupports(id, s);
 	//渲染支撑
 	glwidget->initTreeSupport_id(id, s, progress);
 }
@@ -1335,14 +1081,9 @@ void MainWindow::addSupports(size_t id, TreeSupport* s, QProgressBar* progress)
 void MainWindow::deleteSupports(size_t id)
 {
 	//删除treeSupports中的指定支撑
-	interface1->dlprint->delete_tree_support(id);
+	m_dlprint->delete_tree_support(id);
 	//删除支撑缓存区
 	glwidget->delSupportBuffer(id);
-}
-
-void MainWindow::clearUndoStack()
-{
-	MainUndoGroup->activeStack()->clear();
 }
 
 //支撑编辑可以100个点为一个区间，每次删减操作最多只对100个点进行初始化，区间点过少会消耗过多内存??????
@@ -1350,38 +1091,20 @@ void MainWindow::addOneSupport(Pointf3 p)
 {
 	Pointf3Exist temp = { true,p };
 	treeSupportsExist.push_back(temp);
-	SupportEditUndoStack->push(new addOneSupportCommand(treeSupportsExist.size(), this));
-}
 
-void MainWindow::deleteOneSupport(size_t id)
-{
-	SupportEditUndoStack->push(new deleteOneSupportCommand(id, this));
-}
-
-void MainWindow::addOneSupportUndo(size_t id)
-{
-	auto p = treeSupportsExist.begin() + id;
-	(*p).exist = true;
+	size_t id = treeSupportsExist.size();
+	auto i = treeSupportsExist.begin() + id;
+	(*i).exist = true;
 	glwidget->initSupportEditBuffer(id / 100);
 	glwidget->update();
 }
 
-void MainWindow::deleteOneSupportUndo(size_t id)
+void MainWindow::deleteOneSupport(size_t id)
 {
 	auto p = treeSupportsExist.begin() + id;
 	(*p).exist = false;
 	glwidget->initSupportEditBuffer(id / 100);
 	glwidget->update();
-}
-
-void MainWindow::setPersperctive()
-{
-	glwidget->setPresprective();
-}
-
-void MainWindow::setOrthogonality()
-{
-	glwidget->setOrthogonality();
 }
 
 void MainWindow::initDlprinter()
@@ -1445,3 +1168,75 @@ void MainWindow::showSetupDialog()
 	m_centerTopWidget->CenterButtonPush(SETUPBTN);
 }
 
+void MainWindow::showOffsetWidget()
+{
+	m_centerTopWidget->CenterButtonPush(OFFSETBTN);
+
+	if (m_centerTopWidget->m_offsetBtn->c_isChecked() && glwidget->selectID >= 0)
+		setOffsetValue(m_model->find_instance(glwidget->selectID));
+}
+
+void MainWindow::showRotateWidget()
+{
+	m_centerTopWidget->CenterButtonPush(ROTATEBTN);
+}
+
+void MainWindow::showScaleWidget()
+{
+	m_centerTopWidget->CenterButtonPush(SCALEBTN);
+
+	if (m_centerTopWidget->m_scaleBtn->c_isChecked() && glwidget->selectID >= 0) {
+		ModelInstance* i = m_model->find_instance(glwidget->selectID);
+		setScaleValue(i);
+		setSizeValue(i);
+	}
+}
+
+//----------------------------------------------------------------------------
+
+void MainWindow::generate_id_support(size_t id, TreeSupport*& s, QProgressBar* progress)
+{
+	ModelInstance* instance = m_model->find_instance(id);
+	ModelObject* object = instance->get_object();
+	TriangleMesh mesh(object->volumes[0]->mesh);
+	instance->transform_mesh(&mesh);
+	progress->setValue(15);
+	m_dlprint->generate_support(id, s, &mesh, progress);
+}
+
+void MainWindow::generate_all_inside_support()
+{
+	m_dlprint->delete_all_inside_support();
+	if (m_dlprint->config.hollow_out && m_dlprint->config.fill_pattern == ip3DSupport) {
+		for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
+			size_t a = std::distance(m_model->objects.begin(), o);
+			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+				if ((*i)->exist) {
+					size_t b = std::distance((*o)->instances.begin(), i);
+					size_t id = a * InstanceNum + b;
+					TriangleMesh mesh((*o)->volumes[0]->mesh);
+					(*i)->transform_mesh(&mesh);
+					m_dlprint->generate_inside_support(id, &mesh);
+				}
+			}
+		}
+	}
+}
+
+void MainWindow::slot_offsetChange()
+{
+	if (!m_centerTopWidget->m_offsetWidget->isHidden())
+		setOffsetValue(m_model->find_instance(glwidget->selectID));
+}
+
+void MainWindow::slot_scaleChange()
+{
+	if (!m_centerTopWidget->m_scaleWidget->isHidden())
+		setScaleValue(m_model->find_instance(glwidget->selectID));
+}
+
+void MainWindow::slot_rotateChange()
+{
+	if (!m_centerTopWidget->m_rotateWidget->isHidden())
+		setRotateValue(m_model->find_instance(glwidget->selectID));
+}

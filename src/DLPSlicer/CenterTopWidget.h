@@ -11,16 +11,14 @@
 
 //可以被点击按钮的QSS
 static QString OnButton("border: 1px outset white; border-radius: 5px;  background-color: rgba(100,225,50,225);");
-
 //不能被点击按钮的QSS
 static QString OffButton("border: 1px outset white; border-radius: 5px; background-color: rgba(200,200,200,150);");
-
 
 class MainWindow;
 
 //点击的按钮枚举
 enum CenterBtn {
-	NULLBTN,
+	NULLBTN = 0x01,
 	OPENBTN,
 	OFFSETBTN,
 	SCALEBTN,
@@ -45,33 +43,19 @@ public:
 private:
 	MainWindow* m_parent;
 
-private slots:
-	void showOffsetWidget();
-	void showRotateWidget();
-	void showScaleWidget();
+	QLabel* m_printerLabel;
+	QComboBox* m_printerCombo;
 
+private slots:
 	void setUnifyScale(int state);
 
 public:
-	void resize(QSize size);
+	void resize(const QSize& size);
 	void CenterButtonPush(CenterBtn btn);
-
-	void initOffsetWidget();
-	void initRotateWidget();
-	void initScaleWidget();
-	void initProgress();
 
 	void P(size_t i);
 	void showProgress(int btn);
 	void hideProgress();
-
-	//进度条对话框
-	QLabel* progressLabel;
-	QProgressBar* progress;
-	QStackedWidget* progressWidget;
-
-	QLabel* SelectPrinterLabel;
-	QComboBox* SelectPrinterCombo;
 
 	//自定义的按钮
 	class PushButton : public QPushButton
@@ -88,7 +72,8 @@ public:
 				setStyleSheet(OnButton);
 			else
 				setStyleSheet(OffButton);
-			this->checked = !this->checked; };
+			this->checked = !this->checked;
+		};
 		bool c_isChecked() { return this->checked; };
 
 	private:
@@ -108,22 +93,26 @@ public:
 	PushButton* m_scaleBtn;
 	CenterBtn currentBtn = { NULLBTN };
 
+	//进度条对话框
+	QLabel* m_progressLabel;
+	QProgressBar* m_progressBar;
+	QWidget* m_progressWidget;
+
 	//平移对话框
 	QDoubleSpinBox* x_offset_spin;
 	QDoubleSpinBox* y_offset_spin;
 	QDoubleSpinBox* z_offset_spin;
-	QStackedWidget* offsetWidget;
+	QWidget* m_offsetWidget;
 
 	//旋转对话框
 	double x_rotate;
 	double y_rotate;
 	double z_rotate;
-	void init_rotate();
 
 	QDoubleSpinBox* x_rotate_spin;
 	QDoubleSpinBox* y_rotate_spin;
 	QDoubleSpinBox* z_rotate_spin;
-	QStackedWidget* rotateWidget;
+	QWidget* m_rotateWidget;
 
 	//缩放对话框
 	QDoubleSpinBox* x_scale_spin;
@@ -133,7 +122,6 @@ public:
 	QDoubleSpinBox* y_size_label;
 	QDoubleSpinBox* z_size_label;
 	QCheckBox* unify_scale;							//统一缩放
-	QStackedWidget* scaleWidget;
-
+	QWidget* m_scaleWidget;
 };
 
