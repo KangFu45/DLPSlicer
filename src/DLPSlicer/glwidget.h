@@ -23,12 +23,18 @@ typedef struct {
 //属性2：三角面片的数量
 //属性3：三角面片的数组
 //属性4：OpenGL缓冲区
-typedef struct {
+struct ModelBuffer {
 	int id;
 	int size;
 	GLfloat* stl;
 	QOpenGLBuffer* buffer;
-}ModelBuffer;
+
+	~ModelBuffer() {
+		delete [] stl;
+		delete buffer;
+	}
+
+};
 
 typedef ModelBuffer SupportBuffer;
 
@@ -46,7 +52,7 @@ class GlWidget : public  QOpenGLWidget, protected QOpenGLFunctions
 	Q_OBJECT
 
 public:
-	GlWidget(DLPrinter* _dlprinter, Model* _model, DLPrint* _dlprint, std::vector<Pointf3Exist>& ps);
+	GlWidget(Model* _model, DLPrint* _dlprint, std::vector<Pointf3Exist>& ps);
 	~GlWidget() {};
 
 	//投影方式
@@ -67,10 +73,13 @@ public:
 	std::map<size_t, stl_render> volumes;
 	void drawModel();
 	std::vector<SupportBuffer*> treeSupportBuffers;					//树状支撑缓冲区
-	int selectID{-1};											//选中模型的ID ,等于-1为未选中
-	int translationID;										//选中的转换动作标签ID，等于-1为未选中
-	Model* m_model;											//模型
-	DLPrint* dlprint;										//dlp打印
+
+	//选中的模型实例，一次只能选择一个模型
+	//取代选中id编号，未选中时未空
+	ModelInstance* m_selInstance{ nullptr };
+	int translationID;												//选中的转换动作标签ID，等于-1为未选中
+	Model* m_model;													//模型
+	DLPrint* dlprint;												//dlp打印
 	Pointf3 oneSupport;												//手动支撑点
 	SupportBuffer* oneBallBuffer;									//手动支撑的缓冲区
 	std::vector<SupportBuffer*> supportEditBuffer;					//支撑编辑时渲染缓冲区(100个支撑点为一个渲染缓存区）
@@ -106,7 +115,6 @@ public:
 	void updateConfine();
 	bool checkConfine();
 	TriangleMesh saveSupport();
-	void delModelBuffer(size_t id);
 	void delSupportBuffer(size_t id);
 	void clearModelBuffer();
 	void clearSupportBuffer();
@@ -125,15 +133,9 @@ public:
 	void bindCoord();
 	void read_basics_mesh();					//读取基础模型
 
-	//功能：初始化选中模型的树状支撑。
-	//参数1：生成支撑模型的id即生成支撑的id
-	//参数2：支撑数据
-	void initTreeSupport_id(size_t id,TreeSupport* s,QProgressBar* progress);
-
 	std::vector<TriangleMesh> return_support_model();
 	void save_valume(size_t id);
 	void clear_volumes();
-	void dlprinterChange();
 	void setDefaultView();
 
 	void initTransformMesh();					//初始化转化模型
@@ -145,28 +147,44 @@ public:
 	void addOneSupport(Pointf3 p);
 	void deleteOneSupport(size_t id);
 
-	void offsetValueChange(double x, double y, double z,bool back=false);
+	void offsetValueChange(double x, double y, double z, bool back = false);
 	void scaleValueChange(double x, double y, double z, bool back = false);
 	void rotateValueChange(double angle, int x, int y, int z, bool back = false);
+
+	bool DelSelectSupport();
+	void GenSelInstanceSupport(QProgressBar* progress);
+private:
+	void DelModelBuffer(size_t id);
+
+	//功能：初始化选中模型的树状支撑。
+	//参数1：生成支撑模型的id即生成支撑的id
+	//参数2：支撑数据
+	void initTreeSupport_id(size_t id, QProgressBar* progress);
 protected:
 	void resizeGL(int w, int h) override;
 	void paintGL() override;
 	void initializeGL() override;
 
 	//功能：重写事件函数。
-	void wheelEvent(QWheelEvent *event);
-	void mouseMoveEvent(QMouseEvent *event);
-	void mousePressEvent(QMouseEvent *event);
-	void mouseDoubleClickEvent(QMouseEvent *event);
-	void mouseReleaseEvent(QMouseEvent *event);
+	void wheelEvent(QWheelEvent* event);
+	void mouseMoveEvent(QMouseEvent* event);
+	void mousePressEvent(QMouseEvent* event);
+	void mouseDoubleClickEvent(QMouseEvent* event);
+	void mouseReleaseEvent(QMouseEvent* event);
 
 signals:
-	void signal_modelSelect();
-	void signal_offsetChange();
-	void signal_scaleChange();
-	void signal_rotateChange();
+	void sig_modelSelect();
+	void sig_offsetChange();
+	void sig_scaleChange();
+	void sig_rotateChange();
+
+public slots:
+	void slot_delSelectIntance();
+	void slot_dlprinterChange(QString name);
 
 private:
+	//选中模型的ID ,等于-1为未选中
+	int selectID{ -1 };
 
 	QOpenGLShaderProgram* m_program{ nullptr };								//OpenGL着色器程序
 	int m_projMatrixLoc;
@@ -191,7 +209,7 @@ private:
 	int xLastPos, yLastPos;											//鼠标的坐标值
 
 	//前
-	bool front;	
+	bool front;
 	QVector<GLfloat> frontVector;
 	QOpenGLBuffer front_vbo;
 
@@ -231,10 +249,7 @@ private:
 	//圆环的半径为10mm,圆，圆锥，正方体为1mm单位
 	TriangleMesh cube, ring, cone, ball;		//转换标签的基础模型
 
-	ModelBuffer *translateMesh_X, *translateMesh_Y, *translateMesh_Z;
-	ModelBuffer *scaleMesh_X, *scaleMesh_Y, *scaleMesh_Z;
-	ModelBuffer *rotateMesh_X, *rotateMesh_Y, *rotateMesh_Z;
-
-	DLPrinter* dlprinter;				//打印机
-
-};	
+	ModelBuffer* translateMesh_X, * translateMesh_Y, * translateMesh_Z;
+	ModelBuffer* scaleMesh_X, * scaleMesh_Y, * scaleMesh_Z;
+	ModelBuffer* rotateMesh_X, * rotateMesh_Y, * rotateMesh_Z;
+};

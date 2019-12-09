@@ -10,10 +10,13 @@
 #include"qbuffer.h"
 #include"qdebug.h"
 
+#include "Setting.h"
+extern Setting e_setting;
+
 namespace Slic3r {
 
-	DLPrint::DLPrint(Model* _model, DLPrinter* _dlprinter)
-		:model(_model),dlprinter(_dlprinter)
+	DLPrint::DLPrint(Model* _model)
+		:model(_model)
 	{
 		CirclePoints(circle, 15);
 	}
@@ -172,8 +175,8 @@ namespace Slic3r {
 		if (this->config.raft_layers > 0) {
 			float r = config.layer_height*config.raft_layers;
 
-			double L = double(dlprinter->length / 2);
-			double W = double(dlprinter->width / 2);
+			double L = double(e_setting.m_printers.begin()->length / 2);
+			double W = double(e_setting.m_printers.begin()->width / 2);
 
 			BoundingBoxf bbb;
 			bbb.min.x = this->bb.min.x - config.raft_offset > -L ? this->bb.min.x - config.raft_offset : -L;
@@ -410,25 +413,31 @@ namespace Slic3r {
 	}
 
 
-	void DLPrint::generate_support(size_t id, TreeSupport*& s, TriangleMesh* mesh, QProgressBar* progress)
+	TreeSupport* DLPrint::generate_support(size_t id, TriangleMesh* mesh, QProgressBar* progress)
 	{
 		mesh->require_shared_vertices_faces();
 		mesh->extract_feature_face(config.angle);
 
 		progress->setValue(20);
+
+		TreeSupport* s = new TreeSupport;
 		s->support_point = mesh->feature_point(progress);
 		s->support_point_face = mesh->feature_point_face(config.space, progress);
 		s->generate_tree_support(*mesh, config.leaf_num, config.threads, progress, config.support_top_height);
+		return s;
 	}
 
 	//更新键值只对删除模型时有效
-	void DLPrint::delete_tree_support(size_t id)
+	bool DLPrint::delete_tree_support(size_t id)
 	{
 		auto s = treeSupports.find(id);
 		if (s != treeSupports.end()) {
-			//delete (*s).second;不要删除实际数据，到最后redo手动删除
+			delete (*s).second;
 			treeSupports.erase(s);
+			return true;
 		}
+
+		return false;
 	}
 
 	void DLPrint::savePNG(QString ini_file1)
@@ -636,23 +645,12 @@ namespace Slic3r {
 	{
 		QVector<QPointF> f;
 		for (Points::iterator ps = p.points.begin(); ps != p.points.end(); ++ps) {
-			Point p = *ps;
-			Pointf pf;
-			pf.x = unscale(p.x); pf.y = unscale(p.y);
-
-			if (dlprinter->printer == S288)
-				pf.scale(1 / 0.15);
-			else if (dlprinter->printer == S250)
-				pf.scale(1 / 0.13);
-
-			QPointF qpf;
-			qpf.setX(pf.x + 960); qpf.setY(pf.y + 540);
-			f.push_back(qpf);
+			Pointf pf(unscale((*ps).x), unscale((*ps).y));
+			pf.scale(e_setting.m_printers.begin()->factor);
+			f.push_back(QPointF(pf.x + 960, pf.y + 540));
 		}
 		return QPolygonF(f);
 	}
-
-
 
 	void DLPrint::radiate_point(BoundingBoxf3 bb, Pointf3s& ps, float space, int xyz)
 	{
@@ -948,15 +946,13 @@ namespace Slic3r {
 	}
 
 	//传出指针的引用
-	bool DLPrint::chilck_tree_support(size_t id, TreeSupport*& s)
+	TreeSupport* DLPrint::chilck_tree_support(size_t id)
 	{
 		auto s1 = treeSupports.find(id);
-		if (s1 != treeSupports.end()) {
-			//传出
-			s = (*s1).second;
-			return true;
-		}
-		return false;
+		if (s1 != treeSupports.end())
+			return (*s1).second;
+
+		return nullptr;
 	}
 
 

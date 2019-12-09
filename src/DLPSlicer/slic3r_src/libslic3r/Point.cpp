@@ -423,18 +423,18 @@ Pointf::vector_to(const Pointf &point) const
 
 bool Pointf3::operator==(const Pointf3& p) const
 {
-	bool ret = false;
-	if (this->x == p.x&&this->y == p.y&&this->z == p.z)
-		ret = true;
-	return ret;
+    if (this->x == p.x && this->y == p.y && this->z == p.z)
+        return true;
+
+    return false;
 }
 
 bool Pointf3::operator!=(const Pointf3& p) const
 {
-	bool ret = false;
-	if (this->x != p.x || this->y != p.y || this->z != p.z)
-		ret = true;
-	return ret;
+    if (this->x != p.x || this->y != p.y || this->z != p.z)
+        return true;
+
+    return false;
 }
 
 Vectorf3 Pointf3::operator-(const Pointf3& v) const

@@ -20,7 +20,6 @@
 #include <iostream>
 #include <fstream>
 
-#include "DLPrinter.h"
 #include "glwidget.h"
 #include "CenterTopWidget.h"
 #include "SetupDialog.h"
@@ -96,7 +95,7 @@ class MainWindow : public QMainWindow
 	Q_OBJECT
 
 public:
-	MainWindow(QWidget *parent = 0);
+	MainWindow(QWidget* parent = 0);
 	~MainWindow();
 
 private:
@@ -104,7 +103,6 @@ private:
 	Model* m_model = { new Model };
 	DLPrint* m_dlprint;
 	GlWidget* glwidget;										//三维视图部件
-	DLPrinter* dlprinter;									//打印机
 	//支撑编辑模式时模型的支撑点(100个为一个区间）
 	std::vector<Pointf3Exist> treeSupportsExist;
 
@@ -114,19 +112,11 @@ private:
 
 private:
 	//------将操作分离，用于“撤销重做”操作-------
-	void addModelBuffer(size_t id);
-	void deleteModelBuffer(size_t id);
-
-	void addSupports(size_t id, TreeSupport* s, QProgressBar* progress = NULL);
-	void deleteSupports(size_t id);
-
 	void addOneSupport(Pointf3 p);
 	void deleteOneSupport(size_t id);
 	//_____________________________________________________________
 
-	void AddOffsetValue(double x,double y,double z);
-	void AddScaleValue(double x, double y, double z);
-	void AddRotateValue(double angle, int x, int y, int z);
+	void AddOffsetValue(double x, double y, double z);
 
 	void setOffsetValue(ModelInstance* instance);
 	void setRotateValue(ModelInstance* instance);
@@ -173,8 +163,7 @@ private	slots:
 	void setPersperctive() { glwidget->setPresprective(); };
 	void setOrthogonality() { glwidget->setOrthogonality(); };
 	void openStl();
-	void deleteStl();
-	void _exit();		
+	void _exit();
 
 	//功能：多个视图方向。
 	void defaultView() { glwidget->ChangeView(glwidget->DEFAULT); };
@@ -185,7 +174,6 @@ private	slots:
 	void behindView() { glwidget->ChangeView(glwidget->BEHIND); };
 
 	void newJob();
-	void deleteSupport();
 	void deleteAllSupport();
 	void generateSupport();
 	void generateAllSupport();
@@ -196,16 +184,14 @@ private	slots:
 	void showAboutDialog();
 	void autoArrange();
 	void _duplicate();
-	void dlprinterChange(QString name);
 
 protected:
-	void resizeEvent(QResizeEvent* event) ;
+	void resizeEvent(QResizeEvent* event);
 	void keyPressEvent(QKeyEvent* event);
-	void dragEnterEvent(QDragEnterEvent *event);
-	void dropEvent(QDropEvent *event);
+	void dragEnterEvent(QDragEnterEvent* event);
+	void dropEvent(QDropEvent* event);
 
 private:
-	void generate_id_support(size_t id, TreeSupport*& s, QProgressBar* progress);
 	void generate_all_inside_support();
 };
 #endif // MAINWINDOW_H

@@ -13,7 +13,6 @@
 #include "qpolygon.h"
 #include "TreeSupport.h"
 #include "qprogressbar.h"
-#include "DLPrinter.h"
 
 namespace Slic3r {
 
@@ -51,7 +50,7 @@ namespace Slic3r {
 		std::map<int, TreeSupport*> treeSupports;
 
 		std::vector<Pointf> circle;										//单位圆
-		DLPrint(Model* _model,DLPrinter* _dlprinter) ;										//构造函数
+		DLPrint(Model* _model) ;										//构造函数
 
 		//日期：2017
 		//功能：对模型分层，抽空。
@@ -66,17 +65,17 @@ namespace Slic3r {
 
 		void insertSupports(size_t id, TreeSupport* s);
 
-		bool chilck_tree_support(size_t id, TreeSupport*& s);
+		TreeSupport* chilck_tree_support(size_t id);
 
 		//日期：2017
 		//功能：生成指定模型的支撑。
 		//参数1：对象id
 		//参数2：模型
-		void generate_support(size_t id, TreeSupport*& s,TriangleMesh* mesh,QProgressBar* progress);
+		TreeSupport* generate_support(size_t id,TriangleMesh* mesh,QProgressBar* progress);
 
 		//日期：2018.4.9
 		//功能：删除选中树状支撑。
-		void delete_tree_support(size_t id);
+		bool delete_tree_support(size_t id);
 
 		//日期：2017
 		//功能：保存PNG图片。
@@ -109,7 +108,6 @@ namespace Slic3r {
 		BoundingBoxf3 bb;												//包围盒
 		QString ini_file;												//切片文件路径
 		QProgressBar* m_progress;
-		DLPrinter* dlprinter;
 
 		//四个方向支撑枚举
 		enum xyz

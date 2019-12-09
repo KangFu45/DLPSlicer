@@ -4,5 +4,8 @@
   <Path>
     <UserFile path="C:/Users/Administrator/AppData/Local/DLPSlicer"/>
   </Path>
-  <LaserScan K="198" maxPower="500" minSpeed="100" maxSpeed="100000" serialPort="COM1"/> 
+  <Machine>
+    <Number1 name="S250" length="250" width="140" height="300" />
+    <Number2 name="S288" length="288" width="162" height="300" />
+  </Machine>
 </config>

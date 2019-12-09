@@ -38,6 +38,28 @@ Setting::Setting(string filename)
 	DlprinterFile = UserPath + "Dlprinter.ini";
 	ModelFile = UserPath + "ModelPath.ini";
 	ConfigFile = UserPath + "Config.ini";
+
+	//读取机器参数
+	unsigned short id = 0;
+	while (1) {
+		id++;
+		NodePath = "Machine.Number" + to_string(id);
+		string name = m_XmlConfig->getString(NodePath+":name", "");
+		if (!name.empty() && NamseNoRepetition(name)) {
+			Printer temp;
+			temp.name = name;
+			temp.height = m_XmlConfig->getInt(NodePath + ":height", 0);
+			temp.length = m_XmlConfig->getInt(NodePath + ":length", 0);
+			temp.width = m_XmlConfig->getInt(NodePath + ":width", 0);
+			temp.factor = 1.0 / ((float)temp.length / 1920.0);
+			m_printers.emplace_back(temp);
+		}
+		else
+			break;
+	}
+
+	if (m_printers.empty())
+		m_printers.emplace_back(Printer() = { "default",100,100,100,0.13 });
 }
 
 Setting::~Setting()

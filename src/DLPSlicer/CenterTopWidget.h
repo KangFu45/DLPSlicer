@@ -44,7 +44,6 @@ private:
 	MainWindow* m_parent;
 
 	QLabel* m_printerLabel;
-	QComboBox* m_printerCombo;
 
 private slots:
 	void setUnifyScale(int state);
@@ -52,6 +51,7 @@ private slots:
 public:
 	void resize(const QSize& size);
 	void CenterButtonPush(CenterBtn btn);
+	bool isUnityScale();
 
 	void P(size_t i);
 	void showProgress(int btn);
@@ -82,6 +82,8 @@ public:
 		bool checked = { false };
 	};
 
+	QComboBox* m_printerCombo;
+
 	//按钮
 	PushButton* m_openBtn;
 	PushButton* m_supportBtn;
@@ -102,9 +104,10 @@ public:
 	QDoubleSpinBox* x_offset_spin;
 	QDoubleSpinBox* y_offset_spin;
 	QDoubleSpinBox* z_offset_spin;
+	QPushButton* ZPosZeroBtn;
 	QWidget* m_offsetWidget;
 
-	//旋转对话框
+	//TODO:需用model instance里的值替代
 	double x_rotate;
 	double y_rotate;
 	double z_rotate;

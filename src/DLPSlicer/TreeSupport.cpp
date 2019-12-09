@@ -256,14 +256,18 @@ namespace Slic3r {
 
 		thread = thread > 1 ? thread : 1;
 
-		if (nodes.size() < 100) {
+		//for (int i = 0; i < nodes.size(); ++i) {
+		//	generate_tree_support_area(i, nodes, mesh, leaf_num, TDHeight);
+		//}
+
+		//if (nodes.size() < 100) {
 			parallelize<size_t>(
 				0,
 				nodes.size()-1,
 				boost::bind(&TreeSupport::generate_tree_support_area, this, _1, nodes, mesh, leaf_num,TDHeight),
 				thread
 				);
-		}
+		//}
 
 		generate_support_beam(mesh);
 	}
@@ -280,16 +284,16 @@ namespace Slic3r {
 		while (!node.empty())
 		{
 			//选择节点最高点
-			auto MaxNode = node.begin();
+			treeNode MaxNode = *(node.begin());
 
 			//选择两点之间距离小于lenght的点
 			std::map<float, treeNode> DisNode;
 			float dis;
 			for (auto p3 = node.begin(); p3 != node.end(); ++p3) {
-				if ((*p3).p != (*MaxNode).p) {
+				if ((*p3).p != MaxNode.p) {
 					//限制树枝数量
-					if ((*p3).num + (*MaxNode).num <= leaf_num) {
-						dis = distance_point_3((*MaxNode).p, (*p3).p);
+					if ((*p3).num + MaxNode.num <= leaf_num) {
+						dis = distance_point_3(MaxNode.p, (*p3).p);
 						if (dis <= 30)
 							DisNode.insert(std::make_pair(dis, *p3));
 					}
@@ -303,10 +307,10 @@ namespace Slic3r {
 				treeNode SecondNode = (*p4).second;
 				//求射线的法向量,先得到xy平面上的法向量，再在z轴方向上旋转约束角。
 				float MN[3], SN[3];//两个射线的法向量
-				MN[0] = SecondNode.p.x - (*MaxNode).p.x; MN[1] = SecondNode.p.y - (*MaxNode).p.y; MN[2] = 0.0;
+				MN[0] = SecondNode.p.x - MaxNode.p.x; MN[1] = SecondNode.p.y - MaxNode.p.y; MN[2] = 0.0;
 				stl_normalize_vector(MN);
 
-				SN[0] = (*MaxNode).p.x - SecondNode.p.x; SN[1] = (*MaxNode).p.y - SecondNode.p.y; SN[2] = 0.0;
+				SN[0] = MaxNode.p.x - SecondNode.p.x; SN[1] = MaxNode.p.y - SecondNode.p.y; SN[2] = 0.0;
 				stl_normalize_vector(SN);
 
 				MN[2] = -0.7;
@@ -329,10 +333,10 @@ namespace Slic3r {
 				Vectorf3 SNNV = SNV.Cross(SNNV1);
 
 				//求交点
-				Pointf3 NextNode = CalPlaneLineIntersectPoint(SNNV, SecondNode.p, MNV, (*MaxNode).p);
+				Pointf3 NextNode = CalPlaneLineIntersectPoint(SNNV, SecondNode.p, MNV, MaxNode.p);
 
 				//射线求交发生错误(跳过)
-				if (NextNode.z > (*MaxNode).p.z || NextNode.z > SecondNode.p.z || NextNode.z <= 0) {
+				if (NextNode.z > MaxNode.p.z || NextNode.z > SecondNode.p.z || NextNode.z <= 0) {
 					continue;
 				}
 
@@ -343,7 +347,7 @@ namespace Slic3r {
 					for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
 						f = mesh.stl.facet_start[i];
 						//--------------两个树枝--------------
-						if (line_to_triangle_bool(f, Linef3(NextNode, (*MaxNode).p)) ||
+						if (line_to_triangle_bool(f, Linef3(NextNode, MaxNode.p)) ||
 							line_to_triangle_bool(f, Linef3(NextNode, SecondNode.p))) {
 							across = true;
 							break;
@@ -356,11 +360,11 @@ namespace Slic3r {
 				if (!across) {
 					//------未穿过------
 					//保存两个树枝
-					tree_support_branch.push_back(Linef3(NextNode, (*MaxNode).p));
+					tree_support_branch.push_back(Linef3(NextNode, MaxNode.p));
 					tree_support_branch.push_back(Linef3(NextNode, SecondNode.p));
 
 					//增加一个新的节点
-					n.num = (*MaxNode).num + SecondNode.num;
+					n.num = MaxNode.num + SecondNode.num;
 					n.p = NextNode;
 
 					tree_support_node.push_back(NextNode);
@@ -478,7 +482,7 @@ namespace Slic3r {
 					}
 
 					//删除两个旧的节点
-					delete_node(node, *MaxNode);
+					delete_node(node, MaxNode);
 					delete_node(node, SecondNode);
 
 					//配对成功
@@ -491,25 +495,25 @@ namespace Slic3r {
 			//配对未成功
 			if (!ok) {
 				//向下延伸时判断底端是否与模型成角度
-				Pointf3 bottom = mesh.point_model_intersection_Z((*MaxNode).p);
+				Pointf3 bottom = mesh.point_model_intersection_Z(MaxNode.p);
 				if (bottom.z == 0) {//直接延伸至平台
 					//删除不需要的增强的节点
-					//if ((*MaxNode).num == 1) {
+					//if (MaxNode.num == 1) {
 					//	int dis = -1;
 					//	for (auto t = tree_support_node.begin(); t != tree_support_node.end(); ++t) {
-					//		if ((*t).x == (*MaxNode).p.x && (*t).y == (*MaxNode).p.y && (*t).z == (*MaxNode).p.z)
+					//		if ((*t).x == MaxNode.p.x && (*t).y == MaxNode.p.y && (*t).z == MaxNode.p.z)
 					//			dis = std::distance(tree_support_node.begin(), t);
 					//	}
 					//	tree_support_node.erase(tree_support_node.begin() + dis);
 					//}
 
-					if ((*MaxNode).p.z > TDHeight) {
+					if (MaxNode.p.z > TDHeight) {
 						Pointf3 p1(bottom.x, bottom.y, TDHeight);
 						tree_support_bottom.push_back(Linef3(bottom, p1));
-						tree_support_bole.push_back(Linef3(p1, (*MaxNode).p));
+						tree_support_bole.push_back(Linef3(p1, MaxNode.p));
 					}
 					else {
-						tree_support_bottom.push_back(Linef3(bottom, (*MaxNode).p));
+						tree_support_bottom.push_back(Linef3(bottom, MaxNode.p));
 					}
 				}
 				else {//与模型相交
@@ -564,9 +568,9 @@ namespace Slic3r {
 							p1.z = face.normal.z*height + bottom.z;
 
 							float v[3];
-							v[0] = p1.x - (*MaxNode).p.x;
-							v[1] = p1.y - (*MaxNode).p.y;
-							v[2] = p1.z - (*MaxNode).p.z;
+							v[0] = p1.x - MaxNode.p.x;
+							v[1] = p1.y - MaxNode.p.y;
+							v[2] = p1.z - MaxNode.p.z;
 							stl_normalize_vector(v);
 
 							if (!(v[0] == 0 && v[1] == 0 && v[2] == 0)) {
@@ -586,26 +590,26 @@ namespace Slic3r {
 						down = true;
 
 					if (!down) {
-						tree_support_bole.push_back(Linef3(p1, (*MaxNode).p));
+						tree_support_bole.push_back(Linef3(p1, MaxNode.p));
 						tree_support_bottom.push_back(Linef3(bottom, p1));
-						tree_support_node.push_back((*MaxNode).p);
+						tree_support_node.push_back(MaxNode.p);
 						tree_support_node.push_back(p1);
 					}
 					else
 					{
-						if ((*MaxNode).p.z - bottom.z > TDHeight) {
+						if (MaxNode.p.z - bottom.z > TDHeight) {
 							Pointf3 p2(bottom.x, bottom.y, TDHeight + bottom.z);
 							tree_support_bottom.push_back(Linef3(bottom, p2));
-							tree_support_bole.push_back(Linef3(p2, (*MaxNode).p));
+							tree_support_bole.push_back(Linef3(p2, MaxNode.p));
 						}
 						else {
-							tree_support_bottom.push_back(Linef3(bottom, (*MaxNode).p));
+							tree_support_bottom.push_back(Linef3(bottom, MaxNode.p));
 						}
 					}
 				}
 
 				//删除一个节点
-				delete_node(node, *MaxNode);
+				delete_node(node, MaxNode);
 			}
 		}
 	}
@@ -704,17 +708,11 @@ namespace Slic3r {
 
 	void TreeSupport::delete_node(std::vector<treeNode>& node, treeNode& p)
 	{
-		int a = -1;
 		for (auto i = node.begin(); i != node.end(); ++i) {
-			int dis = std::distance(node.begin(), i);
 			if (p.p == (*i).p) {
-				a = dis;
-				break;
+				node.erase(i);
+				return;
 			}
-		}
-
-		if (a >= 0) {
-			node.erase(node.begin() + a);
 		}
 	}
 

@@ -5,10 +5,14 @@
 
 #include <qdir.h>
 #include <qfileinfo.h>
+#include <qsettings.h>
 
-GlWidget::GlWidget(DLPrinter* _dlprinter, Model* _model, DLPrint* _dlprint, std::vector<Pointf3Exist>& ps)
+#include "Setting.h"
+extern Setting e_setting;
+
+GlWidget::GlWidget(Model* _model, DLPrint* _dlprint, std::vector<Pointf3Exist>& ps)
 	: translationID(-1), supportEdit(false), _Depth(false), autoSupportMesh(NULL), supportEditBuffer(NULL),
-	oneBallBuffer(NULL), viewport(ORTHOGONALITY), front(false), back(false), left(false), right(false), up(false), down(false), dlprinter(_dlprinter),
+	oneBallBuffer(NULL), viewport(ORTHOGONALITY), front(false), back(false), left(false), right(false), up(false), down(false),
 	m_model(_model),dlprint(_dlprint), treeSupportsExist(&ps)
 {
 	setDefaultView();
@@ -137,7 +141,9 @@ void GlWidget::initializeGL()
 
 	initOneSupport();
 	initTransformMesh();
-	dlprinterChange();
+	initPlatform();
+	initConfine();
+	initCoord();
 	setEye();
 	m_program->release();
 }
@@ -294,7 +300,7 @@ void GlWidget::addModelBuffer(ModelInstance* instance)//添加模型缓冲区
 	}
 }
 
-void GlWidget::delModelBuffer(size_t id)//删除一个模型缓冲区
+void GlWidget::DelModelBuffer(size_t id)//删除一个模型缓冲区
 {
 	//删除模型不会更新id，因为需要”撤销重做“还原
 	for (auto m = modelBuffers.begin(); m != modelBuffers.end(); ++m) {
@@ -361,9 +367,9 @@ void GlWidget::clearSupportBuffer()
 
 void GlWidget::initPlatform()
 {
-	unsigned int L = dlprinter->length;
-	unsigned int W = dlprinter->width;
-	unsigned int H = dlprinter->height;
+	unsigned int L = e_setting.m_printers.begin()->length;
+	unsigned int W = e_setting.m_printers.begin()->width;
+	unsigned int H = e_setting.m_printers.begin()->height;
 
 	unsigned int a = L / 10;
 	unsigned int b = L % 10;
@@ -557,8 +563,6 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 		int x = event->pos().x() - xLastPos;
 		int y = yLastPos - event->pos().y();
 
-		//qDebug() << _verticalAngle;
-
 		double _h, x_ratio, y_ratio;
 		if (translationID == translateMesh_X->id) {
 			_h = _horizonAngle - 90;
@@ -591,8 +595,6 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 		}
 		else if (translationID == rotateMesh_Z->id || translationID == rotateMesh_X->id || translationID == rotateMesh_Y->id)
 		{
-			ModelInstance* i = m_model->find_instance(selectID);
-
 			Pointf3 p;
 
 			GLint viewport[4];
@@ -612,7 +614,11 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 				mv[i] = (double)mvmatrix[i];
 				pro[i] = (double)projmatrix[i];
 			}
-			gluProject(i->origin.x, i->origin.y, i->origin.z, mv, pro, viewport, &p.x, &p.y, &p.z);
+			gluProject(m_selInstance->origin.x
+				, m_selInstance->origin.y
+				, m_selInstance->origin.z
+				, mv, pro, viewport
+				, &p.x, &p.y, &p.z);
 
 			Vectorf v1(event->pos().x() - p.x, event->pos().y() - p.y);
 			Vectorf v2(xLastPos - p.x, yLastPos - p.y);
@@ -730,10 +736,8 @@ void GlWidget::ReadDepth()
 
 void GlWidget::addOneSupport()
 {
-	if (supportEdit&&selectID >= 0)
-	{
-		if (!(oneSupport.x == 0 && oneSupport.y == 0 && oneSupport.z == 0))
-		{
+	if (supportEdit && selectID >= 0) {
+		if (!(oneSupport.x == 0 && oneSupport.y == 0 && oneSupport.z == 0)) {
 			//添加一个支撑点并初始化渲染
 			addOneSupport(oneSupport);
 		}
@@ -748,7 +752,7 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 	xLastPos = event->pos().x();
 	yLastPos = event->pos().y();
 
-	if (event->buttons() == Qt::LeftButton&&selectID >= 0&& !supportEdit) {
+	if (event->buttons() == Qt::LeftButton && selectID >= 0 && !supportEdit) {
 		GLint x = event->x();
 		GLint y = event->y();
 
@@ -783,12 +787,12 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 		glTranslatef(center.x(), center.y(), center.z());
 
 		//得到模型实例
-		ModelInstance* i = m_model->find_instance(selectID);
+		ModelInstance* i = m_selInstance;
 
 		//半径
-		double radius = sqrtf(((i->box.max.x - i->box.min.x) / 2)*((i->box.max.x - i->box.min.x) / 2) +
-			((i->box.max.y - i->box.min.y) / 2)*((i->box.max.y - i->box.min.y) / 2) +
-			((i->box.max.z - i->box.min.z) / 2)*((i->box.max.z - i->box.min.z) / 2));
+		double radius = sqrtf(((i->box.max.x - i->box.min.x) / 2) * ((i->box.max.x - i->box.min.x) / 2) +
+			((i->box.max.y - i->box.min.y) / 2) * ((i->box.max.y - i->box.min.y) / 2) +
+			((i->box.max.z - i->box.min.z) / 2) * ((i->box.max.z - i->box.min.z) / 2));
 
 		QMatrix4x4 scaleM, translateM;
 		scaleM.setToIdentity();
@@ -1033,22 +1037,23 @@ void GlWidget::mouseDoubleClickEvent(QMouseEvent* event)
 			}
 			if (selectID != id) {
 				selectID = id;
-				emit signal_modelSelect();
+				m_selInstance = m_model->find_instance(selectID);
+				emit sig_modelSelect();
 			}
 		}
-		else
+		else {
 			selectID = -1;
-
+			m_selInstance = nullptr;
+		}
 		update();
-
 	}
 }
 
 void GlWidget::setEye()
 {
-	eye.setX(500.0*cos(PI*_verticalAngle / 180.0)*cos(PI*_horizonAngle / 180.0));
-	eye.setY(-500.0*cos(PI*_verticalAngle / 180.0)*sin(PI*_horizonAngle / 180.0));
-	eye.setZ(500.0*sin(PI*_verticalAngle / 180.0));
+	eye.setX(500.0 * cos(PI * _verticalAngle / 180.0) * cos(PI * _horizonAngle / 180.0));
+	eye.setY(-500.0 * cos(PI * _verticalAngle / 180.0) * sin(PI * _horizonAngle / 180.0));
+	eye.setZ(500.0 * sin(PI * _verticalAngle / 180.0));
 }
 
 void GlWidget::ChangeView(int view)
@@ -1106,8 +1111,12 @@ void GlWidget::ChangeView(int view)
 	}
 }
 
-void GlWidget::initTreeSupport_id(size_t id, TreeSupport* s, QProgressBar* progress)
+void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 {
+	TreeSupport* s = dlprint->chilck_tree_support(id);
+	if (s == nullptr)
+		return;
+
 	double height = dlprint->config.support_top_height;//写死的顶端与底端的高度
 
 	Pointfs _circle = dlprint->circle;
@@ -1634,10 +1643,9 @@ void GlWidget::supportEditChange()
 	supportEdit = !supportEdit;
 	if (autoSupportMesh == NULL) {
 		//保存待支撑模型
-		ModelInstance* instance = m_model->find_instance(selectID);
-		if (instance != NULL) {
-			autoSupportMesh = new TriangleMesh(instance->get_object()->volumes[0]->mesh);
-			instance->transform_mesh(autoSupportMesh);
+		if (m_selInstance != nullptr) {
+			autoSupportMesh = new TriangleMesh(m_selInstance->get_object()->volumes[0]->mesh);
+			m_selInstance->transform_mesh(autoSupportMesh);
 		}
 
 		//保存支撑点模型？？？？？？？？？？？？
@@ -1678,9 +1686,9 @@ void GlWidget::supportEditChange()
 
 void GlWidget::initConfine()
 {
-	unsigned int L = dlprinter->length;
-	unsigned int W = dlprinter->width;
-	unsigned int H = dlprinter->height;
+	unsigned int L = e_setting.m_printers.begin()->length;
+	unsigned int W = e_setting.m_printers.begin()->width;
+	unsigned int H = e_setting.m_printers.begin()->height;
 
 	GLfloat LF = GLfloat(L / 2);
 	GLfloat WF = GLfloat(W / 2);
@@ -1845,9 +1853,9 @@ void GlWidget::bindConfine()
 
 void GlWidget::updateConfine()
 {
-	unsigned int L = dlprinter->length;
-	unsigned int W = dlprinter->width;
-	unsigned int H = dlprinter->height;
+	unsigned int L = e_setting.m_printers.begin()->length;
+	unsigned int W = e_setting.m_printers.begin()->width;
+	unsigned int H = e_setting.m_printers.begin()->height;
 
 	GLfloat LF = GLfloat(L / 2);
 	GLfloat WF = GLfloat(W / 2);
@@ -1902,8 +1910,8 @@ bool GlWidget::checkConfine()
 
 void GlWidget::initCoord()
 {
-	unsigned int L = this->dlprinter->length;
-	unsigned int W = this->dlprinter->width;
+	unsigned int L = e_setting.m_printers.begin()->length;
+	unsigned int W = e_setting.m_printers.begin()->width;
 
 	coordVector.clear();
 	coordVector.resize(3 * 2 * 6);
@@ -2130,6 +2138,7 @@ void GlWidget::clear_volumes()
 	}
 
 	selectID = -1;
+	m_selInstance = nullptr;
 	translationID = -1;
 }
 
@@ -2170,22 +2179,12 @@ void GlWidget::setDefaultView()
 		_verticalAngle = 5;
 	}
 	else {
-		if (dlprinter->printer == S288) {
-			_scale = 3;
-			center.setX(0);
-			center.setY(0);
-			center.setZ(60);
-			_horizonAngle = 78;
-			_verticalAngle = 10;
-		}
-		else if (dlprinter->printer == S250) {
-			_scale = 6;
-			center.setX(0);
-			center.setY(0);
-			center.setZ(100);
-			_horizonAngle = 78;
-			_verticalAngle = 10;
-		}
+		_scale = 6;
+		center.setX(0);
+		center.setY(0);
+		center.setZ(100);
+		_horizonAngle = 78;
+		_verticalAngle = 10;
 	}
 }
 
@@ -2320,7 +2319,7 @@ void GlWidget::drawTranslationMesh()
 {
 	if (selectID >= 0 && !supportEdit) {
 		//得到模型实例
-		ModelInstance* i = m_model->find_instance(selectID);
+		ModelInstance* i = m_selInstance;
 
 		//半径
 		double radius = sqrtf(((i->box.max.x - i->box.min.x) / 2)*((i->box.max.x - i->box.min.x) / 2) +
@@ -2475,13 +2474,6 @@ void GlWidget::updateTranslationID()
 	rotateMesh_Z->id = ids + 8;
 }
 
-void GlWidget::dlprinterChange()
-{
-	initPlatform();
-	initConfine();
-	initCoord();
-}
-
 //支撑编辑可以100个点为一个区间，每次删减操作最多只对100个点进行初始化，区间点过少会消耗过多内存??????
 void GlWidget::addOneSupport(Pointf3 p)
 {
@@ -2506,44 +2498,105 @@ void GlWidget::deleteOneSupport(size_t id)
 //传入缩放的比例值
 void GlWidget::scaleValueChange(double x, double y, double z, bool back)
 {
-	ModelInstance* i = m_model->find_instance(selectID);
-	if (x != 0) i->scaling_vector.x += x;
-	if (y != 0) i->scaling_vector.y += y;
-	if (z != 0) i->scaling_vector.z += z;
+	if (x != 0) m_selInstance->scaling_vector.x += x;
+	if (y != 0) m_selInstance->scaling_vector.y += y;
+	if (z != 0) m_selInstance->scaling_vector.z += z;
 
-	i->update_attribute();
+	m_selInstance->update_attribute();
 	updateConfine();
 
 	if (back)
-		emit signal_scaleChange();
+		emit sig_scaleChange();
 }
 
 //传入旋转的角度的数值
 void GlWidget::rotateValueChange(double angle, int x, int y, int z, bool back)
 {
-	ModelInstance* i = m_model->find_instance(selectID);
 	QMatrix4x4 m;
 	m.rotate(angle, x, y, z);
-	i->rotation_M = m * i->rotation_M;
+	m_selInstance->rotation_M = m * m_selInstance->rotation_M;
 
-	i->update_attribute();
+	m_selInstance->update_attribute();
 	updateConfine();
 
 	if (back)
-		emit signal_rotateChange();
+		emit sig_rotateChange();
 }
 
 //传入移动的距离数值
 void GlWidget::offsetValueChange(double x, double y, double z, bool back)
 {
-	ModelInstance* i = m_model->find_instance(selectID);
-	if (x != 0)i->offset.x += x;
-	if (y != 0)i->offset.y += y;
-	if (z != 0)i->z_translation += z;
+	if (x != 0)m_selInstance->offset.x += x;
+	if (y != 0)m_selInstance->offset.y += y;
+	if (z != 0)m_selInstance->z_translation += z;
 
-	i->update_attribute();
+	m_selInstance->update_attribute();
 	updateConfine();
 
 	if (back)
-		emit signal_offsetChange();
+		emit sig_offsetChange();
+}
+
+void GlWidget::slot_delSelectIntance()
+{
+	if (m_selInstance == nullptr)
+		return;
+
+	DelSelectSupport();
+
+	DelModelBuffer(selectID);
+	m_selInstance->setExist(false);
+
+	updateConfine();
+
+	m_selInstance = nullptr;
+	selectID = -1;
+}
+
+bool GlWidget::DelSelectSupport()
+{
+	if (m_selInstance != nullptr) {
+		if (dlprint->delete_tree_support(selectID)) {
+			//支撑数据删除成功同时删除支撑缓存区
+			for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
+				if ((*sb)->id == selectID) {
+					delete *sb;
+					treeSupportBuffers.erase(sb);
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	return false;
+}
+
+void GlWidget::GenSelInstanceSupport(QProgressBar* progress)
+{
+	if (m_selInstance == nullptr)
+		return;
+
+	ModelObject* object = m_selInstance->get_object();
+	TriangleMesh mesh(object->volumes[0]->mesh);
+	m_selInstance->transform_mesh(&mesh);
+	progress->setValue(15);
+
+	//支撑数值存入treeSupports
+	dlprint->insertSupports(selectID, dlprint->generate_support(selectID, &mesh, progress));
+	//渲染支撑
+	initTreeSupport_id(selectID, progress);
+}
+
+void GlWidget::slot_dlprinterChange(QString name)
+{
+	if (e_setting.setSelMachine(name.toStdString())) {
+		QSettings writeini(e_setting.DlprinterFile.c_str(), QSettings::IniFormat);
+		writeini.setValue("/dlprinter/name", name);
+
+		initPlatform();
+		initConfine();
+		initCoord();
+
+		updateConfine();
+	}
 }

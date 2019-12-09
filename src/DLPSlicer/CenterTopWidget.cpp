@@ -20,7 +20,6 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	//else if (dlprinter->printer == S250)
 	//	m_printerCombo->setCurrentIndex(1);
 	m_printerCombo->show();
-	connect(m_printerCombo, SIGNAL(currentIndexChanged(QString)), m_parent, SLOT(dlprinterChange(QString)));
 
 	//left
 	m_openBtn = new PushButton(QIcon(":/icon/images/load_b.png"), "", m_parent);
@@ -466,4 +465,9 @@ void CenterTopWidget::setUnifyScale(int state)
 	default:
 		break;
 	}
+}
+
+bool CenterTopWidget::isUnityScale()
+{
+	return this->unify_scale->checkState() == Qt::Unchecked;
 }
