@@ -11,12 +11,6 @@
 #include <QEvent>
 #include "DLPrint.h"
 
-//支撑编辑时的支撑点结构体
-typedef struct {
-	bool exist;		//支撑点是否存在（true--存在，false--不存在）
-	Pointf3 p;		//支撑点
-}Pointf3Exist;
-
 //日期：2017
 //功能：模型缓冲区结构体。
 //属性1：模型或支撑的编号
@@ -29,14 +23,48 @@ struct ModelBuffer {
 	GLfloat* stl;
 	QOpenGLBuffer* buffer;
 
+	Pointf3 origin = Pointf3(0.0, 0.0, 0.0);
+	Pointf3 new_origin = Pointf3(0.0, 0.0, 0.0);
+	//根据三角面片的渲染方式，简单地通过平移原始数据达到模型平移渲染效果
+	//TODO:在着色器里进行转换
+	void translation() {
+		coordf_t delta_x = new_origin.x - origin.x;
+		coordf_t delta_y = new_origin.y - origin.y;
+		coordf_t delta_z = new_origin.z - origin.z;
+
+		for (int i = 0; i < size; ++i) {
+			if (delta_x != 0) {
+				stl[i * 18] += delta_x;
+				stl[i * 18 + 6] += delta_x;
+				stl[i * 18 + 12] += delta_x;
+			}
+
+			if (delta_y != 0) {
+				stl[i * 18 + 1] += delta_y;
+				stl[i * 18 + 7] += delta_y;
+				stl[i * 18 + 13] += delta_y;
+			}
+
+			if (delta_z != 0) {
+				stl[i * 18 + 2] += delta_z;
+				stl[i * 18 + 8] += delta_z;
+				stl[i * 18 + 14] += delta_z;
+			}
+		}
+		origin = new_origin;
+	}
+
 	~ModelBuffer() {
 		delete [] stl;
 		delete buffer;
 	}
 
 };
-
 typedef ModelBuffer SupportBuffer;
+typedef std::vector<ModelBuffer> ModelBuffers;
+typedef std::vector<ModelBuffer*> ModelBufferPtrs;
+typedef std::vector<SupportBuffer> SupportBuffers;
+typedef std::vector<SupportBuffer*> SupportBufferPtrs;
 
 //日期：2018.5.29
 //功能：用来保存每个modelObjectd的渲染数据
@@ -52,7 +80,7 @@ class GlWidget : public  QOpenGLWidget, protected QOpenGLFunctions
 	Q_OBJECT
 
 public:
-	GlWidget(Model* _model, DLPrint* _dlprint, std::vector<Pointf3Exist>& ps);
+	GlWidget(Model* _model, DLPrint* _dlprint);
 	~GlWidget() {};
 
 	//投影方式
@@ -67,12 +95,11 @@ public:
 	QOpenGLBuffer platform_vbo;										//平台顶点缓存对象
 	unsigned short lines_num{ 0 };									//平台的线段的数量
 	int viewport;
-	bool supportEdit;												//支撑编辑判断
-	std::vector<ModelBuffer*> modelBuffers;							//模型渲染缓冲区
+	ModelBufferPtrs modelBuffers;							//模型渲染缓冲区
 	//每个模型对象的渲染数据
 	std::map<size_t, stl_render> volumes;
 	void drawModel();
-	std::vector<SupportBuffer*> treeSupportBuffers;					//树状支撑缓冲区
+	SupportBufferPtrs treeSupportBuffers;					//树状支撑缓冲区
 
 	//选中的模型实例，一次只能选择一个模型
 	//取代选中id编号，未选中时未空
@@ -80,14 +107,29 @@ public:
 	int translationID;												//选中的转换动作标签ID，等于-1为未选中
 	Model* m_model;													//模型
 	DLPrint* dlprint;												//dlp打印
-	Pointf3 oneSupport;												//手动支撑点
-	SupportBuffer* oneBallBuffer;									//手动支撑的缓冲区
-	std::vector<SupportBuffer*> supportEditBuffer;					//支撑编辑时渲染缓冲区(100个支撑点为一个渲染缓存区）
-	//选中模型的支撑区域---暂时只提供球形区域选择
-	std::vector<ModelBuffer*> region_box;
 
-	//支撑编辑模式时模型的支撑点(100个为一个区间）
-	std::vector<Pointf3Exist>* treeSupportsExist;
+	//支撑编辑控制器，进入支撑编辑模式生成
+	//退出支撑模式则删除
+	struct SupEditControl
+	{
+		SupportBuffer* m_curPoint = { nullptr };		//手动支撑的缓冲区
+		//TODO:将buffer与points整合
+		SupportBufferPtrs supportEditBuffer;			//支撑编辑时渲染缓冲区(100个支撑点为一个渲染缓存区）
+		//支撑编辑模式时模型的支撑点(100个为一个区间）
+		Pointf3s m_supportEditPoints;
+		TriangleMesh* mesh;					//手动支撑时的模型实例
+
+		~SupEditControl() {
+			delete m_curPoint;
+			delete mesh;
+			while (!supportEditBuffer.empty()) {
+				auto s = supportEditBuffer.begin();
+				delete *s;
+				supportEditBuffer.erase(s);
+			}
+		}
+	};
+	SupEditControl* m_supEditControl = { nullptr };
 
 	//各个方向视图的枚举
 	enum VIEW
@@ -110,7 +152,6 @@ public:
 	void ChangeView(int view);
 	void addModelBuffer(ModelInstance* instance);
 	void saveOneView(char* _name);
-	void supportEditChange();
 	void addOneSupport();
 	void updateConfine();
 	bool checkConfine();
@@ -153,6 +194,9 @@ public:
 
 	bool DelSelectSupport();
 	void GenSelInstanceSupport(QProgressBar* progress);
+	TreeSupport* GetSelSupport() { return dlprint->chilck_tree_support(selectID); };
+	void UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress);
+	void SupportEditChange(QProgressBar* progress = nullptr);
 private:
 	void DelModelBuffer(size_t id);
 
@@ -240,7 +284,6 @@ private:
 
 	QPoint pos;										//保存屏幕坐标值
 	bool _Depth;									//判断是否获取深度值的开关
-	TriangleMesh* autoSupportMesh;					//手动支撑时的模型实例
 
 	//坐标轴
 	QVector<GLfloat> coordVector;

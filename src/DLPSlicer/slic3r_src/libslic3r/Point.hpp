@@ -132,21 +132,7 @@ class Pointf3 : public Pointf
     static Pointf3 new_unscale(coord_t x, coord_t y, coord_t z) {
         return Pointf3(unscale(x), unscale(y), unscale(z));
     };
-
-	//*************************
-	//日期：2018.4.3
-	//功能：==号操作符重载。
-	//参数1：另一个点坐标
-	//返回：相等为真，否则为假
-	//*************************
 	bool operator==(const Pointf3& p) const;
-
-	//************************
-	//日期：2018.4.3
-	//功能：!=号操作符重载。
-	//参数1：另一个点坐标
-	//返回：相等为假，否则为真
-	//**************************
 	bool operator!=(const Pointf3& p) const;
 
 	// Subtract 减去

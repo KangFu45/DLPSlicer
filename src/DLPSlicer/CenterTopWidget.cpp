@@ -1,6 +1,18 @@
 #include "CenterTopWidget.h"
 #include "mainwindow.h"
 
+#include "Setting.h"
+extern Setting e_setting;
+
+//对自定义对话框进行裁剪的多边形的点
+static QVector<QPoint> progressRect = { QPoint(3,0)
+,QPoint(297,0),QPoint(300,3),QPoint(300,77)
+,QPoint(297,80),QPoint(3,80),QPoint(0,77),QPoint(0,3) };
+
+//自旋盒的QSS
+static QString spinStyle("background-color: rgba(225,225,225,0);border: 1px outset black;");
+//标签的QSS
+static QString labelStyle("background-color: rgba(225,225,225,0)");
 
 CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	:m_parent(parent)
@@ -12,13 +24,10 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_printerLabel->show();
 
 	m_printerCombo = new QComboBox(m_parent);
-	m_printerCombo->insertItem(0, "S288");
-	m_printerCombo->insertItem(1, "S250");
+	for each (Setting::Printer per in e_setting.m_printers)
+		m_printerCombo->addItem(QString(per.name.c_str()));
 	m_printerCombo->setFixedSize(100, 20);
-	//if (dlprinter->printer == S288)
-		m_printerCombo->setCurrentIndex(0);
-	//else if (dlprinter->printer == S250)
-	//	m_printerCombo->setCurrentIndex(1);
+	m_printerCombo->setCurrentIndex(0);
 	m_printerCombo->show();
 
 	//left

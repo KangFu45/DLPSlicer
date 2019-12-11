@@ -28,18 +28,16 @@ namespace Slic3r {
 		int count = 0;//实例计数
 		for (auto o = model->objects.begin(); o != model->objects.end(); ++o) {
 			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-				if ((*i)->exist) {
-					++count;
-					TriangleMesh mesh = (*o)->volumes[0]->mesh;
-					(*i)->transform_mesh(&mesh);
-					if (ret) {
-						this->bb = mesh.bounding_box();
-						ret = false;
-					}
-					else {
-						this->bb.defined = true;
-						this->bb.merge(mesh.bounding_box());
-					}
+				++count;
+				TriangleMesh mesh = (*o)->volumes[0]->mesh;
+				(*i)->transform_mesh(&mesh);
+				if (ret) {
+					this->bb = mesh.bounding_box();
+					ret = false;
+				}
+				else {
+					this->bb.defined = true;
+					this->bb.merge(mesh.bounding_box());
 				}
 			}
 		}
@@ -69,88 +67,87 @@ namespace Slic3r {
 			int aaa = 0;
 			for (auto o = this->model->objects.begin(); o != this->model->objects.end(); ++o) {
 				for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-					if ((*i)->exist) {
-						_layers.clear();
+					_layers.clear();
 
-						for (auto a = ls.begin(); a != ls.end(); ++a)
-							_layers.push_back(*a);
+					for (auto a = ls.begin(); a != ls.end(); ++a)
+						_layers.push_back(*a);
 
-						//切片
-						std::vector<ExPolygons> slices;
-						TriangleMesh mesh = (*o)->raw_mesh();
-						(*i)->transform_mesh(&mesh);
+					//切片
+					std::vector<ExPolygons> slices;
+					TriangleMesh mesh = (*o)->raw_mesh();
+					(*i)->transform_mesh(&mesh);
 
-						TriangleMeshSlicer<Z>(&mesh).slice(slice_z, &slices, config.threads);//切片函数
-						for (size_t i = 0; i < slices.size(); ++i)
-							_layers.at(i).slices.expolygons = slices[i];
+					TriangleMeshSlicer<Z>(&mesh).slice(slice_z, &slices, config.threads);//切片函数
+					for (size_t i = 0; i < slices.size(); ++i)
+						_layers.at(i).slices.expolygons = slices[i];
 
-						//切片进度条范围21->98
-						if (progress != NULL) {
-							int unit = (aaa + 1) / (count / (98 - 21) + 1);
-							if (progress->value() < 21 + unit)
-								progress->setValue(21 + unit);
-						}
-						++aaa;
-
-						//抽空
-						if (config.hollow_out.value) {
-
-							//std::unique_ptr<Fill> fill(Fill::new_from_type(ip3DHoneycomb));
-
-
-							//fill->bounding_box.merge(Point::new_scale(bb.min.x, bb.min.y));
-							//fill->bounding_box.merge(Point::new_scale(bb.max.x, bb.max.y));
-
-							//fill->min_spacing = this->config.get_abs_value("infill_extrusion_width", this->config.layer_height.value);
-							//fill->min_spacing = 3;
-							//qDebug() << "min_spacing:  " << fill->min_spacing;
-
-							//fill->angle = 45;
-							//fill->angle = Geometry::deg2rad(this->config.fill_angle.value);
-
-							//fill->density = this->config.fill_density.value / 100;
-							//fill->density = 0.5;
-							//qDebug() << "dendity:  " << fill->density;
-
-							//计算模型体积，体积小于50ml的模型不抽空
-							double areas = 0;
-							for (auto s = slices.begin(); s != slices.end(); ++s) {
-								Polygons poly = to_polygons(*s);
-								for (auto ps = poly.begin(); ps != poly.end(); ++ps) {
-									//求面积
-									areas += (*ps).area()*SCALING_FACTOR*SCALING_FACTOR;
-								}
-							}
-
-							if (areas > 50) {
-								ExPolygons pattern;
-
-								if (config.fill_pattern.value == ipHoneycomb) {
-									//计算填充密度
-									double space = (1 - double(config.fill_density / 100)) * 20;
-									space = 1 >= space ? 1 : space;
-
-									//壁厚
-									double wall = double(config.fill_density / 100) * 2;
-									wall = wall <= 0.1 ? 0.1 : wall;
-
-									BoundingBox box;
-									box.merge(Point::new_scale(bb.min.x, bb.min.y));
-									box.merge(Point::new_scale(bb.max.x, bb.max.y));
-									pattern.push_back(generate_honeycomb_pattern(box, wall, space));
-								}
-
-								parallelize<size_t>(
-									0,
-									_layers.size() - 1,
-									boost::bind(&DLPrint::_infill_layer, this, _1, pattern),
-									this->config.threads
-									);
-							}
-						}
-						layers.push_back(_layers);
+					//切片进度条范围21->98
+					if (progress != NULL) {
+						int unit = (aaa + 1) / (count / (98 - 21) + 1);
+						if (progress->value() < 21 + unit)
+							progress->setValue(21 + unit);
 					}
+					++aaa;
+
+					//抽空
+					if (config.hollow_out.value) {
+
+						//std::unique_ptr<Fill> fill(Fill::new_from_type(ip3DHoneycomb));
+
+
+						//fill->bounding_box.merge(Point::new_scale(bb.min.x, bb.min.y));
+						//fill->bounding_box.merge(Point::new_scale(bb.max.x, bb.max.y));
+
+						//fill->min_spacing = this->config.get_abs_value("infill_extrusion_width", this->config.layer_height.value);
+						//fill->min_spacing = 3;
+						//qDebug() << "min_spacing:  " << fill->min_spacing;
+
+						//fill->angle = 45;
+						//fill->angle = Geometry::deg2rad(this->config.fill_angle.value);
+
+						//fill->density = this->config.fill_density.value / 100;
+						//fill->density = 0.5;
+						//qDebug() << "dendity:  " << fill->density;
+
+						//计算模型体积，体积小于50ml的模型不抽空
+						double areas = 0;
+						for (auto s = slices.begin(); s != slices.end(); ++s) {
+							Polygons poly = to_polygons(*s);
+							for (auto ps = poly.begin(); ps != poly.end(); ++ps) {
+								//求面积
+								areas += (*ps).area() * SCALING_FACTOR * SCALING_FACTOR;
+							}
+						}
+
+						if (areas > 50) {
+							ExPolygons pattern;
+
+							if (config.fill_pattern.value == ipHoneycomb) {
+								//计算填充密度
+								double space = (1 - double(config.fill_density / 100)) * 20;
+								space = 1 >= space ? 1 : space;
+
+								//壁厚
+								double wall = double(config.fill_density / 100) * 2;
+								wall = wall <= 0.1 ? 0.1 : wall;
+
+								BoundingBox box;
+								box.merge(Point::new_scale(bb.min.x, bb.min.y));
+								box.merge(Point::new_scale(bb.max.x, bb.max.y));
+								pattern.push_back(generate_honeycomb_pattern(box, wall, space));
+							}
+
+							parallelize<size_t>(
+								0,
+								_layers.size() - 1,
+								boost::bind(&DLPrint::_infill_layer, this, _1, pattern),
+								this->config.threads
+								);
+						}
+					}
+					layers.push_back(_layers);
 				}
+
 			}
 
 			//切支撑
@@ -942,6 +939,7 @@ namespace Slic3r {
 
 	void DLPrint::insertSupports(size_t id, TreeSupport* s)
 	{
+		delete_tree_support(id);
 		treeSupports.insert(std::make_pair(id, s));
 	}
 

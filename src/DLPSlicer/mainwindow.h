@@ -27,25 +27,6 @@
 #include "Setting.h"
 #include "Model.hpp"
 
-//对自定义对话框进行裁剪的多边形的点
-static QVector<QPoint> anomalyRect1 = {QPoint(10,0),QPoint(130,0),QPoint(130,100),QPoint(10,100),QPoint(10,60),QPoint(0,50),QPoint(10,40)};
-static QVector<QPoint> anomalyRect2 = { QPoint(10,0),QPoint(210,0),QPoint(210,140),QPoint(10,140),QPoint(10,80),QPoint(0,70),QPoint(10,60) };
-static QVector<QPoint> progressRect = { QPoint(3,0),QPoint(297,0),QPoint(300,3),QPoint(300,77),QPoint(297,80),QPoint(3,80),QPoint(0,77),QPoint(0,3) };
-
-//自旋盒的QSS
-static QString spinStyle("background-color: rgba(225,225,225,0);border: 1px outset black;");
-
-//标签的QSS
-static QString labelStyle("background-color: rgba(225,225,225,0)");
-
-class GlWidget;
-
-//球
-typedef struct {
-	Pointf3 centre;
-	double radius;
-}Ball;
-
 class AboutDialog : public QDialog
 {
 public:
@@ -103,19 +84,12 @@ private:
 	Model* m_model = { new Model };
 	DLPrint* m_dlprint;
 	GlWidget* glwidget;										//三维视图部件
-	//支撑编辑模式时模型的支撑点(100个为一个区间）
-	std::vector<Pointf3Exist> treeSupportsExist;
 
 	AboutDialog* aboutDialog;							//关于对话框
 	SetupDialog* setupDialog;							//设置对话框
 	PreviewDialog* previewDialog;						//预览部件
 
 private:
-	//------将操作分离，用于“撤销重做”操作-------
-	void addOneSupport(Pointf3 p);
-	void deleteOneSupport(size_t id);
-	//_____________________________________________________________
-
 	void AddOffsetValue(double x, double y, double z);
 
 	void setOffsetValue(ModelInstance* instance);

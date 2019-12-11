@@ -566,10 +566,6 @@ class ModelInstance
 	BoundingBoxf3 box;
 	Pointf3 origin;
 
-	bool exist;					//判断是否存在，保留历史记录
-
-	void setExist(bool exist = true);
-
 	void update_attribute();
 
     /// Get the owning ModelObject

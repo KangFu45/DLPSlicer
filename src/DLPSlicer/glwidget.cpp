@@ -10,10 +10,10 @@
 #include "Setting.h"
 extern Setting e_setting;
 
-GlWidget::GlWidget(Model* _model, DLPrint* _dlprint, std::vector<Pointf3Exist>& ps)
-	: translationID(-1), supportEdit(false), _Depth(false), autoSupportMesh(NULL), supportEditBuffer(NULL),
-	oneBallBuffer(NULL), viewport(ORTHOGONALITY), front(false), back(false), left(false), right(false), up(false), down(false),
-	m_model(_model),dlprint(_dlprint), treeSupportsExist(&ps)
+GlWidget::GlWidget(Model* _model, DLPrint* _dlprint)
+	: translationID(-1), _Depth(false)
+	, viewport(ORTHOGONALITY), front(false), back(false), left(false), right(false), up(false), down(false),
+	m_model(_model),dlprint(_dlprint)
 {
 	setDefaultView();
 	read_basics_mesh();
@@ -139,7 +139,6 @@ void GlWidget::initializeGL()
 
 	//glClipPlane(GL_CLIP_PLANE0, 50.0);
 
-	initOneSupport();
 	initTransformMesh();
 	initPlatform();
 	initConfine();
@@ -180,13 +179,13 @@ void GlWidget::paintGL()
 	glDisable(GL_CULL_FACE);
 
 	//渲染树状支撑
-	if (!dlprint->treeSupports.empty() && !supportEdit)
+	if (!dlprint->treeSupports.empty() && m_supEditControl == nullptr)
 		bindTreeSupport();
 
 	//添加支撑时的标识渲染
-	if (supportEdit) {
+	if (m_supEditControl != nullptr) {
 		bindOneSupport();
-		if (!supportEditBuffer.empty())
+		if (!m_supEditControl->supportEditBuffer.empty())
 			bindSupportEditBuffer();
 	}
 	else {
@@ -267,7 +266,7 @@ void GlWidget::drawModel()//渲染模型
 			m_program->setUniformValue(func, 3);
 			glDrawArrays(GL_TRIANGLES, 0, mb->size * 3); //第三个参数是顶点的数量
 		}
-		else if (!supportEdit) {
+		else if (m_supEditControl == nullptr) {
 			m_program->setUniformValue(func, 1);
 			glDrawArrays(GL_TRIANGLES, 0, mb->size * 3);
 		}
@@ -551,14 +550,14 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 		yLastPos = event->pos().y();
 	}
 
-	if (supportEdit && event->buttons() == Qt::LeftButton) {
+	if (m_supEditControl != nullptr && event->buttons() == Qt::LeftButton) {
 		pos.setX(event->pos().x());
 		pos.setY(event->pos().y());
 		_Depth = true;
 		update();
 	}
 
-	if (!supportEdit && event->buttons() == Qt::LeftButton && translationID != -1) {
+	if (m_supEditControl == nullptr && event->buttons() == Qt::LeftButton && translationID != -1) {
 
 		int x = event->pos().x() - xLastPos;
 		int y = yLastPos - event->pos().y();
@@ -684,7 +683,7 @@ void GlWidget::ReadDepth()
 		/* 获取三个矩阵 */
 		glGetDoublev(GL_MODELVIEW_MATRIX, mvmatrix);
 		glGetDoublev(GL_PROJECTION_MATRIX, projmatrix);
-	
+
 		glPopMatrix();
 		glReadPixels((int)winx, (int)winy, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &winz);
 		gluUnProject((GLdouble)winx, (GLdouble)winy, (GLdouble)winz, mvmatrix, projmatrix, viewport, &prox, &proy, &proz);
@@ -694,8 +693,8 @@ void GlWidget::ReadDepth()
 			float v[3];
 			float dis = -1;
 
-			for (int i = 0; i < autoSupportMesh->stl.stats.number_of_facets; ++i) {
-				f = autoSupportMesh->stl.facet_start[i];
+			for (int i = 0; i < m_supEditControl->mesh->stl.stats.number_of_facets; ++i) {
+				f = m_supEditControl->mesh->stl.facet_start[i];
 
 				//得到射线
 				v[0] = prox - eye.x();
@@ -704,55 +703,56 @@ void GlWidget::ReadDepth()
 				stl_normalize_vector(v);
 
 				Pointf3 a;
-				if(line_to_triangle_point(f, Vectorf3(v[0],v[1],v[2]),Pointf3(eye.x(),eye.y(),eye.z()),a)){
+				if (line_to_triangle_point(f, Vectorf3(v[0], v[1], v[2]), Pointf3(eye.x(), eye.y(), eye.z()), a)) {
 					float temp = distance_point_3(a, Pointf3(eye.x(), eye.y(), eye.z()));
 					if (dis >= 0) {
 						if (temp < dis) {
-							oneSupport = a;
+							m_supEditControl->m_curPoint->new_origin = a;
 							face = f;
 							dis = temp;
 						}
 					}
 					else {
-						oneSupport = a;
+						m_supEditControl->m_curPoint->new_origin = a;
 						face = f;
 						dis = temp;
 					}
 				}
 			}
-			if (normal_angle(face.normal)<0)
-				oneSupport = Pointf3{ 0,0,0 };
+			if (normal_angle(face.normal) < 0)
+				m_supEditControl->m_curPoint->new_origin = Pointf3{ 0,0,0 };
 		}
 		else
-			oneSupport = Pointf3{ 0,0,0 };
+			m_supEditControl->m_curPoint->new_origin = Pointf3{ 0,0,0 };
 
-			initOneSupport();
+		initOneSupport();
 
 		_Depth = false;
 		update();
 	}
-	_Depth = false;
 }
 
 void GlWidget::addOneSupport()
 {
-	if (supportEdit && selectID >= 0) {
-		if (!(oneSupport.x == 0 && oneSupport.y == 0 && oneSupport.z == 0)) {
+	if (m_supEditControl != nullptr && selectID >= 0) {
+		if (!(m_supEditControl->m_curPoint->new_origin.x == 0 
+			&& m_supEditControl->m_curPoint->new_origin.y == 0 
+			&& m_supEditControl->m_curPoint->new_origin.z == 0)) {
 			//添加一个支撑点并初始化渲染
-			addOneSupport(oneSupport);
+			addOneSupport(m_supEditControl->m_curPoint->new_origin);
 		}
 	}
-	oneSupport = Pointf3{ 0,0,0 };
+	m_supEditControl->m_curPoint->new_origin = Pointf3{ 0,0,0 };
 	initOneSupport();
 	update();
 }
 
-void GlWidget::mousePressEvent(QMouseEvent *event)
+void GlWidget::mousePressEvent(QMouseEvent* event)
 {
 	xLastPos = event->pos().x();
 	yLastPos = event->pos().y();
 
-	if (event->buttons() == Qt::LeftButton && selectID >= 0 && !supportEdit) {
+	if (event->buttons() == Qt::LeftButton && selectID >= 0 && m_supEditControl == nullptr) {
 		GLint x = event->x();
 		GLint y = event->y();
 
@@ -875,7 +875,7 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 		update();
 	}
 
-	if (supportEdit&&event->buttons() == Qt::LeftButton) {
+	if (m_supEditControl != nullptr && event->buttons() == Qt::LeftButton) {
 		GLint x = event->x();
 		GLint y = event->y();
 
@@ -913,24 +913,22 @@ void GlWidget::mousePressEvent(QMouseEvent *event)
 		stl_facet f;
 
 		//?????????
-		for (auto p = treeSupportsExist->begin(); p != treeSupportsExist->end(); ++p) {
-			if ((*p).exist) {
-				mesh = ball;
-				mesh.translate((*p).p.x, (*p).p.y, (*p).p.z);
+		for (auto p = m_supEditControl->m_supportEditPoints.begin(); p != m_supEditControl->m_supportEditPoints.end(); ++p) {
+			mesh = ball;
+			mesh.translate((*p).x, (*p).y, (*p).z);
 
-				//采用流水线方式在选中模式中渲染支撑点
-				glLoadName(std::distance(treeSupportsExist->begin(), p));
+			//采用流水线方式在选中模式中渲染支撑点
+			glLoadName(std::distance(m_supEditControl->m_supportEditPoints.begin(), p));
 
-				glBegin(GL_TRIANGLES);
+			glBegin(GL_TRIANGLES);
 
-				for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
-					f = mesh.stl.facet_start[i];
-					glVertex3f(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z);
-					glVertex3f(f.vertex[1].x, f.vertex[1].y, f.vertex[1].z);
-					glVertex3f(f.vertex[2].x, f.vertex[2].y, f.vertex[2].z);
-				}
-				glEnd();
+			for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
+				f = mesh.stl.facet_start[i];
+				glVertex3f(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z);
+				glVertex3f(f.vertex[1].x, f.vertex[1].y, f.vertex[1].z);
+				glVertex3f(f.vertex[2].x, f.vertex[2].y, f.vertex[2].z);
 			}
+			glEnd();
 		}
 
 		glPopMatrix();
@@ -968,7 +966,7 @@ void GlWidget::mouseReleaseEvent(QMouseEvent *event)
 
 void GlWidget::mouseDoubleClickEvent(QMouseEvent* event)
 {
-	if (!supportEdit && event->buttons() == Qt::LeftButton) {
+	if (m_supEditControl == nullptr && event->buttons() == Qt::LeftButton) {
 		GLint x = event->x();
 		GLint y = event->y();
 
@@ -1005,19 +1003,18 @@ void GlWidget::mouseDoubleClickEvent(QMouseEvent* event)
 		stl_facet f;
 		for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-				if ((*i)->exist) {
-					glLoadName(m_model->find_id(*i));
-					TriangleMesh mesh = (*o)->volumes[0]->mesh;
-					(*i)->transform_mesh(&mesh);
-					glBegin(GL_TRIANGLES);
-					for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
-						f = mesh.stl.facet_start[i];
-						glVertex3f(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z);
-						glVertex3f(f.vertex[1].x, f.vertex[1].y, f.vertex[1].z);
-						glVertex3f(f.vertex[2].x, f.vertex[2].y, f.vertex[2].z);
-					}
-					glEnd();
+				glLoadName(m_model->find_id(*i));
+				TriangleMesh mesh = (*o)->volumes[0]->mesh;
+				(*i)->transform_mesh(&mesh);
+				glBegin(GL_TRIANGLES);
+				for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
+					f = mesh.stl.facet_start[i];
+					glVertex3f(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z);
+					glVertex3f(f.vertex[1].x, f.vertex[1].y, f.vertex[1].z);
+					glVertex3f(f.vertex[2].x, f.vertex[2].y, f.vertex[2].z);
 				}
+				glEnd();
+
 			}
 		}
 
@@ -1480,8 +1477,17 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 	sb->buffer->bind();
 	sb->buffer->allocate(sb->stl, sb->size * 3 * 2 * 3 * sizeof(GLfloat));
 	sb->buffer->release();
-	treeSupportBuffers.push_back(sb);
 
+	if (!treeSupportBuffers.empty()) {
+		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
+			if ((*sb)->id == id) {
+				delete* sb;
+				treeSupportBuffers.erase(sb);
+				break;
+			}
+		}
+	}
+	treeSupportBuffers.emplace_back(sb);
 	update();
 }
 
@@ -1538,46 +1544,49 @@ TriangleMesh GlWidget::saveSupport()
 
 void GlWidget::initOneSupport()
 {
-	TriangleMesh mesh = ball;
-	mesh.translate(oneSupport.x, oneSupport.y, oneSupport.z);
+	if (m_supEditControl->m_curPoint == nullptr) {
+		//ball就是在原点0,0,0
+		m_supEditControl->m_curPoint = new SupportBuffer();
+		m_supEditControl->m_curPoint->id = -1;
+		m_supEditControl->m_curPoint->size = ball.stl.stats.number_of_facets;
+		m_supEditControl->m_curPoint->stl = new GLfloat[m_supEditControl->m_curPoint->size * 3 * 2 * 3];
 
-	oneBallBuffer = new SupportBuffer();
-	oneBallBuffer->id = -1;
-	oneBallBuffer->size = mesh.stl.stats.number_of_facets;
-	oneBallBuffer->stl = new GLfloat[oneBallBuffer->size * 3 * 2 * 3];
+		float normal[3];
+		for (int i = 0; i < m_supEditControl->m_curPoint->size; ++i) {
+			stl_calculate_normal(normal, &ball.stl.facet_start[i]);
+			stl_normalize_vector(normal);
 
-	float normal[3];
-	for (int i = 0; i < oneBallBuffer->size; ++i) {
-		stl_calculate_normal(normal, &mesh.stl.facet_start[i]);
-		stl_normalize_vector(normal);
+			m_supEditControl->m_curPoint->stl[i * 18] = ball.stl.facet_start[i].vertex[0].x;
+			m_supEditControl->m_curPoint->stl[i * 18 + 1] = ball.stl.facet_start[i].vertex[0].y;
+			m_supEditControl->m_curPoint->stl[i * 18 + 2] = ball.stl.facet_start[i].vertex[0].z;
+			m_supEditControl->m_curPoint->stl[i * 18 + 3] = normal[0];
+			m_supEditControl->m_curPoint->stl[i * 18 + 4] = normal[1];
+			m_supEditControl->m_curPoint->stl[i * 18 + 5] = normal[2];
 
-		oneBallBuffer->stl[i * 18] = mesh.stl.facet_start[i].vertex[0].x;
-		oneBallBuffer->stl[i * 18 + 1] = mesh.stl.facet_start[i].vertex[0].y;
-		oneBallBuffer->stl[i * 18 + 2] = mesh.stl.facet_start[i].vertex[0].z;
-		oneBallBuffer->stl[i * 18 + 3] = normal[0];
-		oneBallBuffer->stl[i * 18 + 4] = normal[1];
-		oneBallBuffer->stl[i * 18 + 5] = normal[2];
+			m_supEditControl->m_curPoint->stl[i * 18 + 6] = ball.stl.facet_start[i].vertex[1].x;
+			m_supEditControl->m_curPoint->stl[i * 18 + 7] = ball.stl.facet_start[i].vertex[1].y;
+			m_supEditControl->m_curPoint->stl[i * 18 + 8] = ball.stl.facet_start[i].vertex[1].z;
+			m_supEditControl->m_curPoint->stl[i * 18 + 9] = normal[0];
+			m_supEditControl->m_curPoint->stl[i * 18 + 10] = normal[1];
+			m_supEditControl->m_curPoint->stl[i * 18 + 11] = normal[2];
 
-		oneBallBuffer->stl[i * 18 + 6] = mesh.stl.facet_start[i].vertex[1].x;
-		oneBallBuffer->stl[i * 18 + 7] = mesh.stl.facet_start[i].vertex[1].y;
-		oneBallBuffer->stl[i * 18 + 8] = mesh.stl.facet_start[i].vertex[1].z;
-		oneBallBuffer->stl[i * 18 + 9] = normal[0];
-		oneBallBuffer->stl[i * 18 + 10] = normal[1];
-		oneBallBuffer->stl[i * 18 + 11] = normal[2];
+			m_supEditControl->m_curPoint->stl[i * 18 + 12] = ball.stl.facet_start[i].vertex[2].x;
+			m_supEditControl->m_curPoint->stl[i * 18 + 13] = ball.stl.facet_start[i].vertex[2].y;
+			m_supEditControl->m_curPoint->stl[i * 18 + 14] = ball.stl.facet_start[i].vertex[2].z;
+			m_supEditControl->m_curPoint->stl[i * 18 + 15] = normal[0];
+			m_supEditControl->m_curPoint->stl[i * 18 + 16] = normal[1];
+			m_supEditControl->m_curPoint->stl[i * 18 + 17] = normal[2];
+		}
 
-		oneBallBuffer->stl[i * 18 + 12] = mesh.stl.facet_start[i].vertex[2].x;
-		oneBallBuffer->stl[i * 18 + 13] = mesh.stl.facet_start[i].vertex[2].y;
-		oneBallBuffer->stl[i * 18 + 14] = mesh.stl.facet_start[i].vertex[2].z;
-		oneBallBuffer->stl[i * 18 + 15] = normal[0];
-		oneBallBuffer->stl[i * 18 + 16] = normal[1];
-		oneBallBuffer->stl[i * 18 + 17] = normal[2];
+		m_supEditControl->m_curPoint->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		m_supEditControl->m_curPoint->buffer->create();
 	}
+	else
+		m_supEditControl->m_curPoint->translation();
 
-	oneBallBuffer->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-	oneBallBuffer->buffer->create();
-	oneBallBuffer->buffer->bind();
-	oneBallBuffer->buffer->allocate(oneBallBuffer->stl, oneBallBuffer->size * 3 * 2 * 3 * sizeof(GLfloat));
-	oneBallBuffer->buffer->release();
+	m_supEditControl->m_curPoint->buffer->bind();
+	m_supEditControl->m_curPoint->buffer->allocate(m_supEditControl->m_curPoint->stl, m_supEditControl->m_curPoint->size * 3 * 2 * 3 * sizeof(GLfloat));
+	m_supEditControl->m_curPoint->buffer->release();
 }
 
 void GlWidget::bindOneSupport()
@@ -1585,15 +1594,15 @@ void GlWidget::bindOneSupport()
 	initModelMatrix();
 
 	m_program->setUniformValue(func, 1);
-	oneBallBuffer->buffer->bind();
+	m_supEditControl->m_curPoint->buffer->bind();
 	m_program->enableAttributeArray(0);
 	m_program->enableAttributeArray(1);
 	m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 6 * sizeof(GLfloat));
 	m_program->setAttributeBuffer(1, GL_FLOAT, 3 * sizeof(GLfloat), 3, 6 * sizeof(GLfloat));
 
-	glDrawArrays(GL_TRIANGLES, 0, oneBallBuffer->size * 3); //第三个参数是顶点的数量
+	glDrawArrays(GL_TRIANGLES, 0, m_supEditControl->m_curPoint->size * 3); //第三个参数是顶点的数量
 
-	oneBallBuffer->buffer->release();
+	m_supEditControl->m_curPoint->buffer->release();
 	m_program->disableAttributeArray(0);
 	m_program->disableAttributeArray(1);
 }
@@ -1638,48 +1647,71 @@ void GlWidget::saveOneView(char* _name)
 	free(pixelDate);
 }
 
-void GlWidget::supportEditChange()
+//TODO:只进行手动支撑有error
+void GlWidget::SupportEditChange(QProgressBar* progress)
 {
-	supportEdit = !supportEdit;
-	if (autoSupportMesh == NULL) {
+	if (m_supEditControl== nullptr) {
+		m_supEditControl = new SupEditControl();
+		initOneSupport();
+
 		//保存待支撑模型
 		if (m_selInstance != nullptr) {
-			autoSupportMesh = new TriangleMesh(m_selInstance->get_object()->volumes[0]->mesh);
-			m_selInstance->transform_mesh(autoSupportMesh);
+			m_supEditControl->mesh = new TriangleMesh(m_selInstance->get_object()->volumes[0]->mesh);
+			m_selInstance->transform_mesh(m_supEditControl->mesh);
 		}
 
 		//保存支撑点模型？？？？？？？？？？？？
 		auto p = dlprint->treeSupports.find(selectID);
 		if (p != dlprint->treeSupports.end()) {
-			//有支撑点,将支撑点传入treeSupportsExist并初始化渲染
-			Pointf3Exist temp = {true,Pointf3(0,0,0)};
+			//有支撑点,将支撑点传入m_supportEditPoints并初始化渲染
+			Pointf3 temp(0, 0, 0);
 			for (auto i = (*p).second->support_point.begin(); i != (*p).second->support_point.end(); ++i) {
-				temp.p.x = (*i).x;
-				temp.p.y = (*i).y;
-				temp.p.z = (*i).z;
-				treeSupportsExist->push_back(temp);
+				temp.x = (*i).x;
+				temp.y = (*i).y;
+				temp.z = (*i).z;
+				m_supEditControl->m_supportEditPoints.push_back(temp);
 			}
 			//增加悬吊面上的支撑点
 			for (auto i = (*p).second->support_point_face.begin(); i != (*p).second->support_point_face.end(); ++i) {
-				temp.p.x = (*i).x;
-				temp.p.y = (*i).y;
-				temp.p.z = (*i).z;
-				treeSupportsExist->push_back(temp);
+				temp.x = (*i).x;
+				temp.y = (*i).y;
+				temp.z = (*i).z;
+				m_supEditControl->m_supportEditPoints.push_back(temp);
 			}
 			initSupportEditBufferAll();
 		}
 	}
 	else {
-		delete autoSupportMesh;
-		autoSupportMesh = NULL;
+		TreeSupport* sup = GetSelSupport();
+		TreeSupport* sup_temp = new TreeSupport;
 
-		while (!supportEditBuffer.empty()) {
-			auto s = supportEditBuffer.begin();
-			delete (*s)->buffer;
-			delete (*s)->stl;
-			delete *s;
-			supportEditBuffer.erase(s);
+		if (sup == nullptr)
+			return;//退出错误处理
+
+		if (sup->support_point.empty()) {
+			for each (const Pointf3 & p in m_supEditControl->m_supportEditPoints) {
+				sup_temp->support_point_face.emplace_back(stl_vertex{ (float)p.x,(float)p.y,(float)p.z });
+			}
 		}
+		else {
+			stl_vertex v;
+			for each (const Pointf3 & p in m_supEditControl->m_supportEditPoints) {
+				v = { (float)p.x,(float)p.y,(float)p.z };
+				for (auto v1 = sup->support_point.begin(); v1 != sup->support_point.end(); ++v1) {
+					if (equal_vertex(v, *v1)) {
+						sup_temp->support_point.emplace_back(v);
+						break;
+					}
+
+					if (v1 == sup->support_point.end() - 1)
+						sup_temp->support_point_face.emplace_back(v);
+				}
+			}
+		}
+
+		UpdateTreeSupport(sup_temp, progress);
+		delete m_supEditControl;
+		m_supEditControl = nullptr;
 	}
 	update();
 }
@@ -1863,40 +1895,38 @@ void GlWidget::updateConfine()
 	front = false; back = false; left = false; right = false; up = false; down = false;
 	for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-			if ((*i)->exist) {
-				TriangleMesh mesh = (*o)->volumes[0]->mesh;
-				(*i)->transform_mesh(&mesh);
-				BoundingBoxf3 box = mesh.bounding_box();
+			TriangleMesh mesh = (*o)->volumes[0]->mesh;
+			(*i)->transform_mesh(&mesh);
+			BoundingBoxf3 box = mesh.bounding_box();
 
-				if (!front) {
-					if (box.min.y < -WF)
-						front = true;
-				}
+			if (!front) {
+				if (box.min.y < -WF)
+					front = true;
+			}
 
-				if (!back) {
-					if (box.max.y > WF)
-						back = true;
-				}
+			if (!back) {
+				if (box.max.y > WF)
+					back = true;
+			}
 
-				if (!left) {
-					if (box.min.x < -LF)
-						left = true;
-				}
+			if (!left) {
+				if (box.min.x < -LF)
+					left = true;
+			}
 
-				if (!right) {
-					if (box.max.x > LF)
-						right = true;
-				}
+			if (!right) {
+				if (box.max.x > LF)
+					right = true;
+			}
 
-				if (!up) {
-					if (box.max.z > H)
-						up = true;
-				}
+			if (!up) {
+				if (box.max.z > H)
+					up = true;
+			}
 
-				if (!down) {
-					if (box.min.z < 0)
-						down = true;
-				}
+			if (!down) {
+				if (box.min.z < 0)
+					down = true;
 			}
 		}
 	}
@@ -1978,31 +2008,29 @@ void GlWidget::initSupportEditBuffer(size_t i)
 {
 	//初始化各区间
 	SupportBuffer* SB;
-	if (i < supportEditBuffer.size()) {
-		SB = *(supportEditBuffer.begin() + i);
+	if (i < m_supEditControl->supportEditBuffer.size()) {
+		SB = *(m_supEditControl->supportEditBuffer.begin() + i);
 		delete SB->buffer;
 		delete SB->stl;
 	}
-	else if (supportEditBuffer.size() == i) {
+	else if (m_supEditControl->supportEditBuffer.size() == i) {
 		SB = new SupportBuffer();
-		supportEditBuffer.push_back(SB);
+		m_supEditControl->supportEditBuffer.push_back(SB);
 	}
 	else
 		return;
 
 	TriangleMesh meshs;
 	//指向区间尾部的后一位
-	auto end = treeSupportsExist->end();
-	if (i * 100 + 99 < treeSupportsExist->size())
-		end = treeSupportsExist->begin() + i * 100 + 100;
+	auto end = m_supEditControl->m_supportEditPoints.end();
+	if (i * 100 + 99 < m_supEditControl->m_supportEditPoints.size())
+		end = m_supEditControl->m_supportEditPoints.begin() + i * 100 + 100;
 
-	for (auto p = treeSupportsExist->begin() + i * 100; p != end; ++p) {
+	for (auto p = m_supEditControl->m_supportEditPoints.begin() + i * 100; p != end; ++p) {
 		//不存在的点不会被渲染
-		if ((*p).exist) {
-			TriangleMesh mesh = ball;
-			mesh.translate((*p).p.x, (*p).p.y, (*p).p.z);
-			meshs.merge(mesh);
-		}
+		TriangleMesh mesh = ball;
+		mesh.translate((*p).x, (*p).y, (*p).z);
+		meshs.merge(mesh);
 	}
 	SB->id = -1;
 	SB->size = meshs.stl.stats.number_of_facets;
@@ -2043,8 +2071,8 @@ void GlWidget::initSupportEditBuffer(size_t i)
 
 void GlWidget::initSupportEditBufferAll()
 {
-	size_t c = treeSupportsExist->size() / 100;
-	if (treeSupportsExist->size() % 100 != 0)
+	size_t c = m_supEditControl->m_supportEditPoints.size() / 100;
+	if (m_supEditControl->m_supportEditPoints.size() % 100 != 0)
 		++c;
 
 	for (int i = 0; i < c; ++i)
@@ -2055,7 +2083,7 @@ void GlWidget::bindSupportEditBuffer()
 {
 	initModelMatrix();
 
-	for (auto SB = supportEditBuffer.begin(); SB != supportEditBuffer.end(); ++SB) {
+	for (auto SB = m_supEditControl->supportEditBuffer.begin(); SB != m_supEditControl->supportEditBuffer.end(); ++SB) {
 		m_program->setUniformValue(func, 6);
 		(*SB)->buffer->bind();
 		m_program->enableAttributeArray(0);
@@ -2317,14 +2345,14 @@ void GlWidget::initTransformMesh_1(ModelBuffer* mb, TriangleMesh mesh, Vectorf3 
 
 void GlWidget::drawTranslationMesh()
 {
-	if (selectID >= 0 && !supportEdit) {
+	if (selectID >= 0 && m_supEditControl == nullptr) {
 		//得到模型实例
 		ModelInstance* i = m_selInstance;
 
 		//半径
-		double radius = sqrtf(((i->box.max.x - i->box.min.x) / 2)*((i->box.max.x - i->box.min.x) / 2) +
-			((i->box.max.y - i->box.min.y) / 2)*((i->box.max.y - i->box.min.y) / 2) +
-			((i->box.max.z - i->box.min.z) / 2)*((i->box.max.z - i->box.min.z) / 2));
+		double radius = sqrtf(((i->box.max.x - i->box.min.x) / 2) * ((i->box.max.x - i->box.min.x) / 2) +
+			((i->box.max.y - i->box.min.y) / 2) * ((i->box.max.y - i->box.min.y) / 2) +
+			((i->box.max.z - i->box.min.z) / 2) * ((i->box.max.z - i->box.min.z) / 2));
 
 		QMatrix4x4 scaleM, translateM;
 		scaleM.setToIdentity();
@@ -2477,22 +2505,16 @@ void GlWidget::updateTranslationID()
 //支撑编辑可以100个点为一个区间，每次删减操作最多只对100个点进行初始化，区间点过少会消耗过多内存??????
 void GlWidget::addOneSupport(Pointf3 p)
 {
-	Pointf3Exist temp = { true,p };
-	treeSupportsExist->push_back(temp);
-
-	size_t id = treeSupportsExist->size();
-	auto i = treeSupportsExist->begin() + id;
-	(*i).exist = true;
-	initSupportEditBuffer(id / 100);
-	update();
+	m_supEditControl->m_supportEditPoints.push_back(p);
+	initSupportEditBuffer(m_supEditControl->m_supportEditPoints.size() / 100);
 }
 
 void GlWidget::deleteOneSupport(size_t id)
 {
-	auto p = treeSupportsExist->begin() + id;
-	(*p).exist = false;
-	initSupportEditBuffer(id / 100);
-	update();
+	if (id < m_supEditControl->m_supportEditPoints.size()) {
+		m_supEditControl->m_supportEditPoints.erase(m_supEditControl->m_supportEditPoints.begin() + id);
+		initSupportEditBuffer(id / 100);
+	}
 }
 
 //传入缩放的比例值
@@ -2543,10 +2565,7 @@ void GlWidget::slot_delSelectIntance()
 		return;
 
 	DelSelectSupport();
-
 	DelModelBuffer(selectID);
-	m_selInstance->setExist(false);
-
 	updateConfine();
 
 	m_selInstance = nullptr;
@@ -2555,18 +2574,18 @@ void GlWidget::slot_delSelectIntance()
 
 bool GlWidget::DelSelectSupport()
 {
-	if (m_selInstance != nullptr) {
-		if (dlprint->delete_tree_support(selectID)) {
-			//支撑数据删除成功同时删除支撑缓存区
-			for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
-				if ((*sb)->id == selectID) {
-					delete *sb;
-					treeSupportBuffers.erase(sb);
-					return true;
-				}
+	if (m_selInstance == nullptr)
+		return false;
+
+	if (dlprint->delete_tree_support(selectID)) {
+		//支撑数据删除成功同时删除支撑缓存区
+		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
+			if ((*sb)->id == selectID) {
+				delete* sb;
+				treeSupportBuffers.erase(sb);
+				return true;
 			}
 		}
-		return false;
 	}
 	return false;
 }
@@ -2576,13 +2595,8 @@ void GlWidget::GenSelInstanceSupport(QProgressBar* progress)
 	if (m_selInstance == nullptr)
 		return;
 
-	ModelObject* object = m_selInstance->get_object();
-	TriangleMesh mesh(object->volumes[0]->mesh);
-	m_selInstance->transform_mesh(&mesh);
-	progress->setValue(15);
-
 	//支撑数值存入treeSupports
-	dlprint->insertSupports(selectID, dlprint->generate_support(selectID, &mesh, progress));
+	dlprint->insertSupports(selectID, dlprint->generate_support(selectID, &find_model(selectID), progress));
 	//渲染支撑
 	initTreeSupport_id(selectID, progress);
 }
@@ -2599,4 +2613,14 @@ void GlWidget::slot_dlprinterChange(QString name)
 
 		updateConfine();
 	}
+}
+
+void GlWidget::UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress)
+{
+	//从支撑编辑里得到，只有支撑点
+	new_sup->generate_tree_support(find_model(selectID), dlprint->config.leaf_num
+		, dlprint->config.threads, progress, dlprint->config.support_top_height);
+
+	dlprint->insertSupports(selectID, new_sup);
+	initTreeSupport_id(selectID, progress);
 }

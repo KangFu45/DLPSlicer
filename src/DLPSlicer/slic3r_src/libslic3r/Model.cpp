@@ -289,10 +289,8 @@ Model::arrange_objects(coordf_t dist, const BoundingBoxf* bb)
     Pointfs instance_sizes;
     for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
         for (size_t i = 0; i < (*o)->instances.size(); ++i) {
-			//ÅÐ¶ÏÊµÀýÊÇ·ñ´æÔÚ
-			if ((*o)->instances[i]->exist) {
-				instance_sizes.push_back((*o)->instance_bounding_box(i).size());
-			}
+            //ÅÐ¶ÏÊµÀýÊÇ·ñ´æÔÚ
+            instance_sizes.push_back((*o)->instance_bounding_box(i).size());
         }
     }
 
@@ -867,15 +865,13 @@ ModelObject::mesh() const
     TriangleMesh mesh;
     TriangleMesh raw_mesh = this->raw_mesh();
 
-	if (!this->instances.empty()) {
-		for (ModelInstancePtrs::const_iterator i = this->instances.begin(); i != this->instances.end(); ++i) {
-			if ((*i)->exist) {
-				TriangleMesh m(raw_mesh);
-				(*i)->transform_mesh(&m);
-				mesh.merge(m);
-			}
-		}
-	}
+    if (!this->instances.empty()) {
+        for (ModelInstancePtrs::const_iterator i = this->instances.begin(); i != this->instances.end(); ++i) {
+            TriangleMesh m(raw_mesh);
+            (*i)->transform_mesh(&m);
+            mesh.merge(m);
+        }
+    }
 	else
 		return raw_mesh;
 
@@ -1285,14 +1281,14 @@ ModelVolume::assign_unique_material()
 
 
 ModelInstance::ModelInstance(ModelObject *object)
-	: scaling_factor(1), scaling_vector(Pointf3(1, 1, 1)), z_translation(0), object(object), exist(true)
+	: scaling_factor(1), scaling_vector(Pointf3(1, 1, 1)), z_translation(0), object(object)
 {
 	this->rotation_M.setToIdentity();
 	update_attribute();
 }
 
 ModelInstance::ModelInstance(ModelObject *object, const ModelInstance &other)
-:  scaling_factor(other.scaling_factor), scaling_vector(other.scaling_vector), offset(other.offset), z_translation(other.z_translation), object(object),exist(other.exist)
+:  scaling_factor(other.scaling_factor), scaling_vector(other.scaling_vector), offset(other.offset), z_translation(other.z_translation), object(object)
 {
 	this->rotation_M = other.rotation_M;
 	this->box = other.box;
@@ -1316,14 +1312,8 @@ ModelInstance::swap(ModelInstance &other)
 	std::swap(this->rotation_M, other.rotation_M);
     std::swap(this->z_translation, other.z_translation);
     std::swap(this->offset,         other.offset);
-	std::swap(this->exist, other.exist);
 	std::swap(this->box, other.box);
 	std::swap(this->origin, other.origin);
-}
-
-void ModelInstance::setExist(bool exist)
-{
-	this->exist = exist;
 }
 
 void ModelInstance::update_attribute()

@@ -126,7 +126,7 @@ MainWindow::MainWindow(QWidget* parent)
 	initDlprinter();
 	m_dlprint = new DLPrint(m_model);
 	initSetupDialog();
-	glwidget = new GlWidget(m_model, m_dlprint, treeSupportsExist);
+	glwidget = new GlWidget(m_model, m_dlprint);
 	setCentralWidget(glwidget);//要先于中央界面上button初始化
 	initAction();
 	m_centerTopWidget = std::unique_ptr<CenterTopWidget>(new CenterTopWidget(this));
@@ -609,8 +609,7 @@ void MainWindow::deleteAllSupport()
 {
 	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-			if ((*i)->exist)
-				m_dlprint->delete_tree_support(m_model->find_id(*i));
+			m_dlprint->delete_tree_support(m_model->find_id(*i));
 		}
 	}
 }
@@ -650,19 +649,18 @@ void MainWindow::generateAllSupport()
 {
 	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-			if ((*i)->exist) {
-				size_t id = m_model->find_id(*i);
+			size_t id = m_model->find_id(*i);
 
-				m_centerTopWidget->showProgress(SUPPORTBTN);
-				m_centerTopWidget->P(10);
+			m_centerTopWidget->showProgress(SUPPORTBTN);
+			m_centerTopWidget->P(10);
 
-				if (!glwidget->DelSelectSupport())
-					glwidget->offsetValueChange(0, 0, m_dlprint->config.model_lift);
+			if (!glwidget->DelSelectSupport())
+				glwidget->offsetValueChange(0, 0, m_dlprint->config.model_lift);
 
-				glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
-				m_centerTopWidget->P(100);
-				m_centerTopWidget->hideProgress();
-			}
+			glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
+			m_centerTopWidget->P(100);
+			m_centerTopWidget->hideProgress();
+
 		}
 	}
 }
@@ -725,10 +723,9 @@ void MainWindow::SupportEdit()
 	{
 		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 
-		if (glwidget->m_selInstance!=nullptr)
-			glwidget->supportEditChange();
-		else
-		{
+		if (glwidget->m_selInstance != nullptr)
+			glwidget->SupportEditChange();
+		else{
 			QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("请选中一个已生成支撑的模型。"));
 			m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 			return;
@@ -736,57 +733,11 @@ void MainWindow::SupportEdit()
 	}
 	else {
 		//-----------退出支撑编辑模式，更新支撑点------------
-		/*
 		m_centerTopWidget->showProgress(SUPPORTEDITBTN);
-		m_centerTopWidget->m_progressBar->setValue(10);
-
-		auto p = m_dlprint->treeSupports.find(glwidget->selectID);
-		TreeSupport* t = new TreeSupport();
-
-		stl_vertex v;
-		for (auto i = treeSupportsExist.begin(); i != treeSupportsExist.end(); ++i) {
-			if ((*i).exist) {
-				v.x = (*i).p.x;
-				v.y = (*i).p.y;
-				v.z = (*i).p.z;
-
-				if (p != m_dlprint->treeSupports.end()) {
-					if ((*p).second->support_point.size() != 0) {
-						for (auto i1 = (*p).second->support_point.begin(); i1 != (*p).second->support_point.end(); ++i1) {
-							if (equal_vertex(*i1, v)) {
-								t->support_point.push_back(v);
-								break;
-							}
-							if (i1 == (*p).second->support_point.end() - 1)
-								t->support_point_face.push_back(v);
-						}
-					}
-					else
-						t->support_point_face.push_back(v);
-				}
-				else
-					t->support_point_face.push_back(v);
-			}
-		}
-
-		t->generate_tree_support(glwidget->find_model(glwidget->selectID),m_dlprint->config.leaf_num,
-			m_dlprint->config.threads, m_centerTopWidget->m_progressBar,m_dlprint->config.support_top_height);
-		
-		if (p != m_dlprint->treeSupports.end()) 
-			deleteSupports(glwidget->selectID);
-		else
-			glwidget->offsetValueChange(glwidget->selectID, 0, 0, m_dlprint->config.model_lift);
-
-		generate_id_support(glwidget->selectID, t, m_centerTopWidget->m_progressBar);
-		addSupports(glwidget->selectID, t, m_centerTopWidget->m_progressBar);
+		glwidget->SupportEditChange(m_centerTopWidget->m_progressBar);
 		m_centerTopWidget->hideProgress();
-		//------------------------------------------------------------
 
-		glwidget->supportEditChange();
-		//清空
-		treeSupportsExist.clear();
 		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
-		*/
 	}
 }
 
@@ -1010,27 +961,6 @@ void MainWindow::_duplicate()
 		duplicate(num, true);
 }
 
-//支撑编辑可以100个点为一个区间，每次删减操作最多只对100个点进行初始化，区间点过少会消耗过多内存??????
-void MainWindow::addOneSupport(Pointf3 p)
-{
-	Pointf3Exist temp = { true,p };
-	treeSupportsExist.push_back(temp);
-
-	size_t id = treeSupportsExist.size();
-	auto i = treeSupportsExist.begin() + id;
-	(*i).exist = true;
-	glwidget->initSupportEditBuffer(id / 100);
-	glwidget->update();
-}
-
-void MainWindow::deleteOneSupport(size_t id)
-{
-	auto p = treeSupportsExist.begin() + id;
-	(*p).exist = false;
-	glwidget->initSupportEditBuffer(id / 100);
-	glwidget->update();
-}
-
 void MainWindow::initDlprinter()
 {
 	if (QFile(e_setting.DlprinterFile.c_str()).exists()) {
@@ -1091,13 +1021,11 @@ void MainWindow::generate_all_inside_support()
 		for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 			size_t a = std::distance(m_model->objects.begin(), o);
 			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-				if ((*i)->exist) {
-					size_t b = std::distance((*o)->instances.begin(), i);
-					size_t id = a * InstanceNum + b;
-					TriangleMesh mesh((*o)->volumes[0]->mesh);
-					(*i)->transform_mesh(&mesh);
-					m_dlprint->generate_inside_support(id, &mesh);
-				}
+				size_t b = std::distance((*o)->instances.begin(), i);
+				size_t id = a * InstanceNum + b;
+				TriangleMesh mesh((*o)->volumes[0]->mesh);
+				(*i)->transform_mesh(&mesh);
+				m_dlprint->generate_inside_support(id, &mesh);
 			}
 		}
 	}
