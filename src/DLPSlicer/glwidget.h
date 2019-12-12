@@ -11,18 +11,48 @@
 #include <QEvent>
 #include "DLPrint.h"
 
+struct BasicBuffer {
+	int size;	//渲染点的坐标数
+	GLfloat* stl = nullptr;
+	QOpenGLBuffer* buffer = nullptr;
+};
+
+typedef BasicBuffer LineBuffer;
+
+struct RectLimitBuffer : public BasicBuffer{
+	bool visible = false;	//超限标记
+
+	void InitStl(int _size) {
+		if (stl == nullptr || this->size != _size) {
+			this->size = _size;
+			stl = new GLfloat[this->size * 3];
+		}
+	}
+	void BindBuffer() {
+		if (buffer == nullptr)
+			buffer = new QOpenGLBuffer();
+
+		if (!buffer->isCreated())
+			buffer->create();
+		buffer->bind();
+		buffer->allocate(stl, this->size * 3 * sizeof(GLfloat));
+		buffer->release();
+	}
+
+	~RectLimitBuffer() {
+		delete[] stl;
+		delete buffer;
+	}
+};
+
 //日期：2017
 //功能：模型缓冲区结构体。
 //属性1：模型或支撑的编号
 //属性2：三角面片的数量
 //属性3：三角面片的数组
 //属性4：OpenGL缓冲区
-struct ModelBuffer {
+struct ModelBuffer : public BasicBuffer{
 	int id;
-	int size;
-	GLfloat* stl;
-	QOpenGLBuffer* buffer;
-
 	Pointf3 origin = Pointf3(0.0, 0.0, 0.0);
 	Pointf3 new_origin = Pointf3(0.0, 0.0, 0.0);
 	//根据三角面片的渲染方式，简单地通过平移原始数据达到模型平移渲染效果
@@ -66,15 +96,6 @@ typedef std::vector<ModelBuffer*> ModelBufferPtrs;
 typedef std::vector<SupportBuffer> SupportBuffers;
 typedef std::vector<SupportBuffer*> SupportBufferPtrs;
 
-//日期：2018.5.29
-//功能：用来保存每个modelObjectd的渲染数据
-//属性1：三角面的个数
-//属性2：模型数据的数组指针，3*float（一个点）+3*floart（点的法向量）
-typedef struct {
-	int size;
-	GLfloat* stl;
-}stl_render;
-
 class GlWidget : public  QOpenGLWidget, protected QOpenGLFunctions
 {
 	Q_OBJECT
@@ -90,42 +111,48 @@ public:
 		ORTHOGONALITY
 	};
 
-	//渲染平台
-	QVector<GLfloat> platform;										//渲染平台的点
-	QOpenGLBuffer platform_vbo;										//平台顶点缓存对象
-	unsigned short lines_num{ 0 };									//平台的线段的数量
+	LineBuffer platformBuffer;								//平台渲染缓冲区
+	LineBuffer coordBuffer;									//坐标轴缓冲区
 	int viewport;
 	ModelBufferPtrs modelBuffers;							//模型渲染缓冲区
-	//每个模型对象的渲染数据
-	std::map<size_t, stl_render> volumes;
-	void drawModel();
 	SupportBufferPtrs treeSupportBuffers;					//树状支撑缓冲区
+
+	RectLimitBuffer frontBuffer;
+	RectLimitBuffer backBuffer;
+	RectLimitBuffer leftBuffer;
+	RectLimitBuffer rightBuffer;
+	RectLimitBuffer upBuffer;
+	RectLimitBuffer downBuffer;
 
 	//选中的模型实例，一次只能选择一个模型
 	//取代选中id编号，未选中时未空
 	ModelInstance* m_selInstance{ nullptr };
-	int translationID;												//选中的转换动作标签ID，等于-1为未选中
-	Model* m_model;													//模型
-	DLPrint* dlprint;												//dlp打印
+	int translationID;										//选中的转换动作标签ID，等于-1为未选中
+	Model* m_model;											//模型
+	DLPrint* dlprint;										//dlp打印
 
 	//支撑编辑控制器，进入支撑编辑模式生成
 	//退出支撑模式则删除
 	struct SupEditControl
 	{
-		SupportBuffer* m_curPoint = { nullptr };		//手动支撑的缓冲区
-		//TODO:将buffer与points整合
-		SupportBufferPtrs supportEditBuffer;			//支撑编辑时渲染缓冲区(100个支撑点为一个渲染缓存区）
-		//支撑编辑模式时模型的支撑点(100个为一个区间）
-		Pointf3s m_supportEditPoints;
-		TriangleMesh* mesh;					//手动支撑时的模型实例
+		SupportBuffer* m_curPoint = { nullptr };	//手动支撑的缓冲区
+		SupportBufferPtrs supportPoints;	//支撑编辑时渲染缓冲区
+		TriangleMesh* m_mesh = nullptr;			//手动支撑时的模型实例
+		//TODO:只是引进ball后面不需要parent
+		GlWidget* m_parent;
 
+		void AddSupportPoint(const stl_vertex& ver);
+		void DelSupportPoint(size_t id);
+		void AddNewSupportPoint();
+		void InitOneSupport();
+		SupEditControl(GlWidget* parent) :m_parent(parent) {};
 		~SupEditControl() {
 			delete m_curPoint;
-			delete mesh;
-			while (!supportEditBuffer.empty()) {
-				auto s = supportEditBuffer.begin();
+			delete m_mesh;
+			while (!supportPoints.empty()) {
+				auto s = supportPoints.begin();
 				delete *s;
-				supportEditBuffer.erase(s);
+				supportPoints.erase(s);
 			}
 		}
 	};
@@ -142,41 +169,27 @@ public:
 		BEHIND
 	};
 
+	void drawModel();
 	void updateTranslationID();
 	void setPresprective();
 	void setOrthogonality();
 
 	TriangleMesh find_model(size_t id);
-	void initSupportEditBuffer(size_t i);
-	void initSupportEditBufferAll();
 	void ChangeView(int view);
-	void addModelBuffer(ModelInstance* instance);
 	void saveOneView(char* _name);
-	void addOneSupport();
-	void updateConfine();
-	bool checkConfine();
 	TriangleMesh saveSupport();
 	void delSupportBuffer(size_t id);
 	void clearModelBuffer();
 	void clearSupportBuffer();
 	void bindTreeSupport();
 	void bindSupportEditBuffer();
-	void initOneSupport();
 	void bindOneSupport();
 	void initModelMatrix();
-	void initPlatform();
-	void bindPlatform();
 	void setEye();
-	void initConfine();
-	void bindConfine();
 	void ReadDepth();
-	void initCoord();
-	void bindCoord();
 	void read_basics_mesh();					//读取基础模型
 
-	std::vector<TriangleMesh> return_support_model();
-	void save_valume(size_t id);
-	void clear_volumes();
+	std::vector<TriangleMesh> return_support_model();;
 	void setDefaultView();
 
 	void initTransformMesh();					//初始化转化模型
@@ -185,8 +198,14 @@ public:
 	void drawTranslationMesh_1(ModelBuffer* mb, QMatrix4x4 scaleM, QMatrix4x4 translateM);
 	void renderTranslationMesh_1(TriangleMesh mesh, int id, Vectorf3 direction, QMatrix4x4 scaleM, QMatrix4x4 translateM);
 
-	void addOneSupport(Pointf3 p);
-	void deleteOneSupport(size_t id);
+	void InitCoord();
+	void BindCoord();
+	void InitPlatform();
+	void BindPlatform();
+	void InitConfine();
+	void BindConfine();
+	void UpdateConfine();
+	bool CheckConfine();
 
 	void offsetValueChange(double x, double y, double z, bool back = false);
 	void scaleValueChange(double x, double y, double z, bool back = false);
@@ -197,6 +216,8 @@ public:
 	TreeSupport* GetSelSupport() { return dlprint->chilck_tree_support(selectID); };
 	void UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress);
 	void SupportEditChange(QProgressBar* progress = nullptr);
+	void AddNewSupportPoint() { m_supEditControl->AddNewSupportPoint(); };
+	void AddModelInstance(size_t id);
 private:
 	void DelModelBuffer(size_t id);
 
@@ -252,42 +273,8 @@ private:
 	QVector3D center;												//世界坐标平移的矢量
 	int xLastPos, yLastPos;											//鼠标的坐标值
 
-	//前
-	bool front;
-	QVector<GLfloat> frontVector;
-	QOpenGLBuffer front_vbo;
-
-	//后
-	bool back;
-	QVector<GLfloat> backVector;
-	QOpenGLBuffer back_vbo;
-
-	//左
-	bool left;
-	QVector<GLfloat> leftVector;
-	QOpenGLBuffer left_vbo;
-
-	//右
-	bool right;
-	QVector<GLfloat> rightVector;
-	QOpenGLBuffer right_vbo;
-
-	//上
-	bool up;
-	QVector<GLfloat> upVector;
-	QOpenGLBuffer up_vbo;
-
-	//下
-	bool down;
-	QVector<GLfloat> downVector;
-	QOpenGLBuffer down_vbo;
-
 	QPoint pos;										//保存屏幕坐标值
 	bool _Depth;									//判断是否获取深度值的开关
-
-	//坐标轴
-	QVector<GLfloat> coordVector;
-	QOpenGLBuffer coord_vbo;
 
 	//圆环的半径为10mm,圆，圆锥，正方体为1mm单位
 	TriangleMesh cube, ring, cone, ball;		//转换标签的基础模型

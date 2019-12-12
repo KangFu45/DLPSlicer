@@ -198,19 +198,14 @@ void MainWindow::openStl()
 		m_centerTopWidget->P(20);
 		size_t id = m_model->load_model(file, format);
 		m_centerTopWidget->P(60);
-		glwidget->save_valume(id);
-		m_centerTopWidget->P(80);
-		
-		glwidget->addModelBuffer(m_model->find_instance(id));
-
+		glwidget->AddModelInstance(id);
 		m_centerTopWidget->P(100);
 		m_centerTopWidget->hideProgress();
-		glwidget->updateConfine();
+		glwidget->UpdateConfine();
 		glwidget->updateTranslationID();
 	}
-	else if (temp.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0) {
+	else if (temp.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0) 
 		showPreviewWidget1(temp);
-	}
 
 	m_centerTopWidget->CenterButtonPush(OPENBTN);
 }
@@ -221,7 +216,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
 		glwidget->slot_delSelectIntance();
 	}
 	else if (event->key() == Qt::Key_Return) {
-		glwidget->addOneSupport();
+		glwidget->AddNewSupportPoint();
 	}
 }
 
@@ -260,11 +255,10 @@ void MainWindow::dropEvent(QDropEvent *event)
 		m_centerTopWidget->P(20);
 		size_t id = m_model->load_model(file, format);
 		m_centerTopWidget->P(60);
-		glwidget->save_valume(id);
-		m_centerTopWidget->P(80);
+		glwidget->AddModelInstance(id);
 		m_centerTopWidget->P(100);
 		m_centerTopWidget->hideProgress();
-		glwidget->updateConfine();
+		glwidget->UpdateConfine();
 
 		glwidget->updateTranslationID();
 	}
@@ -601,7 +595,6 @@ void MainWindow::newJob()//新建项目
 	m_model->clear_objects();
 	m_dlprint->delete_all_support();
 	glwidget->clearModelBuffer();
-	glwidget->clear_volumes();
 	glwidget->clearSupportBuffer();
 }
 
@@ -616,9 +609,10 @@ void MainWindow::deleteAllSupport()
 
 void MainWindow::slot_modelSelect()
 {
-	slot_offsetChange();
-	slot_rotateChange();
-	slot_scaleChange();
+	//error:选中模型会将支撑删除
+	//slot_offsetChange();
+	//slot_rotateChange();
+	//slot_scaleChange();
 }
 
 void MainWindow::generateSupport()
@@ -722,14 +716,7 @@ void MainWindow::SupportEdit()
 	if (!m_centerTopWidget->m_supportEditBtn->c_isChecked())
 	{
 		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
-
-		if (glwidget->m_selInstance != nullptr)
-			glwidget->SupportEditChange();
-		else{
-			QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("请选中一个已生成支撑的模型。"));
-			m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
-			return;
-		}
+		glwidget->SupportEditChange();
 	}
 	else {
 		//-----------退出支撑编辑模式，更新支撑点------------
@@ -750,7 +737,7 @@ void MainWindow::slice()
 		return;
 	}
 
-	if (!glwidget->checkConfine()) {
+	if (!glwidget->CheckConfine()) {
 		QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
 		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), desktop, "histogram file(*.sm)");
 		if (path.size() > 0) {

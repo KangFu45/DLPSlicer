@@ -12,8 +12,8 @@ extern Setting e_setting;
 
 GlWidget::GlWidget(Model* _model, DLPrint* _dlprint)
 	: translationID(-1), _Depth(false)
-	, viewport(ORTHOGONALITY), front(false), back(false), left(false), right(false), up(false), down(false),
-	m_model(_model),dlprint(_dlprint)
+	, viewport(ORTHOGONALITY)
+	,m_model(_model),dlprint(_dlprint)
 {
 	setDefaultView();
 	read_basics_mesh();
@@ -140,9 +140,9 @@ void GlWidget::initializeGL()
 	//glClipPlane(GL_CLIP_PLANE0, 50.0);
 
 	initTransformMesh();
-	initPlatform();
-	initConfine();
-	initCoord();
+	InitPlatform();
+	InitConfine();
+	InitCoord();
 	setEye();
 	m_program->release();
 }
@@ -185,22 +185,22 @@ void GlWidget::paintGL()
 	//添加支撑时的标识渲染
 	if (m_supEditControl != nullptr) {
 		bindOneSupport();
-		if (!m_supEditControl->supportEditBuffer.empty())
+		if (!m_supEditControl->supportPoints.empty())
 			bindSupportEditBuffer();
 	}
 	else {
 		//渲染边界
 		glPolygonMode(GL_BACK, GL_FILL);
-		bindConfine();
+		BindConfine();
 		glPolygonMode(GL_BACK, GL_LINE);
 
 		//渲染坐标轴
 		glLineWidth(3);
-		bindCoord();
+		BindCoord();
 		glLineWidth(1);
 
 		//渲染平台
-		bindPlatform();
+		BindPlatform();
 	}
 
 	glEnable(GL_CULL_FACE);
@@ -277,39 +277,12 @@ void GlWidget::drawModel()//渲染模型
 	}
 }
 
-void GlWidget::addModelBuffer(ModelInstance* instance)//添加模型缓冲区
-{
-	//-------取得模型对象渲染数据---------
-	size_t id = m_model->find_id(instance);
-	auto v = volumes.find(id / InstanceNum);
-	if (v != volumes.end()) {
-		ModelBuffer* mb = new ModelBuffer;
-		//读取对应modelObject里的渲染数据
-		mb->stl = (*v).second.stl;
-		mb->size = (*v).second.size;
-
-		mb->id = id;
-		mb->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-		mb->buffer->create();
-		mb->buffer->bind();
-		mb->buffer->allocate(mb->stl, mb->size * sizeof(GLfloat) * 3 * 2 * 3);
-		mb->buffer->release();
-		modelBuffers.push_back(mb);
-		update();
-	}
-}
-
 void GlWidget::DelModelBuffer(size_t id)//删除一个模型缓冲区
 {
-	//删除模型不会更新id，因为需要”撤销重做“还原
 	for (auto m = modelBuffers.begin(); m != modelBuffers.end(); ++m) {
 		if ((*m)->id == id) {
-			delete (*m)->buffer;
-			//delete[](*m)->stl;    只能被删除一次
-
 			delete *m;
 			modelBuffers.erase(m);
-
 			update();
 			return;
 		}
@@ -340,13 +313,15 @@ void GlWidget::clearModelBuffer()
 {
 	while (!modelBuffers.empty()) {
 		auto m = modelBuffers.begin();
-		delete (*m)->buffer;
-		//delete[](*m)->stl;  //与volumes.stl指向同一块内存
-
 		delete *m;
 		modelBuffers.erase(m);
 	}
-	updateConfine();
+
+	selectID = -1;
+	m_selInstance = nullptr;
+	translationID = -1;
+
+	UpdateConfine();
 	update();
 }
 
@@ -364,7 +339,7 @@ void GlWidget::clearSupportBuffer()
 	update();
 }
 
-void GlWidget::initPlatform()
+void GlWidget::InitPlatform()
 {
 	unsigned int L = e_setting.m_printers.begin()->length;
 	unsigned int W = e_setting.m_printers.begin()->width;
@@ -376,10 +351,11 @@ void GlWidget::initPlatform()
 	unsigned int c = W / 10;
 	unsigned int d = W % 10;
 
-	platform.clear();
-	lines_num = a + c + 12;
-	platform.resize(lines_num * 2 * 3);
-	GLfloat* p = platform.data();
+	platformBuffer.size = a + c + 12;
+	if (platformBuffer.stl != nullptr)
+		delete[] platformBuffer.stl;
+	platformBuffer.stl = new GLfloat[platformBuffer.size * 2 * 3];
+	GLfloat* p = platformBuffer.stl;
 
 	//x方向中间a-1根线
 	for (int i = 1; i < a; i++) {
@@ -403,56 +379,59 @@ void GlWidget::initPlatform()
 
 	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = H;
 	*p++ = GLfloat(L / 2);  *p++ = -GLfloat(W / 2); *p++ = H;
-	
+
 	*p++ = GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = H;
 	*p++ = GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = 0;
-	
+
 	*p++ = GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = H;
 	*p++ = GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = H;
-	
+
 	*p++ = GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = H;
 	*p++ = GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = 0;
-	
+
 	*p++ = GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = H;
 	*p++ = -GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = H;
-	
+
 	*p++ = -GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = H;
 	*p++ = -GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = 0;
-	
+
 	*p++ = -GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = H;
 	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = H;
 
 	//----------缩短30mm--------------
 	*p++ = GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = 0;
 	*p++ = -GLfloat(GLfloat(L / 2) - 30); *p++ = -GLfloat(W / 2); *p++ = 0;
-	
+
 	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = 30;
 	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = H;
-	
+
 	*p++ = -GLfloat(L / 2); *p++ = GLfloat(W / 2); *p++ = 0;
 	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(GLfloat(W / 2) - 30); *p++ = 0;
 	//---------------------------------
 
-	if (!platform_vbo.isCreated())
-		platform_vbo.create();
-	platform_vbo.bind();
-	platform_vbo.allocate(platform.constData(), platform.count() * sizeof(GLfloat));
-	platform_vbo.release();
+	if (platformBuffer.buffer == nullptr)
+		platformBuffer.buffer = new QOpenGLBuffer();
+
+	if (!platformBuffer.buffer->isCreated())
+		platformBuffer.buffer->create();
+	platformBuffer.buffer->bind();
+	platformBuffer.buffer->allocate(platformBuffer.stl, platformBuffer.size * 2 * 3 * sizeof(GLfloat));
+	platformBuffer.buffer->release();
 }
 
-void GlWidget::bindPlatform()
+void GlWidget::BindPlatform()
 {
 	initModelMatrix();
 
 	m_program->setUniformValue(func, 2);
 	m_program->enableAttributeArray(0);
-
-	platform_vbo.bind();
-	m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
-	platform_vbo.release();
-
-	glDrawArrays(GL_LINES, 0, lines_num * 2);
 	
+	platformBuffer.buffer->bind();
+	m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
+	platformBuffer.buffer->release();
+
+	glDrawArrays(GL_LINES, 0, platformBuffer.size * 2);
+
 	m_program->disableAttributeArray(0);
 }
 
@@ -475,6 +454,7 @@ void GlWidget::wheelEvent(QWheelEvent *event)
 		_scale = 500;
 	if (_scale < 0.1)
 		_scale = 0.1;
+
 	update();
 }
 
@@ -693,8 +673,8 @@ void GlWidget::ReadDepth()
 			float v[3];
 			float dis = -1;
 
-			for (int i = 0; i < m_supEditControl->mesh->stl.stats.number_of_facets; ++i) {
-				f = m_supEditControl->mesh->stl.facet_start[i];
+			for (int i = 0; i < m_supEditControl->m_mesh->stl.stats.number_of_facets; ++i) {
+				f = m_supEditControl->m_mesh->stl.facet_start[i];
 
 				//得到射线
 				v[0] = prox - eye.x();
@@ -725,26 +705,11 @@ void GlWidget::ReadDepth()
 		else
 			m_supEditControl->m_curPoint->new_origin = Pointf3{ 0,0,0 };
 
-		initOneSupport();
+		m_supEditControl->InitOneSupport();
 
 		_Depth = false;
 		update();
 	}
-}
-
-void GlWidget::addOneSupport()
-{
-	if (m_supEditControl != nullptr && selectID >= 0) {
-		if (!(m_supEditControl->m_curPoint->new_origin.x == 0 
-			&& m_supEditControl->m_curPoint->new_origin.y == 0 
-			&& m_supEditControl->m_curPoint->new_origin.z == 0)) {
-			//添加一个支撑点并初始化渲染
-			addOneSupport(m_supEditControl->m_curPoint->new_origin);
-		}
-	}
-	m_supEditControl->m_curPoint->new_origin = Pointf3{ 0,0,0 };
-	initOneSupport();
-	update();
 }
 
 void GlWidget::mousePressEvent(QMouseEvent* event)
@@ -913,12 +878,12 @@ void GlWidget::mousePressEvent(QMouseEvent* event)
 		stl_facet f;
 
 		//?????????
-		for (auto p = m_supEditControl->m_supportEditPoints.begin(); p != m_supEditControl->m_supportEditPoints.end(); ++p) {
+		for (auto p = m_supEditControl->supportPoints.begin(); p != m_supEditControl->supportPoints.end(); ++p) {
 			mesh = ball;
-			mesh.translate((*p).x, (*p).y, (*p).z);
+			mesh.translate((*p)->origin.x, (*p)->origin.y, (*p)->origin.z);
 
 			//采用流水线方式在选中模式中渲染支撑点
-			glLoadName(std::distance(m_supEditControl->m_supportEditPoints.begin(), p));
+			glLoadName(std::distance(m_supEditControl->supportPoints.begin(), p));
 
 			glBegin(GL_TRIANGLES);
 
@@ -949,7 +914,7 @@ void GlWidget::mousePressEvent(QMouseEvent* event)
 			if (id >= 0) {
 				qDebug() << "delete oneSupport: " << id;
 				//删除一个支撑点（支撑点的位置关系生成id）并初始化渲染
-				deleteOneSupport(id);
+				m_supEditControl->DelSupportPoint(id);
 			}
 		}
 		update();
@@ -1142,7 +1107,6 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 	}
 
 	TriangleMesh mesh;
-	stl_facet f;
 	Pointf3s topCircle3, supportCircle3A,supportCircle3B,bottomCircle3;
 	Pointf3 p4, p5, p6, p7;
 	Linef3 line, line1;
@@ -1542,53 +1506,6 @@ TriangleMesh GlWidget::saveSupport()
 	return mesh;
 }
 
-void GlWidget::initOneSupport()
-{
-	if (m_supEditControl->m_curPoint == nullptr) {
-		//ball就是在原点0,0,0
-		m_supEditControl->m_curPoint = new SupportBuffer();
-		m_supEditControl->m_curPoint->id = -1;
-		m_supEditControl->m_curPoint->size = ball.stl.stats.number_of_facets;
-		m_supEditControl->m_curPoint->stl = new GLfloat[m_supEditControl->m_curPoint->size * 3 * 2 * 3];
-
-		float normal[3];
-		for (int i = 0; i < m_supEditControl->m_curPoint->size; ++i) {
-			stl_calculate_normal(normal, &ball.stl.facet_start[i]);
-			stl_normalize_vector(normal);
-
-			m_supEditControl->m_curPoint->stl[i * 18] = ball.stl.facet_start[i].vertex[0].x;
-			m_supEditControl->m_curPoint->stl[i * 18 + 1] = ball.stl.facet_start[i].vertex[0].y;
-			m_supEditControl->m_curPoint->stl[i * 18 + 2] = ball.stl.facet_start[i].vertex[0].z;
-			m_supEditControl->m_curPoint->stl[i * 18 + 3] = normal[0];
-			m_supEditControl->m_curPoint->stl[i * 18 + 4] = normal[1];
-			m_supEditControl->m_curPoint->stl[i * 18 + 5] = normal[2];
-
-			m_supEditControl->m_curPoint->stl[i * 18 + 6] = ball.stl.facet_start[i].vertex[1].x;
-			m_supEditControl->m_curPoint->stl[i * 18 + 7] = ball.stl.facet_start[i].vertex[1].y;
-			m_supEditControl->m_curPoint->stl[i * 18 + 8] = ball.stl.facet_start[i].vertex[1].z;
-			m_supEditControl->m_curPoint->stl[i * 18 + 9] = normal[0];
-			m_supEditControl->m_curPoint->stl[i * 18 + 10] = normal[1];
-			m_supEditControl->m_curPoint->stl[i * 18 + 11] = normal[2];
-
-			m_supEditControl->m_curPoint->stl[i * 18 + 12] = ball.stl.facet_start[i].vertex[2].x;
-			m_supEditControl->m_curPoint->stl[i * 18 + 13] = ball.stl.facet_start[i].vertex[2].y;
-			m_supEditControl->m_curPoint->stl[i * 18 + 14] = ball.stl.facet_start[i].vertex[2].z;
-			m_supEditControl->m_curPoint->stl[i * 18 + 15] = normal[0];
-			m_supEditControl->m_curPoint->stl[i * 18 + 16] = normal[1];
-			m_supEditControl->m_curPoint->stl[i * 18 + 17] = normal[2];
-		}
-
-		m_supEditControl->m_curPoint->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-		m_supEditControl->m_curPoint->buffer->create();
-	}
-	else
-		m_supEditControl->m_curPoint->translation();
-
-	m_supEditControl->m_curPoint->buffer->bind();
-	m_supEditControl->m_curPoint->buffer->allocate(m_supEditControl->m_curPoint->stl, m_supEditControl->m_curPoint->size * 3 * 2 * 3 * sizeof(GLfloat));
-	m_supEditControl->m_curPoint->buffer->release();
-}
-
 void GlWidget::bindOneSupport()
 {
 	initModelMatrix();
@@ -1647,64 +1564,56 @@ void GlWidget::saveOneView(char* _name)
 	free(pixelDate);
 }
 
-//TODO:只进行手动支撑有error
 void GlWidget::SupportEditChange(QProgressBar* progress)
 {
-	if (m_supEditControl== nullptr) {
-		m_supEditControl = new SupEditControl();
-		initOneSupport();
+	if (m_selInstance == nullptr)
+		return;
+
+	if (m_supEditControl == nullptr) {
+		m_supEditControl = new SupEditControl(this);
+		m_supEditControl->InitOneSupport();
 
 		//保存待支撑模型
-		if (m_selInstance != nullptr) {
-			m_supEditControl->mesh = new TriangleMesh(m_selInstance->get_object()->volumes[0]->mesh);
-			m_selInstance->transform_mesh(m_supEditControl->mesh);
-		}
+		m_supEditControl->m_mesh = new TriangleMesh(m_selInstance->get_object()->volumes[0]->mesh);
+		m_selInstance->transform_mesh(m_supEditControl->m_mesh);
 
-		//保存支撑点模型？？？？？？？？？？？？
 		auto p = dlprint->treeSupports.find(selectID);
 		if (p != dlprint->treeSupports.end()) {
 			//有支撑点,将支撑点传入m_supportEditPoints并初始化渲染
 			Pointf3 temp(0, 0, 0);
-			for (auto i = (*p).second->support_point.begin(); i != (*p).second->support_point.end(); ++i) {
-				temp.x = (*i).x;
-				temp.y = (*i).y;
-				temp.z = (*i).z;
-				m_supEditControl->m_supportEditPoints.push_back(temp);
-			}
-			//增加悬吊面上的支撑点
-			for (auto i = (*p).second->support_point_face.begin(); i != (*p).second->support_point_face.end(); ++i) {
-				temp.x = (*i).x;
-				temp.y = (*i).y;
-				temp.z = (*i).z;
-				m_supEditControl->m_supportEditPoints.push_back(temp);
-			}
-			initSupportEditBufferAll();
+			std::vector<stl_vertex> ps = (*p).second->support_point;
+			ps.insert(ps.end(), (*p).second->support_point_face.begin(), (*p).second->support_point_face.end());
+			for each (const stl_vertex & i in ps)
+				m_supEditControl->AddSupportPoint(i);
 		}
 	}
 	else {
 		TreeSupport* sup = GetSelSupport();
 		TreeSupport* sup_temp = new TreeSupport;
 
-		if (sup == nullptr)
-			return;//退出错误处理
-
-		if (sup->support_point.empty()) {
-			for each (const Pointf3 & p in m_supEditControl->m_supportEditPoints) {
-				sup_temp->support_point_face.emplace_back(stl_vertex{ (float)p.x,(float)p.y,(float)p.z });
-			}
+		//支撑不存在，只进行手动支撑
+		if (sup == nullptr) {
+			for each (const SupportBuffer * sb in m_supEditControl->supportPoints)
+				sup_temp->support_point_face.emplace_back(stl_vertex{ (float)sb->origin.x,(float)sb->origin.y,(float)sb->origin.z });
 		}
 		else {
-			stl_vertex v;
-			for each (const Pointf3 & p in m_supEditControl->m_supportEditPoints) {
-				v = { (float)p.x,(float)p.y,(float)p.z };
-				for (auto v1 = sup->support_point.begin(); v1 != sup->support_point.end(); ++v1) {
-					if (equal_vertex(v, *v1)) {
-						sup_temp->support_point.emplace_back(v);
-						break;
-					}
+			if (sup->support_point.empty()) {
+				for each (const SupportBuffer * sb in m_supEditControl->supportPoints)
+					sup_temp->support_point_face.emplace_back(stl_vertex{ (float)sb->origin.x,(float)sb->origin.y,(float)sb->origin.z });
+			}
+			else {
+				stl_vertex v;
+				for each (const SupportBuffer * sb in m_supEditControl->supportPoints) {
+					v = { (float)sb->origin.x,(float)sb->origin.y,(float)sb->origin.z };
+					for (auto v1 = sup->support_point.begin(); v1 != sup->support_point.end(); ++v1) {
+						if (equal_vertex(v, *v1)) {
+							sup_temp->support_point.emplace_back(v);
+							break;
+						}
 
-					if (v1 == sup->support_point.end() - 1)
-						sup_temp->support_point_face.emplace_back(v);
+						if (v1 == sup->support_point.end() - 1)
+							sup_temp->support_point_face.emplace_back(v);
+					}
 				}
 			}
 		}
@@ -1716,7 +1625,7 @@ void GlWidget::SupportEditChange(QProgressBar* progress)
 	update();
 }
 
-void GlWidget::initConfine()
+void GlWidget::InitConfine()
 {
 	unsigned int L = e_setting.m_printers.begin()->length;
 	unsigned int W = e_setting.m_printers.begin()->width;
@@ -1725,25 +1634,19 @@ void GlWidget::initConfine()
 	GLfloat LF = GLfloat(L / 2);
 	GLfloat WF = GLfloat(W / 2);
 
-	frontVector.clear();
-	frontVector.resize(3 * 6);
-	backVector.clear();
-	backVector.resize(3 * 6);
-	leftVector.clear();
-	leftVector.resize(3 * 6);
-	rightVector.clear();
-	rightVector.resize(3 * 6);
-	upVector.clear();
-	upVector.resize(3 * 6);
-	downVector.clear();
-	downVector.resize(3 * 6);
+	frontBuffer.InitStl(6);
+	backBuffer.InitStl(6);
+	leftBuffer.InitStl(6);
+	rightBuffer.InitStl(6);
+	upBuffer.InitStl(6);
+	downBuffer.InitStl(6);
 
-	GLfloat* p1 = frontVector.data();
-	GLfloat* p2 = backVector.data();
-	GLfloat* p3 = leftVector.data();
-	GLfloat* p4 = rightVector.data();
-	GLfloat* p5 = upVector.data();
-	GLfloat* p6 = downVector.data();
+	GLfloat* p1 = frontBuffer.stl;
+	GLfloat* p2 = backBuffer.stl;
+	GLfloat* p3 = leftBuffer.stl;
+	GLfloat* p4 = rightBuffer.stl;
+	GLfloat* p5 = upBuffer.stl;
+	GLfloat* p6 = downBuffer.stl;
 
 	//底面下降1mm
 	*p1++ = -LF; *p1++ = -WF; *p1++ = -1;
@@ -1757,133 +1660,104 @@ void GlWidget::initConfine()
 	*p2++ = -LF; *p2++ = WF; *p2++ = -1;
 	*p2++ = LF; *p2++ = WF; *p2++ = -1;
 	*p2++ = -LF; *p2++ = WF; *p2++ = H;
-	
+
 	*p2++ = -LF; *p2++ = WF; *p2++ = H;
 	*p2++ = LF; *p2++ = WF; *p2++ = -1;
 	*p2++ = LF; *p2++ = WF; *p2++ = H;
-	
+
 	*p3++ = -LF; *p3++ = -WF; *p3++ = -1;
 	*p3++ = -LF; *p3++ = WF; *p3++ = -1;
 	*p3++ = -LF; *p3++ = -WF; *p3++ = H;
-	
+
 	*p3++ = -LF; *p3++ = -WF; *p3++ = H;
 	*p3++ = -LF; *p3++ = WF; *p3++ = -1;
 	*p3++ = -LF; *p3++ = WF; *p3++ = H;
-	
+
 	*p4++ = LF; *p4++ = -WF; *p4++ = -1;
 	*p4++ = LF; *p4++ = WF; *p4++ = -1;
 	*p4++ = LF; *p4++ = -WF; *p4++ = H;
-	
+
 	*p4++ = LF; *p4++ = -WF; *p4++ = H;
 	*p4++ = LF; *p4++ = WF; *p4++ = -1;
 	*p4++ = LF; *p4++ = WF; *p4++ = H;
-	
+
 	*p5++ = -LF; *p5++ = -WF; *p5++ = H;
 	*p5++ = LF; *p5++ = -WF; *p5++ = H;
 	*p5++ = -LF; *p5++ = WF; *p5++ = H;
-	
+
 	*p5++ = -LF; *p5++ = WF; *p5++ = H;
 	*p5++ = LF; *p5++ = -WF; *p5++ = H;
 	*p5++ = LF; *p5++ = WF; *p5++ = H;
-	
+
 	*p6++ = -LF; *p6++ = -WF; *p6++ = -1;
 	*p6++ = LF; *p6++ = -WF; *p6++ = -1;
 	*p6++ = -LF; *p6++ = WF; *p6++ = -1;
-	  
+
 	*p6++ = -LF; *p6++ = WF; *p6++ = -1;
 	*p6++ = LF; *p6++ = -WF; *p6++ = -1;
 	*p6++ = LF; *p6++ = WF; *p6++ = -1;
 
-	if(!front_vbo.isCreated())
-		front_vbo.create();
-	front_vbo.bind();
-	front_vbo.allocate(frontVector.constData(), frontVector.count() * sizeof(GLfloat));
-	front_vbo.release();
-
-	if(!back_vbo.isCreated())
-		back_vbo.create();
-	back_vbo.bind();
-	back_vbo.allocate(backVector.constData(), backVector.count() * sizeof(GLfloat));
-	back_vbo.release();
-	
-	if(!left_vbo.isCreated())
-		left_vbo.create();
-	left_vbo.bind();
-	left_vbo.allocate(leftVector.constData(), leftVector.count() * sizeof(GLfloat));
-	left_vbo.release();
-	
-	if(!right_vbo.isCreated())
-		right_vbo.create();
-	right_vbo.bind();
-	right_vbo.allocate(rightVector.constData(), rightVector.count() * sizeof(GLfloat));
-	right_vbo.release();
-	
-	if(!up_vbo.isCreated())
-		up_vbo.create();
-	up_vbo.bind();
-	up_vbo.allocate(upVector.constData(), upVector.count() * sizeof(GLfloat));
-	up_vbo.release();
-	
-	if(!down_vbo.isCreated())
-		down_vbo.create();
-	down_vbo.bind();
-	down_vbo.allocate(downVector.constData(), downVector.count() * sizeof(GLfloat));
-	down_vbo.release();
+	frontBuffer.BindBuffer();
+	backBuffer.BindBuffer();
+	leftBuffer.BindBuffer();
+	rightBuffer.BindBuffer();
+	upBuffer.BindBuffer();
+	downBuffer.BindBuffer();
 }
 
-void GlWidget::bindConfine()
+void GlWidget::BindConfine()
 {
 	initModelMatrix();
 
 	m_program->setUniformValue(func, 5);
 	m_program->enableAttributeArray(0);
 
-	if (front) {
-		front_vbo.bind();
+	if (frontBuffer.visible) {
+		frontBuffer.buffer->bind();
 		m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
-		glDrawArrays(GL_TRIANGLES, 0, 6);
-		front_vbo.release();
+		glDrawArrays(GL_TRIANGLES, 0, frontBuffer.size);
+		frontBuffer.buffer->release();
 	}
 
-	if (back) {
-		back_vbo.bind();
+	if (backBuffer.visible) {
+		backBuffer.buffer->bind();
 		m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
-		back_vbo.release();
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		backBuffer.buffer->release();
+		glDrawArrays(GL_TRIANGLES, 0, backBuffer.size);
 	}
-	
-	if (left) {
-		left_vbo.bind();
+
+	if (leftBuffer.visible) {
+		leftBuffer.buffer->bind();
 		m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
-		left_vbo.release();
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		leftBuffer.buffer->release();
+		glDrawArrays(GL_TRIANGLES, 0, leftBuffer.size);
 	}
-	
-	if (right) {
-		right_vbo.bind();
+
+	if (rightBuffer.visible) {
+		rightBuffer.buffer->bind();
 		m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
-		right_vbo.release();
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		rightBuffer.buffer->release();
+		glDrawArrays(GL_TRIANGLES, 0, rightBuffer.size);
 	}
-	
-	if (up) {
-		up_vbo.bind();
+
+	if (upBuffer.visible) {
+		upBuffer.buffer->bind();
 		m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
-		up_vbo.release();
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		upBuffer.buffer->release();
+		glDrawArrays(GL_TRIANGLES, 0, upBuffer.size);
 	}
-	
-	if (down) {
-		down_vbo.bind();
+
+	if (downBuffer.visible) {
+		downBuffer.buffer->bind();
 		m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(GLfloat));
-		down_vbo.release();
-		glDrawArrays(GL_TRIANGLES, 0, 6);
+		downBuffer.buffer->release();
+		glDrawArrays(GL_TRIANGLES, 0, downBuffer.size);
 	}
 
 	m_program->disableAttributeArray(0);
 }
 
-void GlWidget::updateConfine()
+void GlWidget::UpdateConfine()
 {
 	unsigned int L = e_setting.m_printers.begin()->length;
 	unsigned int W = e_setting.m_printers.begin()->width;
@@ -1892,60 +1766,73 @@ void GlWidget::updateConfine()
 	GLfloat LF = GLfloat(L / 2);
 	GLfloat WF = GLfloat(W / 2);
 
-	front = false; back = false; left = false; right = false; up = false; down = false;
+	frontBuffer.visible = false;
+	backBuffer.visible = false;
+	leftBuffer.visible = false;
+	rightBuffer.visible = false;
+	upBuffer.visible = false;
+	downBuffer.visible = false;
+
 	for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 			TriangleMesh mesh = (*o)->volumes[0]->mesh;
 			(*i)->transform_mesh(&mesh);
 			BoundingBoxf3 box = mesh.bounding_box();
 
-			if (!front) {
+			if (!frontBuffer.visible) {
 				if (box.min.y < -WF)
-					front = true;
+					frontBuffer.visible = true;
 			}
 
-			if (!back) {
+			if (!backBuffer.visible) {
 				if (box.max.y > WF)
-					back = true;
+					backBuffer.visible = true;
 			}
 
-			if (!left) {
+			if (!leftBuffer.visible) {
 				if (box.min.x < -LF)
-					left = true;
+					leftBuffer.visible = true;
 			}
 
-			if (!right) {
+			if (!rightBuffer.visible) {
 				if (box.max.x > LF)
-					right = true;
+					rightBuffer.visible = true;
 			}
 
-			if (!up) {
+			if (!upBuffer.visible) {
 				if (box.max.z > H)
-					up = true;
+					upBuffer.visible = true;
 			}
 
-			if (!down) {
+			if (!downBuffer.visible) {
 				if (box.min.z < 0)
-					down = true;
+					downBuffer.visible = true;
 			}
 		}
 	}
 	update();
 }
 
-bool GlWidget::checkConfine()
+bool GlWidget::CheckConfine()
 {
-	return front || back || left || right || up || down;
+	return frontBuffer.visible 
+		|| backBuffer.visible 
+		|| leftBuffer.visible 
+		|| rightBuffer.visible 
+		|| upBuffer.visible 
+		|| downBuffer.visible;
 }
 
-void GlWidget::initCoord()
+void GlWidget::InitCoord()
 {
 	unsigned int L = e_setting.m_printers.begin()->length;
 	unsigned int W = e_setting.m_printers.begin()->width;
 
-	coordVector.clear();
-	coordVector.resize(3 * 2 * 6);
-	GLfloat*p = coordVector.data();
+	coordBuffer.size = 3;
+	if (coordBuffer.stl != nullptr)
+		delete[] coordBuffer.stl;
+	coordBuffer.stl = new GLfloat[coordBuffer.size * 2 * 6];
+	GLfloat* p = coordBuffer.stl;
 
 	//x轴,红色
 	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = 0.0f; *p++ = 1.0f; *p++ = 0.0f; *p++ = 0.0f;
@@ -1956,17 +1843,20 @@ void GlWidget::initCoord()
 	*p++ = -GLfloat(L / 2); *p++ = -(GLfloat(W / 2) - 30); *p++ = 0.0f; *p++ = 0.0f; *p++ = 1.0f; *p++ = 0.0f;
 
 	//z轴，蓝色
-	*p++ = -GLfloat(L / 2); *p++ =-GLfloat(W / 2); *p++ = 0.0f; *p++ = 0.0f; *p++ = 0.0f; *p++ = 1.0f;
-	*p++ = -GLfloat(L / 2); *p++ =-GLfloat(W / 2); *p++ = 30.0f; *p++ = 0.0f; *p++ = 0.0f; *p++ = 1.0f;
-	
-	if (!coord_vbo.isCreated())
-		coord_vbo.create();
-	coord_vbo.bind();
-	coord_vbo.allocate(coordVector.constData(), coordVector.count() * sizeof(GLfloat));
-	coord_vbo.release();
+	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = 0.0f; *p++ = 0.0f; *p++ = 0.0f; *p++ = 1.0f;
+	*p++ = -GLfloat(L / 2); *p++ = -GLfloat(W / 2); *p++ = 30.0f; *p++ = 0.0f; *p++ = 0.0f; *p++ = 1.0f;
+
+	if (coordBuffer.buffer == nullptr)
+		coordBuffer.buffer = new QOpenGLBuffer();
+
+	if (!coordBuffer.buffer->isCreated())
+		coordBuffer.buffer->create();
+	coordBuffer.buffer->bind();
+	coordBuffer.buffer->allocate(coordBuffer.stl, coordBuffer.size * 2 * 6 * sizeof(GLfloat));
+	coordBuffer.buffer->release();
 }
 
-void GlWidget::bindCoord()
+void GlWidget::BindCoord()
 {
 	initModelMatrix();
 
@@ -1974,10 +1864,11 @@ void GlWidget::bindCoord()
 	m_program->enableAttributeArray(0);
 	m_program->enableAttributeArray(2);
 
-	coord_vbo.bind();
+	coordBuffer.buffer->bind();
 	m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 6 * sizeof(GLfloat));
 	m_program->setAttributeBuffer(2, GL_FLOAT, 3 * sizeof(GLfloat), 3, 6 * sizeof(GLfloat));
-	glDrawArrays(GL_LINES, 0, 6);
+	coordBuffer.buffer->release();
+	glDrawArrays(GL_LINES, 0, coordBuffer.size * 2);
 
 	m_program->disableAttributeArray(0);
 	m_program->disableAttributeArray(2);
@@ -2004,86 +1895,11 @@ void GlWidget::bindTreeSupport()
 	}
 }
 
-void GlWidget::initSupportEditBuffer(size_t i)
-{
-	//初始化各区间
-	SupportBuffer* SB;
-	if (i < m_supEditControl->supportEditBuffer.size()) {
-		SB = *(m_supEditControl->supportEditBuffer.begin() + i);
-		delete SB->buffer;
-		delete SB->stl;
-	}
-	else if (m_supEditControl->supportEditBuffer.size() == i) {
-		SB = new SupportBuffer();
-		m_supEditControl->supportEditBuffer.push_back(SB);
-	}
-	else
-		return;
-
-	TriangleMesh meshs;
-	//指向区间尾部的后一位
-	auto end = m_supEditControl->m_supportEditPoints.end();
-	if (i * 100 + 99 < m_supEditControl->m_supportEditPoints.size())
-		end = m_supEditControl->m_supportEditPoints.begin() + i * 100 + 100;
-
-	for (auto p = m_supEditControl->m_supportEditPoints.begin() + i * 100; p != end; ++p) {
-		//不存在的点不会被渲染
-		TriangleMesh mesh = ball;
-		mesh.translate((*p).x, (*p).y, (*p).z);
-		meshs.merge(mesh);
-	}
-	SB->id = -1;
-	SB->size = meshs.stl.stats.number_of_facets;
-	SB->stl = new GLfloat[SB->size * 3 * 2 * 3];
-
-	float normal[3];
-	for (int i = 0; i < SB->size; ++i) {
-		stl_calculate_normal(normal, &meshs.stl.facet_start[i]);
-		stl_normalize_vector(normal);
-
-		SB->stl[i * 18] = meshs.stl.facet_start[i].vertex[0].x;
-		SB->stl[i * 18 + 1] = meshs.stl.facet_start[i].vertex[0].y;
-		SB->stl[i * 18 + 2] = meshs.stl.facet_start[i].vertex[0].z;
-		SB->stl[i * 18 + 3] = normal[0];
-		SB->stl[i * 18 + 4] = normal[1];
-		SB->stl[i * 18 + 5] = normal[2];
-
-		SB->stl[i * 18 + 6] = meshs.stl.facet_start[i].vertex[1].x;
-		SB->stl[i * 18 + 7] = meshs.stl.facet_start[i].vertex[1].y;
-		SB->stl[i * 18 + 8] = meshs.stl.facet_start[i].vertex[1].z;
-		SB->stl[i * 18 + 9] = normal[0];
-		SB->stl[i * 18 + 10] = normal[1];
-		SB->stl[i * 18 + 11] = normal[2];
-
-		SB->stl[i * 18 + 12] = meshs.stl.facet_start[i].vertex[2].x;
-		SB->stl[i * 18 + 13] = meshs.stl.facet_start[i].vertex[2].y;
-		SB->stl[i * 18 + 14] = meshs.stl.facet_start[i].vertex[2].z;
-		SB->stl[i * 18 + 15] = normal[0];
-		SB->stl[i * 18 + 16] = normal[1];
-		SB->stl[i * 18 + 17] = normal[2];
-	}
-	SB->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-	SB->buffer->create();
-	SB->buffer->bind();
-	SB->buffer->allocate(SB->stl, SB->size * 3 * 2 * 3 * sizeof(GLfloat));
-	SB->buffer->release();
-}
-
-void GlWidget::initSupportEditBufferAll()
-{
-	size_t c = m_supEditControl->m_supportEditPoints.size() / 100;
-	if (m_supEditControl->m_supportEditPoints.size() % 100 != 0)
-		++c;
-
-	for (int i = 0; i < c; ++i)
-		initSupportEditBuffer(i);
-}
-
 void GlWidget::bindSupportEditBuffer()
 {
 	initModelMatrix();
 
-	for (auto SB = m_supEditControl->supportEditBuffer.begin(); SB != m_supEditControl->supportEditBuffer.end(); ++SB) {
+	for (auto SB = m_supEditControl->supportPoints.begin(); SB != m_supEditControl->supportPoints.end(); ++SB) {
 		m_program->setUniformValue(func, 6);
 		(*SB)->buffer->bind();
 		m_program->enableAttributeArray(0);
@@ -2108,42 +1924,6 @@ TriangleMesh GlWidget::find_model(size_t id)
 	return mesh;
 }
 
-void GlWidget::save_valume(size_t id)
-{
-	size_t i = id / InstanceNum;
-	//判断模型对象是否有渲染数据，没有则创建
-	if (volumes.find(i) == volumes.end()) {
-		TriangleMesh mesh = m_model->find_object(id)->volumes[0]->mesh;
-		stl_render s;
-		s.size = mesh.stl.stats.number_of_facets;
-		GLfloat* v = new GLfloat[s.size * 3 * 2 * 3];
-		for (int i = 0; i < s.size; ++i) {
-			v[i * 18] = mesh.stl.facet_start[i].vertex[0].x;
-			v[i * 18 + 1] = mesh.stl.facet_start[i].vertex[0].y;
-			v[i * 18 + 2] = mesh.stl.facet_start[i].vertex[0].z;
-			v[i * 18 + 3] = mesh.stl.facet_start[i].normal.x;
-			v[i * 18 + 4] = mesh.stl.facet_start[i].normal.y;
-			v[i * 18 + 5] = mesh.stl.facet_start[i].normal.z;
-
-			v[i * 18 + 6] = mesh.stl.facet_start[i].vertex[1].x;
-			v[i * 18 + 7] = mesh.stl.facet_start[i].vertex[1].y;
-			v[i * 18 + 8] = mesh.stl.facet_start[i].vertex[1].z;
-			v[i * 18 + 9] = mesh.stl.facet_start[i].normal.x;
-			v[i * 18 + 10] = mesh.stl.facet_start[i].normal.y;
-			v[i * 18 + 11] = mesh.stl.facet_start[i].normal.z;
-
-			v[i * 18 + 12] = mesh.stl.facet_start[i].vertex[2].x;
-			v[i * 18 + 13] = mesh.stl.facet_start[i].vertex[2].y;
-			v[i * 18 + 14] = mesh.stl.facet_start[i].vertex[2].z;
-			v[i * 18 + 15] = mesh.stl.facet_start[i].normal.x;
-			v[i * 18 + 16] = mesh.stl.facet_start[i].normal.y;
-			v[i * 18 + 17] = mesh.stl.facet_start[i].normal.z;
-		}
-		s.stl = v;
-		volumes.insert(std::make_pair(i, s));
-	}
-}
-
 void GlWidget::initModelMatrix()
 {
 	QMatrix4x4 rotateM, scaleM, translateM;
@@ -2154,20 +1934,6 @@ void GlWidget::initModelMatrix()
 	m_program->setUniformValue(m_rotateMatrixLoc, rotateM);
 	m_program->setUniformValue(m_scaleMatrixLoc, scaleM);
 	m_program->setUniformValue(m_translateMatrixLoc, translateM);
-}
-
-void GlWidget::clear_volumes()
-{
-	while (!volumes.empty())
-	{
-		auto v = volumes.begin();
-		delete  (*v).second.stl;
-		volumes.erase(v);
-	}
-
-	selectID = -1;
-	m_selInstance = nullptr;
-	translationID = -1;
 }
 
 void GlWidget::setPresprective()
@@ -2297,9 +2063,9 @@ void GlWidget::initTransformMesh()
 
 void GlWidget::initTransformMesh_1(ModelBuffer* mb, TriangleMesh mesh, Vectorf3 color, Vectorf3 direction)
 {
-	mesh.rotate_x((direction.x/180)*PI);
-	mesh.rotate_y((direction.y)/180*PI);
-	mesh.rotate_z((direction.z)/180*PI);
+	mesh.rotate_x((direction.x / 180) * PI);
+	mesh.rotate_y((direction.y) / 180 * PI);
+	mesh.rotate_z((direction.z) / 180 * PI);
 
 	mb->size = mesh.stl.stats.number_of_facets;
 	mb->stl = new GLfloat[mb->size * 3 * 3 * 3];  //包含  坐标值  法向量  颜色
@@ -2314,7 +2080,7 @@ void GlWidget::initTransformMesh_1(ModelBuffer* mb, TriangleMesh mesh, Vectorf3 
 		mb->stl[i * 27 + 6] = color.x;
 		mb->stl[i * 27 + 7] = color.y;
 		mb->stl[i * 27 + 8] = color.z;
-		
+
 		mb->stl[i * 27 + 9] = mesh.stl.facet_start[i].vertex[1].x;
 		mb->stl[i * 27 + 10] = mesh.stl.facet_start[i].vertex[1].y;
 		mb->stl[i * 27 + 11] = mesh.stl.facet_start[i].vertex[1].z;
@@ -2324,7 +2090,7 @@ void GlWidget::initTransformMesh_1(ModelBuffer* mb, TriangleMesh mesh, Vectorf3 
 		mb->stl[i * 27 + 15] = color.x;
 		mb->stl[i * 27 + 16] = color.y;
 		mb->stl[i * 27 + 17] = color.z;
-		
+
 		mb->stl[i * 27 + 18] = mesh.stl.facet_start[i].vertex[2].x;
 		mb->stl[i * 27 + 19] = mesh.stl.facet_start[i].vertex[2].y;
 		mb->stl[i * 27 + 20] = mesh.stl.facet_start[i].vertex[2].z;
@@ -2479,7 +2245,7 @@ void GlWidget::renderTranslationMesh_1(TriangleMesh mesh, int id, Vectorf3 direc
 
 void GlWidget::updateTranslationID()
 {
-	int ids = m_model->objects.size()*InstanceNum;
+	int ids = m_model->objects.size() * InstanceNum;
 	//translation
 	translateMesh_X->id = ids;
 
@@ -2502,21 +2268,6 @@ void GlWidget::updateTranslationID()
 	rotateMesh_Z->id = ids + 8;
 }
 
-//支撑编辑可以100个点为一个区间，每次删减操作最多只对100个点进行初始化，区间点过少会消耗过多内存??????
-void GlWidget::addOneSupport(Pointf3 p)
-{
-	m_supEditControl->m_supportEditPoints.push_back(p);
-	initSupportEditBuffer(m_supEditControl->m_supportEditPoints.size() / 100);
-}
-
-void GlWidget::deleteOneSupport(size_t id)
-{
-	if (id < m_supEditControl->m_supportEditPoints.size()) {
-		m_supEditControl->m_supportEditPoints.erase(m_supEditControl->m_supportEditPoints.begin() + id);
-		initSupportEditBuffer(id / 100);
-	}
-}
-
 //传入缩放的比例值
 void GlWidget::scaleValueChange(double x, double y, double z, bool back)
 {
@@ -2525,7 +2276,7 @@ void GlWidget::scaleValueChange(double x, double y, double z, bool back)
 	if (z != 0) m_selInstance->scaling_vector.z += z;
 
 	m_selInstance->update_attribute();
-	updateConfine();
+	UpdateConfine();
 
 	if (back)
 		emit sig_scaleChange();
@@ -2539,7 +2290,7 @@ void GlWidget::rotateValueChange(double angle, int x, int y, int z, bool back)
 	m_selInstance->rotation_M = m * m_selInstance->rotation_M;
 
 	m_selInstance->update_attribute();
-	updateConfine();
+	UpdateConfine();
 
 	if (back)
 		emit sig_rotateChange();
@@ -2553,7 +2304,7 @@ void GlWidget::offsetValueChange(double x, double y, double z, bool back)
 	if (z != 0)m_selInstance->z_translation += z;
 
 	m_selInstance->update_attribute();
-	updateConfine();
+	UpdateConfine();
 
 	if (back)
 		emit sig_offsetChange();
@@ -2566,7 +2317,7 @@ void GlWidget::slot_delSelectIntance()
 
 	DelSelectSupport();
 	DelModelBuffer(selectID);
-	updateConfine();
+	UpdateConfine();
 
 	m_selInstance = nullptr;
 	selectID = -1;
@@ -2607,11 +2358,11 @@ void GlWidget::slot_dlprinterChange(QString name)
 		QSettings writeini(e_setting.DlprinterFile.c_str(), QSettings::IniFormat);
 		writeini.setValue("/dlprinter/name", name);
 
-		initPlatform();
-		initConfine();
-		initCoord();
+		InitPlatform();
+		InitConfine();
+		InitCoord();
 
-		updateConfine();
+		UpdateConfine();
 	}
 }
 
@@ -2623,4 +2374,159 @@ void GlWidget::UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress)
 
 	dlprint->insertSupports(selectID, new_sup);
 	initTreeSupport_id(selectID, progress);
+}
+
+void GlWidget::AddModelInstance(size_t id)
+{
+	ModelBuffer* mb = new ModelBuffer;
+	//读取对应modelObject里的渲染数据
+	TriangleMesh mesh = m_model->find_object(id)->volumes[0]->mesh;
+	mb->size = mesh.stl.stats.number_of_facets;
+
+	GLfloat* v = new GLfloat[mb->size * 3 * 2 * 3];
+	for (int i = 0; i < mb->size; ++i) {
+		v[i * 18] = mesh.stl.facet_start[i].vertex[0].x;
+		v[i * 18 + 1] = mesh.stl.facet_start[i].vertex[0].y;
+		v[i * 18 + 2] = mesh.stl.facet_start[i].vertex[0].z;
+		v[i * 18 + 3] = mesh.stl.facet_start[i].normal.x;
+		v[i * 18 + 4] = mesh.stl.facet_start[i].normal.y;
+		v[i * 18 + 5] = mesh.stl.facet_start[i].normal.z;
+
+		v[i * 18 + 6] = mesh.stl.facet_start[i].vertex[1].x;
+		v[i * 18 + 7] = mesh.stl.facet_start[i].vertex[1].y;
+		v[i * 18 + 8] = mesh.stl.facet_start[i].vertex[1].z;
+		v[i * 18 + 9] = mesh.stl.facet_start[i].normal.x;
+		v[i * 18 + 10] = mesh.stl.facet_start[i].normal.y;
+		v[i * 18 + 11] = mesh.stl.facet_start[i].normal.z;
+
+		v[i * 18 + 12] = mesh.stl.facet_start[i].vertex[2].x;
+		v[i * 18 + 13] = mesh.stl.facet_start[i].vertex[2].y;
+		v[i * 18 + 14] = mesh.stl.facet_start[i].vertex[2].z;
+		v[i * 18 + 15] = mesh.stl.facet_start[i].normal.x;
+		v[i * 18 + 16] = mesh.stl.facet_start[i].normal.y;
+		v[i * 18 + 17] = mesh.stl.facet_start[i].normal.z;
+	}
+	mb->stl = v;
+	mb->id = id;
+	mb->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+	mb->buffer->create();
+	mb->buffer->bind();
+	mb->buffer->allocate(mb->stl, mb->size * sizeof(GLfloat) * 3 * 2 * 3);
+	mb->buffer->release();
+	modelBuffers.emplace_back(mb);
+	update();
+}
+
+//--------------GlWidget::SupEditControl---------------
+
+void GlWidget::SupEditControl::AddSupportPoint(const stl_vertex& ver)
+{
+	SupportBuffer* SB = new SupportBuffer();
+	SB->origin = Pointf3(ver.x, ver.y, ver.z);
+	TriangleMesh mesh = m_parent->ball;
+	mesh.translate(SB->origin.x, SB->origin.y, SB->origin.z);
+
+	SB->id = -1;
+	SB->size = mesh.stl.stats.number_of_facets;
+	SB->stl = new GLfloat[SB->size * 3 * 2 * 3];
+
+	float normal[3];
+	for (int i = 0; i < SB->size; ++i) {
+		stl_calculate_normal(normal, &mesh.stl.facet_start[i]);
+		stl_normalize_vector(normal);
+
+		SB->stl[i * 18] = mesh.stl.facet_start[i].vertex[0].x;
+		SB->stl[i * 18 + 1] = mesh.stl.facet_start[i].vertex[0].y;
+		SB->stl[i * 18 + 2] = mesh.stl.facet_start[i].vertex[0].z;
+		SB->stl[i * 18 + 3] = normal[0];
+		SB->stl[i * 18 + 4] = normal[1];
+		SB->stl[i * 18 + 5] = normal[2];
+
+		SB->stl[i * 18 + 6] = mesh.stl.facet_start[i].vertex[1].x;
+		SB->stl[i * 18 + 7] = mesh.stl.facet_start[i].vertex[1].y;
+		SB->stl[i * 18 + 8] = mesh.stl.facet_start[i].vertex[1].z;
+		SB->stl[i * 18 + 9] = normal[0];
+		SB->stl[i * 18 + 10] = normal[1];
+		SB->stl[i * 18 + 11] = normal[2];
+
+		SB->stl[i * 18 + 12] = mesh.stl.facet_start[i].vertex[2].x;
+		SB->stl[i * 18 + 13] = mesh.stl.facet_start[i].vertex[2].y;
+		SB->stl[i * 18 + 14] = mesh.stl.facet_start[i].vertex[2].z;
+		SB->stl[i * 18 + 15] = normal[0];
+		SB->stl[i * 18 + 16] = normal[1];
+		SB->stl[i * 18 + 17] = normal[2];
+	}
+	SB->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+	SB->buffer->create();
+	SB->buffer->bind();
+	SB->buffer->allocate(SB->stl, SB->size * 3 * 2 * 3 * sizeof(GLfloat));
+	SB->buffer->release();
+	supportPoints.emplace_back(SB);
+}
+
+void GlWidget::SupEditControl::DelSupportPoint(size_t id)
+{
+	auto sb = supportPoints.begin() + id;
+	if (sb != supportPoints.end()) {
+		delete* sb;
+		supportPoints.erase(sb);
+	}
+}
+
+void GlWidget::SupEditControl::AddNewSupportPoint()
+{
+	if (m_curPoint->new_origin.x != 0
+		&& m_curPoint->new_origin.y != 0
+		&& m_curPoint->new_origin.y != 0) {
+		AddSupportPoint(stl_vertex{ (float)m_curPoint->new_origin.x, (float)m_curPoint->new_origin.y,(float)m_curPoint->new_origin.z });
+		m_curPoint->new_origin = Pointf3(0.0, 0.0, 0.0);
+		InitOneSupport();
+	}
+}
+
+void GlWidget::SupEditControl::InitOneSupport()
+{
+	if (m_curPoint == nullptr) {
+		//ball就是在原点0,0,0
+		m_curPoint = new SupportBuffer();
+		m_curPoint->id = -1;
+		m_curPoint->size = m_parent->ball.stl.stats.number_of_facets;
+		m_curPoint->stl = new GLfloat[m_curPoint->size * 3 * 2 * 3];
+
+		float normal[3];
+		for (int i = 0; i < m_curPoint->size; ++i) {
+			stl_calculate_normal(normal, &m_parent->ball.stl.facet_start[i]);
+			stl_normalize_vector(normal);
+
+			m_curPoint->stl[i * 18] = m_parent->ball.stl.facet_start[i].vertex[0].x;
+			m_curPoint->stl[i * 18 + 1] = m_parent->ball.stl.facet_start[i].vertex[0].y;
+			m_curPoint->stl[i * 18 + 2] = m_parent->ball.stl.facet_start[i].vertex[0].z;
+			m_curPoint->stl[i * 18 + 3] = normal[0];
+			m_curPoint->stl[i * 18 + 4] = normal[1];
+			m_curPoint->stl[i * 18 + 5] = normal[2];
+
+			m_curPoint->stl[i * 18 + 6] = m_parent->ball.stl.facet_start[i].vertex[1].x;
+			m_curPoint->stl[i * 18 + 7] = m_parent->ball.stl.facet_start[i].vertex[1].y;
+			m_curPoint->stl[i * 18 + 8] = m_parent->ball.stl.facet_start[i].vertex[1].z;
+			m_curPoint->stl[i * 18 + 9] = normal[0];
+			m_curPoint->stl[i * 18 + 10] = normal[1];
+			m_curPoint->stl[i * 18 + 11] = normal[2];
+
+			m_curPoint->stl[i * 18 + 12] = m_parent->ball.stl.facet_start[i].vertex[2].x;
+			m_curPoint->stl[i * 18 + 13] = m_parent->ball.stl.facet_start[i].vertex[2].y;
+			m_curPoint->stl[i * 18 + 14] = m_parent->ball.stl.facet_start[i].vertex[2].z;
+			m_curPoint->stl[i * 18 + 15] = normal[0];
+			m_curPoint->stl[i * 18 + 16] = normal[1];
+			m_curPoint->stl[i * 18 + 17] = normal[2];
+		}
+
+		m_curPoint->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		m_curPoint->buffer->create();
+	}
+	else
+		m_curPoint->translation();
+
+	m_curPoint->buffer->bind();
+	m_curPoint->buffer->allocate(m_curPoint->stl, m_curPoint->size * 3 * 2 * 3 * sizeof(GLfloat));
+	m_curPoint->buffer->release();
 }
