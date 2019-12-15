@@ -4,11 +4,11 @@
 
 #include "libslic3r.h"
 #include "BoundingBox.hpp"
-#include "PrintConfig.hpp"
-#include "Layer.hpp"
+//#include "PrintConfig.hpp"
+//#include "Layer.hpp"
 #include "Point.hpp"
 #include "TriangleMesh.hpp"
-#include "LayerHeightSpline.hpp"
+//#include "LayerHeightSpline.hpp"
 #include <map>
 #include <string>
 #include <utility>
@@ -240,7 +240,7 @@ public:
 
 	size_t find_id(ModelInstance* instance);
 
-	size_t load_model(std::string file, int format);
+	size_t load_model(std::string file);
 
 };
 
@@ -253,7 +253,7 @@ class ModelMaterial
     t_model_material_attributes attributes;
     ///< Attributes are defined by the AMF file format, but they don't seem to be used by Slic3r for any purpose.
 
-    DynamicPrintConfig config;
+    //DynamicPrintConfig config;
     ///< Dynamic configuration storage for the object specific configuration values, overriding the global configuration.
 
     /// Get the parent model owing this material
@@ -300,12 +300,12 @@ class ModelObject
     ///< Printable and modifier volumes, each with its material ID and a set of override parameters.
     ///< ModelVolumes are owned by this ModelObject.
 
-    DynamicPrintConfig config; ///< Configuration parameters specific to a single ModelObject, overriding the global Slic3r settings.
+    //DynamicPrintConfig config; ///< Configuration parameters specific to a single ModelObject, overriding the global Slic3r settings.
 
-    t_layer_height_ranges layer_height_ranges; ///< Variation of a layer thickness for spans of Z coordinates.
+    //t_layer_height_ranges layer_height_ranges; ///< Variation of a layer thickness for spans of Z coordinates.
 
     int part_number; ///< It's used for the 3MF items part numbers in the build element.
-    LayerHeightSpline layer_height_spline;     ///< Spline based variations of layer thickness for interactive user manipulation
+    //LayerHeightSpline layer_height_spline;     ///< Spline based variations of layer thickness for interactive user manipulation
 
     Pointf3 origin_translation;
     ///< This vector accumulates the total translation applied to the object by the
@@ -491,7 +491,7 @@ class ModelVolume
 
     std::string name;   ///< Name of this ModelVolume object
     TriangleMesh mesh;  ///< The triangular model.
-    DynamicPrintConfig config;
+    //DynamicPrintConfig config;
     ///< Configuration parameters specific to an object model geometry or a modifier volume,
     ///< overriding the global Slic3r settings and the ModelObject settings.
 

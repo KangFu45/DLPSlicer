@@ -10,11 +10,47 @@
 
 extern Setting e_setting;
 
-SetupDialog::SetupDialog(MainWindow* _mainwindow)
-	:mainwindow(_mainwindow)
+//---------------FKConfig--------------
+
+void FKConfig::writeConfig()
+{
+	QSettings writeini(e_setting.ConfigFile.c_str(), QSettings::IniFormat);
+	writeini.clear();
+	writeini.setValue("/illu_config/normIllu", normIlluTime);
+	writeini.setValue("/illu_config/normInttersity", norm_inttersity);
+	writeini.setValue("/illu_config/overIllu", overIlluTime);
+	writeini.setValue("/illu_config/overInttersity", over_inttersity);
+	writeini.setValue("/illu_config/overLayer", overLayer);
+
+	writeini.setValue("/support_config/topHeight", support_top_height);
+	writeini.setValue("/support_config/topRadius", support_top_radius);
+	writeini.setValue("/support_config/supportRadius", support_radius);
+	writeini.setValue("/support_config/bottomRadius", support_bottom_radius);
+	writeini.setValue("/support_config/supportSpace", space);
+	writeini.setValue("/support_config/supportAngle", angle);
+	writeini.setValue("/support_config/leafNum", leaf_num);
+	writeini.setValue("/support_config/modelLift", model_lift);
+
+	writeini.setValue("/hollow_out_config/hollowOutBox", hollow_out);
+	//writeini.setValue("/hollow_out_config/fillPattern", fill_pattern_combo->currentIndex());
+	writeini.setValue("/hollow_out_config/wallThickness", wall_thickness);
+	writeini.setValue("/hollow_out_config/fillDensity", fill_density);
+
+	writeini.setValue("/other/thickness", layer_height);
+	writeini.setValue("/other/raft", raft_layers);
+	writeini.setValue("/other/raftOffset", raft_offset);
+	writeini.setValue("/other/arrangeSpace", arrange_space);
+	writeini.setValue("/other/thread", threads);
+}
+
+//------------------SetupDialog---------------
+
+SetupDialog::SetupDialog(FKConfig* config)
+	:m_config(config)
 {
 	initLayout();
 	readConfig();
+
 	resize(minimumSize());
 	setWindowFlags(windowFlags() & ~Qt::WindowCloseButtonHint);
 	setWindowTitle(QStringLiteral("设置"));
@@ -304,14 +340,14 @@ void SetupDialog::initLayout()
 	setupTab->addTab(otherWidget, QStringLiteral("其他设置"));
 
 	defultBtn = new QPushButton(QStringLiteral("默认设置"));
-	connect(defultBtn, SIGNAL(clicked()), this, SLOT(recoverDefult()));
+	connect(defultBtn, SIGNAL(clicked()), this, SLOT(slot_setDefultValue()));
 
 	cancalBtn = new QPushButton(QStringLiteral("取消"));
-	connect(cancalBtn, SIGNAL(clicked()), this, SLOT(BtnChange()));
+	connect(cancalBtn, SIGNAL(clicked()), this, SLOT(close()));
 
 	okBtn = new QPushButton(QStringLiteral("确认"));
-	connect(okBtn, SIGNAL(clicked()), this, SLOT(writeConfig()));
-	connect(okBtn, SIGNAL(clicked()), this, SLOT(BtnChange()));
+	connect(okBtn, SIGNAL(clicked()), this, SLOT(slot_writeConfig()));
+	connect(okBtn, SIGNAL(clicked()), this, SLOT(close()));
 
 	mainLayout = new QGridLayout(this);
 	mainLayout->addWidget(setupTab, 0, 0, 6, 10);
@@ -324,54 +360,47 @@ void SetupDialog::initLayout()
 	this->setLayout(mainLayout);
 }
 
-void SetupDialog::writeConfig()
+void SetupDialog::slot_writeConfig()
 {
-	QSettings* writeini = new QSettings(e_setting.ConfigFile.c_str(), QSettings::IniFormat);
-	writeini->clear();
-	writeini->setValue("/illu_config/normIllu", normIlluSpin->value());
-	writeini->setValue("/illu_config/normInttersity", norm_inttersity_spin->value());
-	writeini->setValue("/illu_config/overIllu", overIlluSpin->value());
-	writeini->setValue("/illu_config/overInttersity", over_inttersity_spin->value());
-	writeini->setValue("/illu_config/overLayer", overLayerSpin->value());
+	m_config->normIlluTime = normIlluSpin->value();
+	m_config->norm_inttersity = norm_inttersity_spin->value();
+	m_config->overIlluTime = overIlluSpin->value();
+	m_config->over_inttersity = over_inttersity_spin->value();
+	m_config->overLayer = overLayerSpin->value();
 
-	writeini->setValue("/support_config/topHeight", top_height_spin->value());
-	writeini->setValue("/support_config/topRadius", top_radius_spin->value());
-	writeini->setValue("/support_config/supportRadius", support_radius_spin->value());
-	writeini->setValue("/support_config/bottomRadius", bottom_radius_spin->value());
-	writeini->setValue("/support_config/supportSpace", support_space_spin->value());
-	writeini->setValue("/support_config/supportAngle", support_angle_spin->value());
-	writeini->setValue("/support_config/leafNum", leaf_num_spin->value());
-	writeini->setValue("/support_config/modelLift", model_lift_spin->value());
+	m_config->support_top_height = top_height_spin->value();
+	m_config->support_top_radius = top_radius_spin->value();
+	m_config->support_radius = support_radius_spin->value();
+	m_config->support_bottom_radius = bottom_radius_spin->value();
+	m_config->space = support_space_spin->value();
+	m_config->angle = support_angle_spin->value();
+	m_config->leaf_num = leaf_num_spin->value();
+	m_config->model_lift = model_lift_spin->value();
 
-	writeini->setValue("/hollow_out_config/hollowOutBox", int(hollow_out_box->isChecked()));
-	writeini->setValue("/hollow_out_config/fillPattern", fill_pattern_combo->currentIndex());
-	writeini->setValue("/hollow_out_config/wallThickness", wall_thickness_spin->value());
-	writeini->setValue("/hollow_out_config/fillDensity", density_spin->value());
+	m_config->hollow_out = int(hollow_out_box->isChecked());
+	//if (setupDialog.fill_pattern_combo->currentIndex() == 0)
+	//	config->fill_pattern.value = ipHoneycomb;
+	//else if (setupDialog.fill_pattern_combo->currentIndex() == 1)
+	//	config->fill_pattern.value = ip3DSupport;
+	//fill_pattern_combo->currentIndex();
+	m_config->wall_thickness = wall_thickness_spin->value();
+	m_config->fill_density = density_spin->value();
 
-	writeini->setValue("/other/thickness", thicknessCombo->currentIndex());
-	writeini->setValue("/other/raft", raftSpin->value());
-	writeini->setValue("/other/raftOffset", raftOffsetSpin->value());
-	writeini->setValue("/other/arrangeSpace", arrange_space_spin->value());
-	writeini->setValue("/other/thread", threadSpin->value());
+	if (thicknessCombo->currentText() == "0.05mm")
+		m_config->layer_height = 0.05;
+	else if (thicknessCombo->currentText() == "0.1mm")
+		m_config->layer_height = 0.1;
+	else if (thicknessCombo->currentText() == "0.025mm")
+		m_config->layer_height = 0.025;
+	m_config->raft_layers = raftSpin->value();
+	m_config->raft_offset = raftOffsetSpin->value();
+	m_config->arrange_space = arrange_space_spin->value();
+	m_config->threads = threadSpin->value();
 
-	delete writeini;
-
-	mainwindow->DlpPrintLoadSetup();
+	m_config->writeConfig();
 }
 
-void SetupDialog::recoverDefult()
-{
-	setDefultValue();
-	writeConfig();
-}
-
-void SetupDialog::BtnChange()
-{
-	this->close();
-	///mainwindow->showSetupDialog();
-}
-
-void SetupDialog::setDefultValue()
+void SetupDialog::slot_setDefultValue()
 {
 	normIlluSpin->setValue(6);
 	norm_inttersity_spin->setValue(80);
@@ -398,85 +427,59 @@ void SetupDialog::setDefultValue()
 	raftOffsetSpin->setValue(5);
 	arrange_space_spin->setValue(5);
 	threadSpin->setValue(threadSpin->maximum());
+
+	m_config->writeConfig();
 }
 
 void SetupDialog::readConfig()
 {
 	if (QFile(e_setting.ConfigFile.c_str()).exists()) {
-		QSettings* readini = new QSettings(e_setting.ConfigFile.c_str(), QSettings::IniFormat);
+		QSettings readini(e_setting.ConfigFile.c_str(), QSettings::IniFormat);
 		//读取打印设置
-		QString normIllu = readini->value("/illu_config/normIllu").toString();
-		normIlluSpin->setValue(normIllu.toInt());
+		normIlluSpin->setValue(readini.value("/illu_config/normIllu").toInt());
 
-		QString normInttersity = readini->value("/illu_config/normInttersity").toString();
-		norm_inttersity_spin->setValue(normInttersity.toInt());
+		norm_inttersity_spin->setValue(readini.value("/illu_config/normInttersity").toInt());
 
-		QString overIllu = readini->value("/illu_config/overIllu").toString();
-		overIlluSpin->setValue(overIllu.toInt());
+		overIlluSpin->setValue(readini.value("/illu_config/overIllu").toInt());
 
-		QString overInttersity = readini->value("/illu_config/overInttersity").toString();
-		over_inttersity_spin->setValue(overInttersity.toInt());
+		over_inttersity_spin->setValue(readini.value("/illu_config/overInttersity").toInt());
 
-		QString overLayer = readini->value("/illu_config/overLayer").toString();
-		overLayerSpin->setValue(overLayer.toInt());
+		overLayerSpin->setValue(readini.value("/illu_config/overLayer").toInt());
 
+		top_height_spin->setValue(readini.value("/support_config/topHeight").toDouble());
 
-		QString topHeight = readini->value("/support_config/topHeight").toString();
-		top_height_spin->setValue(topHeight.toDouble());
+		top_radius_spin->setValue(readini.value("/support_config/topRadius").toDouble());
 
-		QString topRadius = readini->value("/support_config/topRadius").toString();
-		top_radius_spin->setValue(topRadius.toDouble());
+		support_radius_spin->setValue(readini.value("/support_config/supportRadius").toDouble());
 
-		QString supportRadius = readini->value("/support_config/supportRadius").toString();
-		support_radius_spin->setValue(supportRadius.toDouble());
+		bottom_radius_spin->setValue(readini.value("/support_config/bottomRadius").toDouble());
 
-		QString bottomRadius = readini->value("/support_config/bottomRadius").toString();
-		bottom_radius_spin->setValue(bottomRadius.toDouble());
+		support_space_spin->setValue(readini.value("/support_config/supportSpace").toInt());
 
-		QString supportSpace = readini->value("/support_config/supportSpace").toString();
-		support_space_spin->setValue(supportSpace.toInt());
+		support_angle_spin->setValue(readini.value("/support_config/supportAngle").toInt());
 
-		QString supportAngle = readini->value("/support_config/supportAngle").toString();
-		support_angle_spin->setValue(supportAngle.toInt());
+		leaf_num_spin->setValue(readini.value("/support_config/leafNum").toInt());
 
-		QString leafNum = readini->value("/support_config/leafNum").toString();
-		leaf_num_spin->setValue(leafNum.toInt());
+		model_lift_spin->setValue(readini.value("/support_config/modelLift").toDouble());
 
-		QString modelLift = readini->value("/support_config/modelLift").toString();
-		model_lift_spin->setValue(modelLift.toDouble());
+		hollow_out_box->setChecked(readini.value("/hollow_out_config/hollowOutBox").toInt());
 
+		fill_pattern_combo->setCurrentIndex(readini.value("/hollow_out_config/fillPattern").toInt());
 
-		QString hollowOutBox = readini->value("/hollow_out_config/hollowOutBox").toString();
-		hollow_out_box->setChecked(hollowOutBox.toInt());
+		wall_thickness_spin->setValue(readini.value("/hollow_out_config/wallThickness").toDouble());
 
-		QString fillPattern = readini->value("/hollow_out_config/fillPattern").toString();
-		fill_pattern_combo->setCurrentIndex(fillPattern.toInt());
+		density_spin->setValue(readini.value("/hollow_out_config/fillDensity").toDouble());
 
-		QString wallThickness = readini->value("/hollow_out_config/wallThickness").toString();
-		wall_thickness_spin->setValue(wallThickness.toDouble());
+		thicknessCombo->setCurrentIndex(readini.value("/other/thickness").toInt());
 
-		QString Density = readini->value("/hollow_out_config/fillDensity").toString();
-		density_spin->setValue(Density.toDouble());
+		raftSpin->setValue(readini.value("/other/raft").toInt());
 
+		raftOffsetSpin->setValue(readini.value("/other/raftOffset").toInt());
 
-		QString thickness = readini->value("/other/thickness").toString();
-		thicknessCombo->setCurrentIndex(thickness.toInt());
+		arrange_space_spin->setValue(readini.value("/other/arrangeSpace").toDouble());
 
-		QString raft = readini->value("/other/raft").toString();
-		raftSpin->setValue(raft.toInt());
-
-		QString raftOffset = readini->value("/other/raftOffset").toString();
-		raftOffsetSpin->setValue(raftOffset.toInt());
-
-		QString arrangeSpace = readini->value("/other/arrangeSpace").toString();
-		arrange_space_spin->setValue(arrangeSpace.toDouble());
-
-		QString thread = readini->value("/other/thread").toString();
-		threadSpin->setValue(thread.toInt());
-
-		delete readini;
+		threadSpin->setValue(readini.value("/other/thread").toInt());
 	}
-	else {
-		setDefultValue();
-	}
+	else
+		this->slot_setDefultValue();
 }

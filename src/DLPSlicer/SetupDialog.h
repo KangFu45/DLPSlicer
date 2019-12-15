@@ -8,16 +8,50 @@
 #include <qcombobox.h>
 #include <qpushbutton.h>
 
-class MainWindow;
+struct FKConfig
+{
+	float	fill_angle;
+	float	fill_density;
+	//ConfigOptionEnum<InfillPattern> fill_pattern;
+	float	layer_height;
+	int		raft_layers;
+	int		raft_offset;
+
+	float	support_top_height;
+	float	support_radius;
+	float	support_top_radius;
+	float	support_bottom_radius;
+	int		space;
+	int		angle;
+	int		leaf_num;
+	float   model_lift;
+
+	int		overLayer;
+	int		overIlluTime;
+	int		over_inttersity;
+	int		norm_inttersity;
+	int		normIlluTime;
+	int		firstIllu;
+
+	float	wall_thickness;
+	bool	hollow_out;
+	float	arrange_space;
+
+	int		threads;
+
+	void writeConfig();
+};
 
 class SetupDialog : public QDialog
 {
 	Q_OBJECT
 public:
-	SetupDialog(MainWindow* _mainwindow);
+	SetupDialog(FKConfig* config);
 	~SetupDialog();
 
 	void initLayout();
+
+	FKConfig* m_config;
 
 	//光照设置
 	QSpinBox* normIlluSpin;                       //正常曝光时间
@@ -90,26 +124,10 @@ public:
 	QPushButton* okBtn;
 	QGridLayout* mainLayout;
 
-private slots:
-	//日期：2017
-	//功能：写配置。
-	void writeConfig();
+public slots:
+	void slot_writeConfig();
+	void slot_setDefultValue();
 
-	//日期：2017
-	//功能：恢复默认。
-	void recoverDefult();
-
-	//日期：2017
-	//功能：关闭对话框操作。
-	void BtnChange();
 private:
-	//日期：2017
-	//功能：设置默认值。
-	void setDefultValue();
-
-	//日期：2017
-	//功能：读取配置。
 	void readConfig();
-
-	MainWindow* mainwindow;						  //父窗口
 };

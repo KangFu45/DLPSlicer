@@ -7,28 +7,26 @@
 #include "ExPolygonCollection.hpp"
 #include "Model.hpp"
 #include "Point.hpp"
-#include "PrintConfig.hpp"
 #include <qrect.h>
 #include <map>
 #include "qpolygon.h"
 #include "TreeSupport.h"
 #include "qprogressbar.h"
+#include "SetupDialog.h"
 
 namespace Slic3r {
 
-	//作者：付康
-	//日期：2017
-	//功能：dlp打印，保存每层的信息，执行切片，保存图片操作。
 	class DLPrint
 	{
 	public:
-		DLPrintConfig config;											//dlp打印设置
+		//DLPrintConfig config;											//dlp打印设置
+		FKConfig* m_config;
 																		
 		class Layer {													
 		public:															
 			ExPolygonCollection slices;									//切片层
 			ExPolygonCollection perimeters;								//外圈边界线
-			ExtrusionEntityCollection infill;							//内部填充线
+			//ExtrusionEntityCollection infill;							//内部填充线
 			ExPolygonCollection solid_infill;							//固态填充线
 			float slice_z, print_z;										//切片高，打印高
 			bool solid;													//是否为固态层
@@ -36,7 +34,7 @@ namespace Slic3r {
 			Layer(float _slice_z, float _print_z)
 				: slice_z(_slice_z), print_z(_print_z), solid(true) {};
 		};
-		size_t layer_num;												//模型层数
+		size_t layer_num = 0;											//模型层数
 		std::vector<std::vector<Layer>> layers;							//每个实例对象单独切片分层
 		std::vector<double> areas;										//每层的面积，用作求模型的体积
 		std::vector<Layer> _layers;										//传递每个模型Layer			
@@ -50,7 +48,7 @@ namespace Slic3r {
 		std::map<int, TreeSupport*> treeSupports;
 
 		std::vector<Pointf> circle;										//单位圆
-		DLPrint(Model* _model) ;										//构造函数
+		DLPrint(Model* _model,FKConfig* config) ;						//构造函数
 
 		//日期：2017
 		//功能：对模型分层，抽空。
@@ -98,7 +96,7 @@ namespace Slic3r {
 		void delete_all_support(){
 			while (!treeSupports.empty()){
 				auto s = treeSupports.begin();
-				//delete (*s).second;//不要删除实际数据，等redo手动删除
+				delete (*s).second;
 				treeSupports.erase(s);
 			}
 		}
@@ -107,7 +105,7 @@ namespace Slic3r {
 		Model* model;													//模型
 		BoundingBoxf3 bb;												//包围盒
 		QString ini_file;												//切片文件路径
-		QProgressBar* m_progress;
+		QProgressBar* m_progress = nullptr;
 
 		//四个方向支撑枚举
 		enum xyz

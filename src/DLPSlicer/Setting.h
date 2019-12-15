@@ -5,10 +5,14 @@ class Setting
 {
 public:
 	Setting() {};
-	Setting(string filename);
+	Setting(string _appPath);
 	~Setting();
 
-	//App
+	string appPath;
+	string resourcePath;
+	string xmlFile;
+	string modelPath;
+
 	string appName;
 	string appVersion;
 

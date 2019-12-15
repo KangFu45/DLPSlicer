@@ -561,11 +561,11 @@ Model::print_info() const
 bool
 Model::looks_like_multipart_object() const
 {
-    if (this->objects.size() == 1) return false;
-    for (const ModelObject* o : this->objects) {
-        if (o->volumes.size() > 1) return false;
-        if (o->config.keys().size() > 1) return false;
-    }
+    //if (this->objects.size() == 1) return false;
+    //for (const ModelObject* o : this->objects) {
+    //    if (o->volumes.size() > 1) return false;
+    //    if (o->config.keys().size() > 1) return false;
+    //}
     
     std::set<coordf_t> heights;
     for (const ModelObject* o : this->objects)
@@ -646,7 +646,7 @@ size_t Model::find_id(ModelInstance* instance) {
 	return -1;
 }
 
-size_t Model::load_model(std::string file, int format)
+size_t Model::load_model(std::string file)
 {
 	//添加一个已有模型对象的实例
 	for (auto object = objects.begin(); object != objects.end(); ++object) {
@@ -658,13 +658,7 @@ size_t Model::load_model(std::string file, int format)
 	ModelObject* temp = add_object();
 	TriangleMesh* T = new TriangleMesh();
 
-	if (format == 0)
-		IO::STL::read(file, T);
-	else if (format == 1) {
-		IO::OBJ::read(file, T);
-	}
-	//else if (format == 2)
-	//	IO::AMF::read(file, T);
+	IO::STL::read(file, T);
 
 	T->repair();
 
@@ -683,7 +677,7 @@ size_t Model::load_model(std::string file, int format)
 
 ModelMaterial::ModelMaterial(Model *model) : model(model) {}
 ModelMaterial::ModelMaterial(Model *model, const ModelMaterial &other)
-    : attributes(other.attributes), config(other.config), model(model)
+    : attributes(other.attributes), model(model)
 {}
 
 void
@@ -702,10 +696,10 @@ ModelObject::ModelObject(Model *model, const ModelObject &other, bool copy_volum
     input_file(other.input_file),
     instances(),
     volumes(),
-    config(other.config),
-    layer_height_ranges(other.layer_height_ranges),
+    //config(other.config),
+    //layer_height_ranges(other.layer_height_ranges),
     part_number(other.part_number),
-    layer_height_spline(other.layer_height_spline),
+    //layer_height_spline(other.layer_height_spline),
     origin_translation(other.origin_translation),
     _bounding_box(other._bounding_box),
     _bounding_box_valid(other._bounding_box_valid),
@@ -734,9 +728,9 @@ ModelObject::swap(ModelObject &other)
     std::swap(this->input_file,             other.input_file);
     std::swap(this->instances,              other.instances);
     std::swap(this->volumes,                other.volumes);
-    std::swap(this->config,                 other.config);
-    std::swap(this->layer_height_ranges,    other.layer_height_ranges);
-    std::swap(this->layer_height_spline,    other.layer_height_spline);
+    //std::swap(this->config,                 other.config);
+    //std::swap(this->layer_height_ranges,    other.layer_height_ranges);
+    //std::swap(this->layer_height_spline,    other.layer_height_spline);
     std::swap(this->origin_translation,     other.origin_translation);
     std::swap(this->_bounding_box,          other._bounding_box);
     std::swap(this->_bounding_box_valid,    other._bounding_box_valid);
@@ -1127,13 +1121,13 @@ ModelObject::cut(Axis axis, coordf_t z, Model* model) const
             if (upper_mesh.facets_count() > 0) {
                 ModelVolume* vol    = upper->add_volume(upper_mesh);
                 vol->name           = volume->name;
-                vol->config         = volume->config;
+                //vol->config         = volume->config;
                 vol->set_material(volume->material_id(), *volume->material());
             }
             if (lower_mesh.facets_count() > 0) {
                 ModelVolume* vol    = lower->add_volume(lower_mesh);
                 vol->name           = volume->name;
-                vol->config         = volume->config;
+                //vol->config         = volume->config;
                 vol->set_material(volume->material_id(), *volume->material());
             }
         }
@@ -1160,7 +1154,7 @@ ModelObject::split(ModelObjectPtrs* new_objects)
         new_object->part_number = this->part_number; //According to 3mf part number should be given to the split parts.
         ModelVolume* new_volume = new_object->add_volume(**mesh);
         new_volume->name        = volume->name;
-        new_volume->config      = volume->config;
+        //new_volume->config      = volume->config;
         new_volume->modifier    = volume->modifier;
         new_volume->material_id(volume->material_id());
         
@@ -1220,7 +1214,7 @@ ModelVolume::ModelVolume(ModelObject* object, const TriangleMesh &mesh)
 {}
 
 ModelVolume::ModelVolume(ModelObject* object, const ModelVolume &other)
-:   name(other.name), mesh(other.mesh), config(other.config),
+:   name(other.name), mesh(other.mesh),
     modifier(other.modifier), object(object)
 {
     this->material_id(other.material_id());
@@ -1237,7 +1231,7 @@ ModelVolume::swap(ModelVolume &other)
 {
     std::swap(this->name,       other.name);
     std::swap(this->mesh,       other.mesh);
-    std::swap(this->config,     other.config);
+    //std::swap(this->config,     other.config);
     std::swap(this->modifier,   other.modifier);
 }
 

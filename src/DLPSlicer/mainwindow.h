@@ -22,8 +22,6 @@
 
 #include "glwidget.h"
 #include "CenterTopWidget.h"
-#include "SetupDialog.h"
-#include "PreviewDialog.h"
 #include "Setting.h"
 #include "Model.hpp"
 
@@ -64,15 +62,10 @@ inline bool clearDir(QString path)
 	return dir.rmpath(dir.absolutePath()); // 删除文件夹  
 }
 
+class FKConfig;
+
 class MainWindow : public QMainWindow
 {
-	enum fileFormat
-	{
-		stl,
-		obj,
-		amf
-	};
-
 	Q_OBJECT
 
 public:
@@ -83,29 +76,23 @@ private:
 	std::unique_ptr<CenterTopWidget> m_centerTopWidget;
 	Model* m_model = { new Model };
 	DLPrint* m_dlprint;
-	GlWidget* glwidget;										//三维视图部件
+	GlWidget* m_glwidget;	//三维视图部件
+	FKConfig* m_config;
 
-	AboutDialog* aboutDialog;							//关于对话框
-	SetupDialog* setupDialog;							//设置对话框
-	PreviewDialog* previewDialog;						//预览部件
+	void SetOffsetValue(ModelInstance* instance);
+	void SetRotateValue(ModelInstance* instance);
+	void SetScaleValue(ModelInstance* instance);
+	void SetSizeValue(ModelInstance* instance);
 
-private:
-	void AddOffsetValue(double x, double y, double z);
+	void InitAction();
+	void InitDlprinter();
 
-	void setOffsetValue(ModelInstance* instance);
-	void setRotateValue(ModelInstance* instance);
-	void setScaleValue(ModelInstance* instance);
-	void setSizeValue(ModelInstance* instance);
-
-	void initAction();
-	void initDlprinter();
-	void initSetupDialog();
-
-	QString readStlTxt();
-	void stroyStlTxt(QString stl);
-	void showPreviewWidget1(QString zipPath);
-	bool extractZipPath(QString zipPath);
-	void duplicate(size_t num, bool arrange);
+	QString ReadStlTxt();
+	void StroyStlTxt(QString stl);
+	void ShowPreviewWidget(QString zipPath);
+	bool ExtractZipPath(QString zipPath);
+	void Duplicate(size_t num, bool arrange);
+	void GenAllInsideSupport();
 
 public slots:
 	void slot_modelSelect();
@@ -113,59 +100,53 @@ public slots:
 	void slot_scaleChange();
 	void slot_rotateChange();
 
-	void DlpPrintLoadSetup();
-	void showSetupDialog();
+	void slot_showSetupDialog();
 
-	void xoffsetValueChange(double value);
-	void yoffsetValueChange(double value);
-	void zoffsetValueChange(double value);
+	void slot_xoffsetValueChange(double value);
+	void slot_yoffsetValueChange(double value);
+	void slot_zoffsetValueChange(double value);
 
-	void xRotateValueChange(double angle);
-	void yRotateValueChange(double angle);
-	void zRotateValueChange(double angle);
+	void slot_xRotateValueChange(double angle);
+	void slot_yRotateValueChange(double angle);
+	void slot_zRotateValueChange(double angle);
 
-	void xScaleValueChange(double value);
-	void yScaleValueChange(double value);
-	void zScaleValueChange(double value);
+	void slot_xScaleValueChange(double value);
+	void slot_yScaleValueChange(double value);
+	void slot_zScaleValueChange(double value);
 
-	void showOffsetWidget();
-	void showRotateWidget();
-	void showScaleWidget();
+	void slot_showOffsetWidget();
+	void slot_showRotateWidget();
+	void slot_showScaleWidget();
 
 private	slots:
-	void ZPosZero();
-	void setPersperctive() { glwidget->setPresprective(); };
-	void setOrthogonality() { glwidget->setOrthogonality(); };
-	void openStl();
-	void _exit();
+	void slot_ZPosZero();
+	void slot_setPersperctive() { m_glwidget->SetViewPort(m_glwidget->PRESPRECTIVE); };
+	void slot_setOrthogonality() { m_glwidget->SetViewPort(m_glwidget->ORTHOGONALITY); };
+	void slot_openStl();
+	void slot_exit() { exit(0); };
 
 	//功能：多个视图方向。
-	void defaultView() { glwidget->ChangeView(glwidget->DEFAULT); };
-	void overlookView() { glwidget->ChangeView(glwidget->OVERLOOK); };
-	void leftView() { glwidget->ChangeView(glwidget->LEFT); };
-	void rightView() { glwidget->ChangeView(glwidget->RIGHT); };
-	void frontView() { glwidget->ChangeView(glwidget->FRONT); };
-	void behindView() { glwidget->ChangeView(glwidget->BEHIND); };
+	void slot_defaultView() { m_glwidget->ChangeView(m_glwidget->DEFAULT); };
+	void slot_overlookView() { m_glwidget->ChangeView(m_glwidget->OVERLOOK); };
+	void slot_leftView() { m_glwidget->ChangeView(m_glwidget->LEFT); };
+	void slot_rightView() { m_glwidget->ChangeView(m_glwidget->RIGHT); };
+	void slot_frontView() { m_glwidget->ChangeView(m_glwidget->FRONT); };
+	void slot_behindView() { m_glwidget->ChangeView(m_glwidget->BEHIND); };
 
-	void newJob();
-	void deleteAllSupport();
-	void generateSupport();
-	void generateAllSupport();
-	void SupportEdit();
-	void saveView();
-	void slice();
-	void saveModelSupport();
-	void showAboutDialog();
-	void autoArrange();
-	void _duplicate();
+	void slot_newJob();
+	void slot_generateSupport();
+	void slot_generateAllSupport();
+	void slot_supportEdit();
+	void slot_saveView();
+	void slot_slice();
+	void slot_showAboutDialog();
+	void slot_autoArrange();
+	void slot_duplicate();
 
 protected:
 	void resizeEvent(QResizeEvent* event);
 	void keyPressEvent(QKeyEvent* event);
 	void dragEnterEvent(QDragEnterEvent* event);
 	void dropEvent(QDropEvent* event);
-
-private:
-	void generate_all_inside_support();
 };
 #endif // MAINWINDOW_H

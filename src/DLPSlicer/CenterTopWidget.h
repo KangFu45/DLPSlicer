@@ -42,21 +42,12 @@ public:
 
 private:
 	MainWindow* m_parent;
-
 	QLabel* m_printerLabel;
 
 private slots:
 	void setUnifyScale(int state);
 
 public:
-	void resize(const QSize& size);
-	void CenterButtonPush(CenterBtn btn);
-	bool isUnityScale();
-
-	void P(size_t i);
-	void showProgress(int btn);
-	void hideProgress();
-
 	//自定义的按钮
 	class PushButton : public QPushButton
 	{
@@ -126,5 +117,13 @@ public:
 	QDoubleSpinBox* z_size_label;
 	QCheckBox* unify_scale;							//统一缩放
 	QWidget* m_scaleWidget;
+
+	void resize(const QSize& size);
+	void CenterButtonPush(CenterBtn btn);
+	bool isUnityScale() { return unify_scale->checkState() == Qt::Unchecked; };
+
+	void P(size_t i);
+	void showProgress(int btn);
+	void hideProgress() { m_progressWidget->hide(); };
 };
 

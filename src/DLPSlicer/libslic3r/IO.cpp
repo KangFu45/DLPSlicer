@@ -7,7 +7,7 @@
 #include <boost/nowide/fstream.hpp>
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
+//#include "tiny_obj_loader.h"
 
 namespace Slic3r { namespace IO {
 
@@ -78,58 +78,58 @@ OBJ::read(std::string input_file, Model* model)
     // TODO: encode file name
     // TODO: check that file exists
     
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string err;
-	boost::nowide::ifstream ifs(input_file);
-    bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, &ifs);
-    
-    if (!err.empty()) { // `err` may contain warning message.
-        std::cerr << err << std::endl;
-    }
-    
-    if (!ret)
-        throw std::runtime_error("Error while reading OBJ file");
-    
-    ModelObject* object = model->add_object();
-    object->name        = boost::filesystem::path(input_file).filename().string();
-    object->input_file  = input_file;
-    
-    // Loop over shapes and add a volume for each one.
-    for (std::vector<tinyobj::shape_t>::const_iterator shape = shapes.begin();
-        shape != shapes.end(); ++shape) {
-        
-        Pointf3s points;
-        std::vector<Point3> facets;
-        
-        // Read vertices.
-        assert((attrib.vertices.size() % 3) == 0);
-        for (size_t v = 0; v < attrib.vertices.size(); v += 3) {
-            points.push_back(Pointf3(
-                attrib.vertices[v],
-                attrib.vertices[v+1],
-                attrib.vertices[v+2]
-            ));
-        }
-        
-        // Loop over facets of the current shape.
-        for (size_t f = 0; f < shape->mesh.num_face_vertices.size(); ++f) {
-            // tiny_obj_loader should triangulate any facet with more than 3 vertices
-            assert((shape->mesh.num_face_vertices[f] % 3) == 0);
-            
-            facets.push_back(Point3(
-                shape->mesh.indices[f*3+0].vertex_index,
-                shape->mesh.indices[f*3+1].vertex_index,
-                shape->mesh.indices[f*3+2].vertex_index
-            ));
-        }
-        
-        TriangleMesh mesh(points, facets);
-        mesh.check_topology();
-        ModelVolume* volume = object->add_volume(mesh);
-        volume->name        = object->name;
-    }
+    //tinyobj::attrib_t attrib;
+    //std::vector<tinyobj::shape_t> shapes;
+    //std::vector<tinyobj::material_t> materials;
+    //std::string err;
+	//boost::nowide::ifstream ifs(input_file);
+    //bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, &ifs);
+    //
+    //if (!err.empty()) { // `err` may contain warning message.
+    //    std::cerr << err << std::endl;
+    //}
+    //
+    //if (!ret)
+    //    throw std::runtime_error("Error while reading OBJ file");
+    //
+    //ModelObject* object = model->add_object();
+    //object->name        = boost::filesystem::path(input_file).filename().string();
+    //object->input_file  = input_file;
+    //
+    //// Loop over shapes and add a volume for each one.
+    //for (std::vector<tinyobj::shape_t>::const_iterator shape = shapes.begin();
+    //    shape != shapes.end(); ++shape) {
+    //    
+    //    Pointf3s points;
+    //    std::vector<Point3> facets;
+    //    
+    //    // Read vertices.
+    //    assert((attrib.vertices.size() % 3) == 0);
+    //    for (size_t v = 0; v < attrib.vertices.size(); v += 3) {
+    //        points.push_back(Pointf3(
+    //            attrib.vertices[v],
+    //            attrib.vertices[v+1],
+    //            attrib.vertices[v+2]
+    //        ));
+    //    }
+    //    
+    //    // Loop over facets of the current shape.
+    //    for (size_t f = 0; f < shape->mesh.num_face_vertices.size(); ++f) {
+    //        // tiny_obj_loader should triangulate any facet with more than 3 vertices
+    //        assert((shape->mesh.num_face_vertices[f] % 3) == 0);
+    //        
+    //        facets.push_back(Point3(
+    //            shape->mesh.indices[f*3+0].vertex_index,
+    //            shape->mesh.indices[f*3+1].vertex_index,
+    //            shape->mesh.indices[f*3+2].vertex_index
+    //        ));
+    //    }
+    //    
+    //    TriangleMesh mesh(points, facets);
+    //    mesh.check_topology();
+    //    ModelVolume* volume = object->add_volume(mesh);
+    //    volume->name        = object->name;
+    //}
     
     return true;
 }

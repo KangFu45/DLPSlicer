@@ -5,10 +5,12 @@
 #include <QOpenGLShaderProgram>
 #include <QOpenGLBuffer>
 #include <QOpenGLVertexArrayObject>
+#include <QEvent>
+
 #include <gl\GL.h>
 #include <gl\GLU.h>
+
 #include "Model.hpp"
-#include <QEvent>
 #include "DLPrint.h"
 
 struct BasicBuffer {
@@ -96,41 +98,16 @@ typedef std::vector<ModelBuffer*> ModelBufferPtrs;
 typedef std::vector<SupportBuffer> SupportBuffers;
 typedef std::vector<SupportBuffer*> SupportBufferPtrs;
 
+
 class GlWidget : public  QOpenGLWidget, protected QOpenGLFunctions
 {
 	Q_OBJECT
 
 public:
 	GlWidget(Model* _model, DLPrint* _dlprint);
-	~GlWidget() {};
+	~GlWidget();
 
-	//投影方式
-	enum VIEWPORT
-	{
-		PRESPRECTIVE = 10,
-		ORTHOGONALITY
-	};
-
-	LineBuffer platformBuffer;								//平台渲染缓冲区
-	LineBuffer coordBuffer;									//坐标轴缓冲区
-	int viewport;
-	ModelBufferPtrs modelBuffers;							//模型渲染缓冲区
-	SupportBufferPtrs treeSupportBuffers;					//树状支撑缓冲区
-
-	RectLimitBuffer frontBuffer;
-	RectLimitBuffer backBuffer;
-	RectLimitBuffer leftBuffer;
-	RectLimitBuffer rightBuffer;
-	RectLimitBuffer upBuffer;
-	RectLimitBuffer downBuffer;
-
-	//选中的模型实例，一次只能选择一个模型
-	//取代选中id编号，未选中时未空
-	ModelInstance* m_selInstance{ nullptr };
-	int translationID;										//选中的转换动作标签ID，等于-1为未选中
-	Model* m_model;											//模型
-	DLPrint* dlprint;										//dlp打印
-
+private:
 	//支撑编辑控制器，进入支撑编辑模式生成
 	//退出支撑模式则删除
 	struct SupEditControl
@@ -151,17 +128,76 @@ public:
 			delete m_mesh;
 			while (!supportPoints.empty()) {
 				auto s = supportPoints.begin();
-				delete *s;
+				delete* s;
 				supportPoints.erase(s);
 			}
 		}
 	};
 	SupEditControl* m_supEditControl = { nullptr };
 
+	RectLimitBuffer frontBuffer;
+	RectLimitBuffer backBuffer;
+	RectLimitBuffer leftBuffer;
+	RectLimitBuffer rightBuffer;
+	RectLimitBuffer upBuffer;
+	RectLimitBuffer downBuffer;
+
+	int translationID;	//选中的转换动作标签ID，等于-1为未选中
+	Model* m_model;		//模型
+	DLPrint* m_dlprint;	//dlp打印
+
+	LineBuffer platformBuffer;	//平台渲染缓冲区
+	LineBuffer coordBuffer;	//坐标轴缓冲区
+	ModelBufferPtrs modelBuffers;	//模型渲染缓冲区
+	SupportBufferPtrs treeSupportBuffers;	//树状支撑缓冲区
+
+	//选中模型的ID ,等于-1为未选中
+	int selectID;
+
+	QOpenGLShaderProgram* m_program{ nullptr };			//OpenGL着色器程序
+	int m_projMatrixLoc;
+	int m_viewMatrixLoc;
+
+	int m_rotateMatrixLoc;
+	int m_scaleMatrixLoc;
+	int m_translateMatrixLoc;
+
+	int m_lightPosLoc;
+	int func;
+
+	QMatrix4x4 m_proj;								//投影矩阵
+	QMatrix4x4 m_camera;							//视图矩阵
+	QMatrix4x4 m_world;								//世界坐标矩阵
+
+	//视图旋转，平移，缩放
+	GLfloat _scale;
+	GLfloat _verticalAngle, _horizonAngle;			//视图旋转的水平，垂直值
+	QVector3D eye;									//照相机的位置
+	QVector3D center;								//世界坐标平移的矢量
+	int xLastPos, yLastPos;							//鼠标的坐标值
+
+	QPoint pos;										//保存屏幕坐标值
+	bool _Depth{ false };							//判断是否获取深度值的开关
+
+	//圆环的半径为10mm,圆，圆锥，正方体为1mm单位
+	TriangleMesh cube, ring, cone, ball;		//转换标签的基础模型
+
+	ModelBuffer translateMesh_X, translateMesh_Y, translateMesh_Z;
+	ModelBuffer scaleMesh_X, scaleMesh_Y, scaleMesh_Z;
+	ModelBuffer rotateMesh_X, rotateMesh_Y, rotateMesh_Z;
+
+public:
+	//投影方式
+	enum VIEWPORT 
+	{
+		PRESPRECTIVE = 0x01,
+		ORTHOGONALITY
+	}viewport;
+
 	//各个方向视图的枚举
 	enum VIEW
 	{
-		DEFAULT,
+		DEFAULT = 0x03,
 		OVERLOOK,
 		LEFT,
 		RIGHT,
@@ -169,62 +205,54 @@ public:
 		BEHIND
 	};
 
-	void drawModel();
-	void updateTranslationID();
-	void setPresprective();
-	void setOrthogonality();
+	//选中的模型实例，一次只能选择一个模型
+	//取代选中id编号，未选中时未空
+	ModelInstance* m_selInstance{ nullptr };
 
-	TriangleMesh find_model(size_t id);
-	void ChangeView(int view);
-	void saveOneView(char* _name);
-	TriangleMesh saveSupport();
-	void delSupportBuffer(size_t id);
-	void clearModelBuffer();
-	void clearSupportBuffer();
-	void bindTreeSupport();
-	void bindSupportEditBuffer();
-	void bindOneSupport();
-	void initModelMatrix();
-	void setEye();
+	void SetViewPort(VIEWPORT view);
+	void ChangeView(VIEW view);
+	void SaveOneView(char* file);
+	TriangleMesh SaveSupport();
+	void ClearModelBuffer();
+	void ClearSupportBuffer();
+	std::vector<TriangleMesh> GetSupportModel();
+	void UpdateConfine();
+	bool CheckConfine();
+
+	void OffsetValueChange(double x, double y, double z, bool back = false);
+	void ScaleValueChange(double x, double y, double z, bool back = false);
+	void rotateValueChange(double angle, int x, int y, int z, bool back = false);
+
+	bool DelSelectSupport();
+	void GenSelInstanceSupport(QProgressBar* progress);
+	void SupportEditChange(QProgressBar* progress = nullptr);
+	void AddNewSupportPoint() { m_supEditControl->AddNewSupportPoint(); };
+	void AddModelInstance(size_t id);
+
+private:
+	void DrawModel();
+	TriangleMesh FindModel(size_t id);
+	void DelModelBuffer(size_t id);
+	void BindTreeSupport();
+	void BindSupportEditBuffer();
+	void BindOneSupport();
+	void InitModelMatrix();
+	void SetEye();
 	void ReadDepth();
-	void read_basics_mesh();					//读取基础模型
-
-	std::vector<TriangleMesh> return_support_model();;
-	void setDefaultView();
-
-	void initTransformMesh();					//初始化转化模型
-	void initTransformMesh_1(ModelBuffer* mb, TriangleMesh mesh, Vectorf3 color, Vectorf3 direction);
-	void drawTranslationMesh();
-	void drawTranslationMesh_1(ModelBuffer* mb, QMatrix4x4 scaleM, QMatrix4x4 translateM);
-	void renderTranslationMesh_1(TriangleMesh mesh, int id, Vectorf3 direction, QMatrix4x4 scaleM, QMatrix4x4 translateM);
-
+	void ReadBasicMesh();//读取基础模型
+	void SetDefaultView();
+	void DrawTranMesh();
+	void DrawTranMeshCase(ModelBuffer* mb, QMatrix4x4 scaleM, QMatrix4x4 translateM);
+	void RenderTranMeshCase(TriangleMesh mesh, int id, Vectorf3 direction, QMatrix4x4 scaleM, QMatrix4x4 translateM);
 	void InitCoord();
 	void BindCoord();
 	void InitPlatform();
 	void BindPlatform();
 	void InitConfine();
 	void BindConfine();
-	void UpdateConfine();
-	bool CheckConfine();
-
-	void offsetValueChange(double x, double y, double z, bool back = false);
-	void scaleValueChange(double x, double y, double z, bool back = false);
-	void rotateValueChange(double angle, int x, int y, int z, bool back = false);
-
-	bool DelSelectSupport();
-	void GenSelInstanceSupport(QProgressBar* progress);
-	TreeSupport* GetSelSupport() { return dlprint->chilck_tree_support(selectID); };
 	void UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress);
-	void SupportEditChange(QProgressBar* progress = nullptr);
-	void AddNewSupportPoint() { m_supEditControl->AddNewSupportPoint(); };
-	void AddModelInstance(size_t id);
-private:
-	void DelModelBuffer(size_t id);
+	void InitTreeSupportID(size_t id, QProgressBar* progress);
 
-	//功能：初始化选中模型的树状支撑。
-	//参数1：生成支撑模型的id即生成支撑的id
-	//参数2：支撑数据
-	void initTreeSupport_id(size_t id, QProgressBar* progress);
 protected:
 	void resizeGL(int w, int h) override;
 	void paintGL() override;
@@ -246,40 +274,4 @@ signals:
 public slots:
 	void slot_delSelectIntance();
 	void slot_dlprinterChange(QString name);
-
-private:
-	//选中模型的ID ,等于-1为未选中
-	int selectID{ -1 };
-
-	QOpenGLShaderProgram* m_program{ nullptr };								//OpenGL着色器程序
-	int m_projMatrixLoc;
-	int m_viewMatrixLoc;
-
-	int m_rotateMatrixLoc;
-	int m_scaleMatrixLoc;
-	int m_translateMatrixLoc;
-
-	int m_lightPosLoc;
-	int func;
-
-	QMatrix4x4 m_proj;												//投影矩阵
-	QMatrix4x4 m_camera;											//视图矩阵
-	QMatrix4x4 m_world;												//世界坐标矩阵
-
-	//视图旋转，平移，缩放
-	GLfloat _scale;
-	GLfloat _verticalAngle, _horizonAngle;							//视图旋转的水平，垂直值
-	QVector3D eye;													//照相机的位置
-	QVector3D center;												//世界坐标平移的矢量
-	int xLastPos, yLastPos;											//鼠标的坐标值
-
-	QPoint pos;										//保存屏幕坐标值
-	bool _Depth;									//判断是否获取深度值的开关
-
-	//圆环的半径为10mm,圆，圆锥，正方体为1mm单位
-	TriangleMesh cube, ring, cone, ball;		//转换标签的基础模型
-
-	ModelBuffer* translateMesh_X, * translateMesh_Y, * translateMesh_Z;
-	ModelBuffer* scaleMesh_X, * scaleMesh_Y, * scaleMesh_Z;
-	ModelBuffer* rotateMesh_X, * rotateMesh_Y, * rotateMesh_Z;
 };

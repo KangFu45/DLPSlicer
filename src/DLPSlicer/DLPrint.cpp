@@ -15,8 +15,9 @@ extern Setting e_setting;
 
 namespace Slic3r {
 
-	DLPrint::DLPrint(Model* _model)
+	DLPrint::DLPrint(Model* _model, FKConfig* config)
 		:model(_model)
+		, m_config(config)
 	{
 		CirclePoints(circle, 15);
 	}
@@ -42,7 +43,7 @@ namespace Slic3r {
 			}
 		}
 
-		const float lh = this->config.layer_height.value;
+		const float lh = this->m_config->layer_height;
 		std::vector<Layer> ls;
 		ls.push_back(Layer(lh / 2, lh));
 		while (ls.back().print_z + lh / 2 <= this->bb.max.z) {
@@ -77,7 +78,7 @@ namespace Slic3r {
 					TriangleMesh mesh = (*o)->raw_mesh();
 					(*i)->transform_mesh(&mesh);
 
-					TriangleMeshSlicer<Z>(&mesh).slice(slice_z, &slices, config.threads);//切片函数
+					TriangleMeshSlicer<Z>(&mesh).slice(slice_z, &slices, m_config->threads);//切片函数
 					for (size_t i = 0; i < slices.size(); ++i)
 						_layers.at(i).slices.expolygons = slices[i];
 
@@ -90,7 +91,7 @@ namespace Slic3r {
 					++aaa;
 
 					//抽空
-					if (config.hollow_out.value) {
+					if (m_config->hollow_out) {
 
 						//std::unique_ptr<Fill> fill(Fill::new_from_type(ip3DHoneycomb));
 
@@ -122,26 +123,26 @@ namespace Slic3r {
 						if (areas > 50) {
 							ExPolygons pattern;
 
-							if (config.fill_pattern.value == ipHoneycomb) {
-								//计算填充密度
-								double space = (1 - double(config.fill_density / 100)) * 20;
-								space = 1 >= space ? 1 : space;
-
-								//壁厚
-								double wall = double(config.fill_density / 100) * 2;
-								wall = wall <= 0.1 ? 0.1 : wall;
-
-								BoundingBox box;
-								box.merge(Point::new_scale(bb.min.x, bb.min.y));
-								box.merge(Point::new_scale(bb.max.x, bb.max.y));
-								pattern.push_back(generate_honeycomb_pattern(box, wall, space));
-							}
+							//if (m_config->fill_pattern.value == ipHoneycomb) {
+							//	//计算填充密度
+							//	double space = (1 - double(config.fill_density / 100)) * 20;
+							//	space = 1 >= space ? 1 : space;
+							//
+							//	//壁厚
+							//	double wall = double(config.fill_density / 100) * 2;
+							//	wall = wall <= 0.1 ? 0.1 : wall;
+							//
+							//	BoundingBox box;
+							//	box.merge(Point::new_scale(bb.min.x, bb.min.y));
+							//	box.merge(Point::new_scale(bb.max.x, bb.max.y));
+							//	pattern.push_back(generate_honeycomb_pattern(box, wall, space));
+							//}
 
 							parallelize<size_t>(
 								0,
 								_layers.size() - 1,
 								boost::bind(&DLPrint::_infill_layer, this, _1, pattern),
-								this->config.threads
+								m_config->threads
 								);
 						}
 					}
@@ -161,7 +162,7 @@ namespace Slic3r {
 					_layers.push_back(*a);
 
 				std::vector<ExPolygons> slices;
-				TriangleMeshSlicer<Z>(&SMesh).slice(slice_z, &slices, config.threads);//切片函数
+				TriangleMeshSlicer<Z>(&SMesh).slice(slice_z, &slices, m_config->threads);//切片函数
 				for (size_t i = 0; i < slices.size(); ++i)
 					_layers.at(i).slices.expolygons = slices[i];
 				layers.push_back(_layers);
@@ -169,17 +170,17 @@ namespace Slic3r {
 		}
 
 		//生成底板
-		if (this->config.raft_layers > 0) {
-			float r = config.layer_height*config.raft_layers;
+		if (this->m_config->raft_layers > 0) {
+			float r = m_config->layer_height * m_config->raft_layers;
 
 			double L = double(e_setting.m_printers.begin()->length / 2);
 			double W = double(e_setting.m_printers.begin()->width / 2);
 
 			BoundingBoxf bbb;
-			bbb.min.x = this->bb.min.x - config.raft_offset > -L ? this->bb.min.x - config.raft_offset : -L;
-			bbb.min.y = this->bb.min.y - config.raft_offset > -W ? this->bb.min.y - config.raft_offset : -W;
-			bbb.max.x = this->bb.max.x + config.raft_offset < L ? this->bb.max.x + config.raft_offset : L;
-			bbb.max.y = this->bb.max.y + config.raft_offset < W ? this->bb.max.y + config.raft_offset : W;
+			bbb.min.x = this->bb.min.x - m_config->raft_offset > -L ? this->bb.min.x - m_config->raft_offset : -L;
+			bbb.min.y = this->bb.min.y - m_config->raft_offset > -W ? this->bb.min.y - m_config->raft_offset : -W;
+			bbb.max.x = this->bb.max.x + m_config->raft_offset < L ? this->bb.max.x + m_config->raft_offset : L;
+			bbb.max.y = this->bb.max.y + m_config->raft_offset < W ? this->bb.max.y + m_config->raft_offset : W;
 
 			ExPolygons raft;
 			Polygon p;
@@ -191,7 +192,7 @@ namespace Slic3r {
 			_raft.contour = p;
 			raft.push_back(_raft);
 
-			for (int i = this->config.raft_layers; i >= 1; --i) {
+			for (int i = this->m_config->raft_layers; i >= 1; --i) {
 				this->r_layers.insert(this->r_layers.begin(), Layer(0, lh * i));
 				this->r_layers.front().slices.expolygons = raft;
 			}
@@ -199,7 +200,7 @@ namespace Slic3r {
 			// prepend total raft height to all sliced layers
 			for (auto l = this->layers.begin(); l != this->layers.end(); ++l) {
 				for (auto l1 = (*l).begin(); l1 != (*l).end(); ++l1) {
-					(*l1).print_z += lh*this->config.raft_layers;
+					(*l1).print_z += lh * this->m_config->raft_layers;
 				}
 			}
 
@@ -215,15 +216,15 @@ namespace Slic3r {
 
 	void DLPrint::_infill_layer(size_t i, ExPolygons pattern)
 	{
-		Layer &layer = this->_layers[i];
+		Layer& layer = this->_layers[i];
 
 		// const float shell_thickness = this->config.get_abs_value("perimeter_extrusion_width", this->config.layer_height.value);
-		const float shell_thickness = config.wall_thickness;
+		const float shell_thickness = m_config->wall_thickness;
 		// In order to detect what regions of this layer need to be solid,
 		// perform an intersection with layers within the requested shell thickness.
 		Polygons internal = layer.slices;
 		for (size_t j = 0; j < this->_layers.size(); ++j) {
-			const Layer &other = this->_layers[j];
+			const Layer& other = this->_layers[j];
 			if (std::abs(other.print_z - layer.print_z) > shell_thickness) continue;
 
 			if (j == 0 || j == this->_layers.size() - 1) {
@@ -246,37 +247,37 @@ namespace Slic3r {
 		layer.solid_infill << diff_ex(infill, internal, true);
 
 		// Generate internal infill
-		if (config.fill_pattern.value == ipHoneycomb)
-		{
-			//std::unique_ptr<Fill> fill(_fill->clone());
-			//fill->layer_id = i;
-			//fill->z = layer.print_z;
-
-			//ExtrusionPath templ(erInternalInfill);
-			//templ.width = fill->spacing();
-			const ExPolygons internal_ex = intersection_ex(infill, internal);//需要内部填充的区域
-
-			layer.solid_infill << union_ex(intersection_ex(internal_ex, pattern));
-			//for (ExPolygons::const_iterator it = internal_ex.begin(); it != internal_ex.end(); ++it) {
-			//	Polylines polylines = fill->fill_surface(Surface(stInternal, *it));
-			//	layer.infill.append(polylines, templ);
-			//}
-		}
-
-		// Generate perimeter(s).
-		layer.perimeters << diff_ex(
-			layer.slices,
-			offset(layer.slices, -scale_(shell_thickness))
-		);
+		//if (m_config->fill_pattern.value == ipHoneycomb)
+		//{
+		//	//std::unique_ptr<Fill> fill(_fill->clone());
+		//	//fill->layer_id = i;
+		//	//fill->z = layer.print_z;
+		//
+		//	//ExtrusionPath templ(erInternalInfill);
+		//	//templ.width = fill->spacing();
+		//	const ExPolygons internal_ex = intersection_ex(infill, internal);//需要内部填充的区域
+		//
+		//	layer.solid_infill << union_ex(intersection_ex(internal_ex, pattern));
+		//	//for (ExPolygons::const_iterator it = internal_ex.begin(); it != internal_ex.end(); ++it) {
+		//	//	Polylines polylines = fill->fill_surface(Surface(stInternal, *it));
+		//	//	layer.infill.append(polylines, templ);
+		//	//}
+		//}
+		//
+		//// Generate perimeter(s).
+		//layer.perimeters << diff_ex(
+		//	layer.slices,
+		//	offset(layer.slices, -scale_(shell_thickness))
+		//);
 	}
 
 	ExPolygon DLPrint::generate_honeycomb_pattern(BoundingBox box, double wall, double radius)
 	{
-		box.offset(scale_(radius*2));
+		box.offset(scale_(radius * 2));
 
 		ExPolygon pattern;
 		pattern.contour = box.polygon();
-		
+
 		BoundingBoxf _box;
 		_box.max.x = unscale(box.max.x);
 		_box.max.y = unscale(box.max.y);
@@ -300,7 +301,7 @@ namespace Slic3r {
 		Polygon hole;
 		for (auto p1 = ps.begin(); p1 != ps.end(); ++p1) {
 			hole = _hole;
-			hole.scale(radius*1.1);
+			hole.scale(radius * 1.1);
 			hole.translate(scale_((*p1).x), scale_((*p1).y));
 			pattern.holes.push_back(hole);
 		}
@@ -327,8 +328,8 @@ namespace Slic3r {
 
 		if (angle == 30)
 		{
-			p1.x = p.x + cos(_angle)*radius;
-			p1.y = p.y + sin(_angle)*radius;
+			p1.x = p.x + cos(_angle) * radius;
+			p1.y = p.y + sin(_angle) * radius;
 
 			generate_honeycomb(box, ps, radius, p1, 30, true);
 			generate_honeycomb(box, ps, radius, p1, 90, false);
@@ -343,8 +344,8 @@ namespace Slic3r {
 		}
 		else if (angle == 330)
 		{
-			p1.x = p.x + cos(_angle)*radius;
-			p1.y = p.y + sin(_angle)*radius;
+			p1.x = p.x + cos(_angle) * radius;
+			p1.y = p.y + sin(_angle) * radius;
 
 			generate_honeycomb(box, ps, radius, p1, 330, true);
 		}
@@ -378,7 +379,7 @@ namespace Slic3r {
 			for (int j = 0; j < y; ++j) {
 				hole = _hole;
 				hole.scale(space);
-				hole.translate(scale_(_box.min.x + i * space + space / 2),scale_( _box.min.y + j * space + space / 2));
+				hole.translate(scale_(_box.min.x + i * space + space / 2), scale_(_box.min.y + j * space + space / 2));
 				pattern.holes.push_back(hole);
 			}
 		}
@@ -394,8 +395,8 @@ namespace Slic3r {
 		Pointf3s pointf3_xz_45, pointf3_xz_135, pointf3_yz_45, pointf3_yz_135;
 
 		//计算填充密度
-		double space=(1-double(config.fill_density/100))*10;
-		space = config.support_radius >= space ? config.support_radius + 1 : space;
+		double space = (1 - double(m_config->fill_density / 100)) * 10;
+		space = m_config->support_radius >= space ? m_config->support_radius + 1 : space;
 
 		radiate_point(bb, pointf3_xz_45, space, XZ_45);
 		radiate_point(bb, pointf3_xz_135, space, XZ_135);
@@ -413,14 +414,14 @@ namespace Slic3r {
 	TreeSupport* DLPrint::generate_support(size_t id, TriangleMesh* mesh, QProgressBar* progress)
 	{
 		mesh->require_shared_vertices_faces();
-		mesh->extract_feature_face(config.angle);
+		mesh->extract_feature_face(m_config->angle);
 
 		progress->setValue(20);
 
 		TreeSupport* s = new TreeSupport;
 		s->support_point = mesh->feature_point(progress);
-		s->support_point_face = mesh->feature_point_face(config.space, progress);
-		s->generate_tree_support(*mesh, config.leaf_num, config.threads, progress, config.support_top_height);
+		s->support_point_face = mesh->feature_point_face(m_config->space, progress);
+		s->generate_tree_support(*mesh, m_config->leaf_num, m_config->threads, progress, m_config->support_top_height);
 		return s;
 	}
 
@@ -448,18 +449,18 @@ namespace Slic3r {
 		if (_file.open(QFile::WriteOnly | QFile::Truncate))
 		{
 			QTextStream stream(&_file);
-			stream << "Slice thickness = " << config.layer_height << "\n";
-			stream << "norm illumination time = " << config.normIlluTime << "\n";
-			stream << "norm illumination inttersity = " << config.norm_inttersity << "\n";
-			stream << "number of override slices = " << config.overLayer << "\n";
-			stream << "override illumination time = " << config.overIlluTime << "\n";
-			stream << "override illumination inttersity =" << config.over_inttersity << "\n";
-			stream << "first layer_illumination_time = " << config.overIlluTime << "\n";
-			stream << "first illumination inttersity = " << config.over_inttersity << "\n";
-			stream << "number of slices = " << layer_num + config.raft_layers << "\n";
+			stream << "Slice thickness = " << m_config->layer_height << "\n";
+			stream << "norm illumination time = " << m_config->normIlluTime << "\n";
+			stream << "norm illumination inttersity = " << m_config->norm_inttersity << "\n";
+			stream << "number of override slices = " << m_config->overLayer << "\n";
+			stream << "override illumination time = " << m_config->overIlluTime << "\n";
+			stream << "override illumination inttersity =" << m_config->over_inttersity << "\n";
+			stream << "first layer_illumination_time = " << m_config->overIlluTime << "\n";
+			stream << "first illumination inttersity = " << m_config->over_inttersity << "\n";
+			stream << "number of slices = " << layer_num + m_config->raft_layers << "\n";
 			stream << "length = " << this->bb.max.x - this->bb.min.x << "\n";
 			stream << "width = " << this->bb.max.y - this->bb.min.y << "\n";
-			stream << "height = " << this->bb.max.z + config.layer_height*config.raft_layers << "\n";
+			stream << "height = " << this->bb.max.z + m_config->layer_height * m_config->raft_layers << "\n";
 
 			this->ini_file = ini_file1;
 
@@ -467,14 +468,14 @@ namespace Slic3r {
 
 			parallelize<size_t>(
 				0,
-				layer_num + config.raft_layers - 1,
+				layer_num + m_config->raft_layers - 1,
 				boost::bind(&DLPrint::saveOnePNG, this, _1),
-				this->config.threads
+				this->m_config->threads
 				);
 
 			double area = 0;
 			for (auto a = areas.begin(); a != areas.end(); ++a) {
-				area += (*a)*config.layer_height;
+				area += (*a) * m_config->layer_height;
 			}
 			areas.clear();
 
@@ -482,18 +483,18 @@ namespace Slic3r {
 			stream << "model volume = " << _area << "\n";
 
 			float aaa = 0;
-			for (int num = 0; num < layer_num + config.raft_layers; ++num) {
-				if (num < config.raft_layers)
-					aaa = (this->bb.max.x - this->bb.min.x)*(this->bb.max.y - this->bb.min.y);
+			for (int num = 0; num < layer_num + m_config->raft_layers; ++num) {
+				if (num < m_config->raft_layers)
+					aaa = (this->bb.max.x - this->bb.min.x) * (this->bb.max.y - this->bb.min.y);
 				else
-					aaa = *(areas.begin() + num - config.raft_layers);
-				if (num < config.overLayer) {
+					aaa = *(areas.begin() + num - m_config->raft_layers);
+				if (num < m_config->overLayer) {
 					//长曝光层
-					stream << num*config.layer_height << " , " << "slice" << num << ".png , " << aaa << "\n";
+					stream << num * m_config->layer_height << " , " << "slice" << num << ".png , " << aaa << "\n";
 				}
 				else {
 					//正常曝光层
-					stream << num*config.layer_height << " , " << "slice" << num << ".png , " << aaa << "\n";
+					stream << num * m_config->layer_height << " , " << "slice" << num << ".png , " << aaa << "\n";
 				}
 			}
 
@@ -525,11 +526,11 @@ namespace Slic3r {
 		QPainterPath _path;
 		_path.setFillRule(Qt::WindingFill);
 
-		float raft = config.layer_height*config.raft_layers;//底板高度
-		float now = config.layer_height*num;
+		float raft = m_config->layer_height * m_config->raft_layers;//底板高度
+		float now = m_config->layer_height * num;
 
 		//画底板
-		if (config.raft_layers > num) {
+		if (m_config->raft_layers > num) {
 			ExPolygons exp = r_layers[num].slices.expolygons;
 			for (ExPolygons::iterator exps = exp.begin(); exps != exp.end(); ++exps) {
 				ExPolygon _exps = *exps;
@@ -544,7 +545,7 @@ namespace Slic3r {
 		else {
 			ExPolygons temp;
 			ExPolygons contour;
-			size_t num1 = num - config.raft_layers;
+			size_t num1 = num - m_config->raft_layers;
 			for (auto l = layers.begin(); l != layers.end(); ++l) {
 				std::vector<Layer>* _layers1 = &(*l);
 				Layer _l = *(_layers1->begin() + num1);
@@ -571,41 +572,41 @@ namespace Slic3r {
 				}
 			}
 
-		//画内部支撑
-			if (config.hollow_out && !inside_supports.empty()&&config.fill_pattern.value==ip3DSupport) {
-				ExPolygons ss1;
-				for (auto i = inside_supports.begin(); i != inside_supports.end(); ++i) {
-					std::vector<Linef3>* inside = (*i).second;
-
-					for (auto l3 = inside->begin(); l3 != inside->end(); ++l3) {
-
-						if (now > (*l3).a.z&&now < (*l3).b.z) {
-							ExPolygon s1;
-							//求横梁与当前面的交点
-							Vectorf3 planeVector(0, 0, 1);
-							Pointf3 planePoint(0, 0, now);
-							Vectorf3 lineVector((*l3).b.x - (*l3).a.x, (*l3).b.y - (*l3).a.y, (*l3).b.z - (*l3).a.z);
-							Pointf3 point = CalPlaneLineIntersectPoint(planeVector, planePoint, lineVector, (*l3).a);
-							//将模型支撑在不同实例上画出
-
-							for (std::vector<Pointf>::iterator p = circle.begin(); p != circle.end() - 1; ++p) {
-								Pointf _p = *p;
-								_p.scale(config.support_radius);
-								_p.translate(point.x, point.y);
-								s1.contour.points.push_back(Point(scale_(_p.x), scale_(_p.y)));
-							}
-							ss1.push_back(s1);
-
-						}
-					}
-
-				}
-				ss1 = union_ex(ss1);
-				//去除多余线段
-				contour = intersection_ex(ss1, contour);//a*b求交
-				temp = diff_ex(temp, ss1);//a-b
-				temp = temp + contour;
-			}
+			//画内部支撑
+				//if (m_config->hollow_out && !inside_supports.empty()&&m_config->fill_pattern.value==ip3DSupport) {
+				//	ExPolygons ss1;
+				//	for (auto i = inside_supports.begin(); i != inside_supports.end(); ++i) {
+				//		std::vector<Linef3>* inside = (*i).second;
+				//
+				//		for (auto l3 = inside->begin(); l3 != inside->end(); ++l3) {
+				//
+				//			if (now > (*l3).a.z&&now < (*l3).b.z) {
+				//				ExPolygon s1;
+				//				//求横梁与当前面的交点
+				//				Vectorf3 planeVector(0, 0, 1);
+				//				Pointf3 planePoint(0, 0, now);
+				//				Vectorf3 lineVector((*l3).b.x - (*l3).a.x, (*l3).b.y - (*l3).a.y, (*l3).b.z - (*l3).a.z);
+				//				Pointf3 point = CalPlaneLineIntersectPoint(planeVector, planePoint, lineVector, (*l3).a);
+				//				//将模型支撑在不同实例上画出
+				//
+				//				for (std::vector<Pointf>::iterator p = circle.begin(); p != circle.end() - 1; ++p) {
+				//					Pointf _p = *p;
+				//					_p.scale(m_config->support_radius);
+				//					_p.translate(point.x, point.y);
+				//					s1.contour.points.push_back(Point(scale_(_p.x), scale_(_p.y)));
+				//				}
+				//				ss1.push_back(s1);
+				//
+				//			}
+				//		}
+				//
+				//	}
+				//	ss1 = union_ex(ss1);
+				//	//去除多余线段
+				//	contour = intersection_ex(ss1, contour);//a*b求交
+				//	temp = diff_ex(temp, ss1);//a-b
+				//	temp = temp + contour;
+				//}
 
 			temp = union_ex(temp);
 
@@ -613,7 +614,7 @@ namespace Slic3r {
 			double area = 0;
 			for (Polygons::iterator ps = poly.begin(); ps != poly.end(); ++ps) {
 				//求面积
-				area += (*ps).area()*SCALING_FACTOR*SCALING_FACTOR;
+				area += (*ps).area() * SCALING_FACTOR * SCALING_FACTOR;
 
 				QPolygonF qp = polTpQpol(*ps);
 				_path.addPolygon(qp);
@@ -664,13 +665,13 @@ namespace Slic3r {
 				for (int i = 1; i < b; ++i) {
 					Pointf pf;
 					if (l1.a.x < l1.b.x)
-						pf.x = l1.a.x + i*x;
+						pf.x = l1.a.x + i * x;
 					else
-						pf.x = l1.b.x + i*x;
+						pf.x = l1.b.x + i * x;
 					if (l1.a.y < l1.b.y)
-						pf.y = l1.a.y + i*z;
+						pf.y = l1.a.y + i * z;
 					else
-						pf.y = l1.b.y + i*z;
+						pf.y = l1.b.y + i * z;
 					pfs.push_back(pf);//得到二维方向的交点
 				}
 
@@ -679,7 +680,7 @@ namespace Slic3r {
 					for (auto p = pfs.begin(); p != pfs.end(); ++p) {
 						int i = std::distance(pfs.begin(), p);
 						auto p1 = pfs.end() - i - 1;
-						ps.push_back(Pointf3((*p).x, bb.min.y + j*space, (*p1).y));//y==z
+						ps.push_back(Pointf3((*p).x, bb.min.y + j * space, (*p1).y));//y==z
 					}
 				}
 			}
@@ -695,20 +696,20 @@ namespace Slic3r {
 				for (int i = 1; i < b; ++i) {
 					Pointf pf;
 					if (l2.a.x < l2.b.x)
-						pf.x = l2.a.x + i*x;
+						pf.x = l2.a.x + i * x;
 					else
-						pf.x = l2.b.x + i*x;
+						pf.x = l2.b.x + i * x;
 					if (l2.a.y < l2.b.y)
-						pf.y = l2.a.y + i*z;
+						pf.y = l2.a.y + i * z;
 					else
-						pf.y = l2.b.y + i*z;
+						pf.y = l2.b.y + i * z;
 					pfs.push_back(pf);//得到二维方向的交点
 				}
 
 				int c = fabs(bb.max.y - bb.min.y) / space;//y边间隔次数,间隔距离为space
 				for (int j = 1; j < c; ++j) {
 					for (auto p = pfs.begin(); p != pfs.end(); ++p) {
-						ps.push_back(Pointf3((*p).x, bb.min.y + j*space, (*p).y));
+						ps.push_back(Pointf3((*p).x, bb.min.y + j * space, (*p).y));
 					}
 				}
 			}
@@ -724,13 +725,13 @@ namespace Slic3r {
 				for (int i = 1; i < b; ++i) {
 					Pointf pf;
 					if (l3.a.x < l3.b.x)
-						pf.x = l3.a.x + i*y;
+						pf.x = l3.a.x + i * y;
 					else
-						pf.x = l3.b.x + i*y;
+						pf.x = l3.b.x + i * y;
 					if (l3.a.y < l3.b.y)
-						pf.y = l3.a.y + i*z;
+						pf.y = l3.a.y + i * z;
 					else
-						pf.y = l3.b.y + i*z;
+						pf.y = l3.b.y + i * z;
 					pfs.push_back(pf);//得到二维方向的交点
 				}
 
@@ -739,7 +740,7 @@ namespace Slic3r {
 					for (auto p = pfs.begin(); p != pfs.end(); ++p) {
 						int i = std::distance(pfs.begin(), p);
 						auto p1 = pfs.end() - i - 1;
-						ps.push_back(Pointf3(bb.min.x + j*space, (*p).x, (*p1).y));
+						ps.push_back(Pointf3(bb.min.x + j * space, (*p).x, (*p1).y));
 					}
 				}
 			}
@@ -755,20 +756,20 @@ namespace Slic3r {
 				for (int i = 1; i < b; ++i) {
 					Pointf pf;
 					if (l4.a.x < l4.b.x)
-						pf.x = l4.a.x + i*y;
+						pf.x = l4.a.x + i * y;
 					else
-						pf.x = l4.b.x + i*y;
+						pf.x = l4.b.x + i * y;
 					if (l4.a.y < l4.b.y)
-						pf.y = l4.a.y + i*z;
+						pf.y = l4.a.y + i * z;
 					else
-						pf.y = l4.b.y + i*z;
+						pf.y = l4.b.y + i * z;
 					pfs.push_back(pf);//得到二维方向的交点
 				}
 
 				int c = fabs(bb.max.x - bb.min.x) / space;//x边间隔次数,间隔距离为space
 				for (int j = 1; j < c; ++j) {
 					for (auto p = pfs.begin(); p != pfs.end(); ++p) {
-						ps.push_back(Pointf3(bb.min.x + j*space, (*p).x, (*p).y));
+						ps.push_back(Pointf3(bb.min.x + j * space, (*p).x, (*p).y));
 					}
 				}
 			}
@@ -794,8 +795,8 @@ namespace Slic3r {
 				for (int i = 0; i < mesh->stl.stats.number_of_facets; ++i) {
 					stl_facet f = mesh->stl.facet_start[i];
 					//排除不与二维面相交的三角面
-					if ((f.vertex[0].y > (*p).y&&f.vertex[1].y > (*p).y&&f.vertex[2].y > (*p).y) ||
-						(f.vertex[0].y < (*p).y&&f.vertex[1].y < (*p).y&&f.vertex[2].y < (*p).y))
+					if ((f.vertex[0].y > (*p).y&& f.vertex[1].y > (*p).y&& f.vertex[2].y > (*p).y) ||
+						(f.vertex[0].y < (*p).y && f.vertex[1].y < (*p).y && f.vertex[2].y < (*p).y))
 						continue;
 					else {
 						//得到射线与平面的交点
@@ -824,8 +825,8 @@ namespace Slic3r {
 				for (int i = 0; i < mesh->stl.stats.number_of_facets; ++i) {
 					stl_facet f = mesh->stl.facet_start[i];
 					//排除不与二维面相交的三角面
-					if ((f.vertex[0].y > (*p).y&&f.vertex[1].y > (*p).y&&f.vertex[2].y > (*p).y) ||
-						(f.vertex[0].y < (*p).y&&f.vertex[1].y < (*p).y&&f.vertex[2].y < (*p).y))
+					if ((f.vertex[0].y > (*p).y&& f.vertex[1].y > (*p).y&& f.vertex[2].y > (*p).y) ||
+						(f.vertex[0].y < (*p).y && f.vertex[1].y < (*p).y && f.vertex[2].y < (*p).y))
 						continue;
 					else {
 						//得到射线与平面的交点
@@ -853,8 +854,8 @@ namespace Slic3r {
 				for (int i = 0; i < mesh->stl.stats.number_of_facets; ++i) {
 					stl_facet f = mesh->stl.facet_start[i];
 					//排除不与二维面相交的三角面
-					if ((f.vertex[0].x > (*p).x&&f.vertex[1].x > (*p).x&&f.vertex[2].x > (*p).x) ||
-						(f.vertex[0].x < (*p).x&&f.vertex[1].x < (*p).y&&f.vertex[2].x < (*p).x))
+					if ((f.vertex[0].x > (*p).x&& f.vertex[1].x > (*p).x&& f.vertex[2].x > (*p).x) ||
+						(f.vertex[0].x < (*p).x && f.vertex[1].x < (*p).y && f.vertex[2].x < (*p).x))
 						continue;
 					else {
 						//得到射线与平面的交点
@@ -882,8 +883,8 @@ namespace Slic3r {
 				for (int i = 0; i < mesh->stl.stats.number_of_facets; ++i) {
 					stl_facet f = mesh->stl.facet_start[i];
 					//排除不与二维面相交的三角面
-					if ((f.vertex[0].x > (*p).x&&f.vertex[1].x > (*p).x&&f.vertex[2].x > (*p).x) ||
-						(f.vertex[0].x < (*p).x&&f.vertex[1].x < (*p).y&&f.vertex[2].x < (*p).x))
+					if ((f.vertex[0].x > (*p).x&& f.vertex[1].x > (*p).x&& f.vertex[2].x > (*p).x) ||
+						(f.vertex[0].x < (*p).x && f.vertex[1].x < (*p).y && f.vertex[2].x < (*p).x))
 						continue;
 					else {
 						//得到射线与平面的交点

@@ -9,15 +9,39 @@
 
 #include "Setting.h"
 extern Setting e_setting;
+static int TranInvalidID = -10;
+static int SelInvalidID = -1;
 
 GlWidget::GlWidget(Model* _model, DLPrint* _dlprint)
-	: translationID(-1), _Depth(false)
+	: translationID(TranInvalidID)
+	, selectID(SelInvalidID)
 	, viewport(ORTHOGONALITY)
-	,m_model(_model),dlprint(_dlprint)
+	, m_model(_model)
+	, m_dlprint(_dlprint)
 {
-	setDefaultView();
-	read_basics_mesh();
+	translateMesh_X.id = -1;
+	translateMesh_Y.id = -2;
+	translateMesh_Z.id = -3;
+	scaleMesh_X.id = -4;
+	scaleMesh_Y.id = -5;
+	scaleMesh_Z.id = -6;
+	rotateMesh_X.id = -7;
+	rotateMesh_Y.id = -8;
+	rotateMesh_Z.id = -9;
+
+	SetDefaultView();
+	ReadBasicMesh();
 	setMouseTracking(true);//设置鼠标跟踪
+}
+
+GlWidget::~GlWidget()
+{
+	delete m_dlprint;
+	delete m_model;
+	delete m_selInstance;
+	if (m_supEditControl != nullptr)
+		delete m_supEditControl;
+	delete m_program;
 }
 
 //顶点着色器
@@ -100,6 +124,54 @@ static const char *fragmentShaderSourceCore =
 "   }\n"
 "}\n";
 
+void InitTransformMesh(ModelBuffer* mb, TriangleMesh mesh, Vectorf3 color, Vectorf3 direction)
+{
+	mesh.rotate_x((direction.x / 180) * PI);
+	mesh.rotate_y((direction.y) / 180 * PI);
+	mesh.rotate_z((direction.z) / 180 * PI);
+
+	mb->size = mesh.stl.stats.number_of_facets;
+	mb->stl = new GLfloat[mb->size * 3 * 3 * 3];  //包含  坐标值  法向量  颜色
+
+	for (int i = 0; i < mb->size; ++i) {
+		mb->stl[i * 27] = mesh.stl.facet_start[i].vertex[0].x;
+		mb->stl[i * 27 + 1] = mesh.stl.facet_start[i].vertex[0].y;
+		mb->stl[i * 27 + 2] = mesh.stl.facet_start[i].vertex[0].z;
+		mb->stl[i * 27 + 3] = mesh.stl.facet_start[i].normal.x;
+		mb->stl[i * 27 + 4] = mesh.stl.facet_start[i].normal.y;
+		mb->stl[i * 27 + 5] = mesh.stl.facet_start[i].normal.z;
+		mb->stl[i * 27 + 6] = color.x;
+		mb->stl[i * 27 + 7] = color.y;
+		mb->stl[i * 27 + 8] = color.z;
+
+		mb->stl[i * 27 + 9] = mesh.stl.facet_start[i].vertex[1].x;
+		mb->stl[i * 27 + 10] = mesh.stl.facet_start[i].vertex[1].y;
+		mb->stl[i * 27 + 11] = mesh.stl.facet_start[i].vertex[1].z;
+		mb->stl[i * 27 + 12] = mesh.stl.facet_start[i].normal.x;
+		mb->stl[i * 27 + 13] = mesh.stl.facet_start[i].normal.y;
+		mb->stl[i * 27 + 14] = mesh.stl.facet_start[i].normal.z;
+		mb->stl[i * 27 + 15] = color.x;
+		mb->stl[i * 27 + 16] = color.y;
+		mb->stl[i * 27 + 17] = color.z;
+
+		mb->stl[i * 27 + 18] = mesh.stl.facet_start[i].vertex[2].x;
+		mb->stl[i * 27 + 19] = mesh.stl.facet_start[i].vertex[2].y;
+		mb->stl[i * 27 + 20] = mesh.stl.facet_start[i].vertex[2].z;
+		mb->stl[i * 27 + 21] = mesh.stl.facet_start[i].normal.x;
+		mb->stl[i * 27 + 22] = mesh.stl.facet_start[i].normal.y;
+		mb->stl[i * 27 + 23] = mesh.stl.facet_start[i].normal.z;
+		mb->stl[i * 27 + 24] = color.x;
+		mb->stl[i * 27 + 25] = color.y;
+		mb->stl[i * 27 + 26] = color.z;
+	}
+
+	mb->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+	mb->buffer->create();
+	mb->buffer->bind();
+	mb->buffer->allocate(mb->stl, mb->size * 3 * 3 * 3 * sizeof(GLfloat));
+	mb->buffer->release();
+}
+
 void GlWidget::initializeGL()
 {
 	initializeOpenGLFunctions();
@@ -139,11 +211,23 @@ void GlWidget::initializeGL()
 
 	//glClipPlane(GL_CLIP_PLANE0, 50.0);
 
-	initTransformMesh();
+	//translation
+	InitTransformMesh(&translateMesh_X, cone, Vectorf3(0.8, 0.0, 0.0), Vectorf3(0, 90, 0));
+	InitTransformMesh(&translateMesh_Y, cone, Vectorf3(0.0, 0.8, 0.0), Vectorf3(90, 0, 0));
+	InitTransformMesh(&translateMesh_Z, cone, Vectorf3(0.0, 0.0, 0.8), Vectorf3(0, 0, 0));
+	//scale
+	InitTransformMesh(&scaleMesh_X, cube, Vectorf3(0.8, 0.0, 0.0), Vectorf3(0, -90, 0));
+	InitTransformMesh(&scaleMesh_Y, cube, Vectorf3(0.0, 0.8, 0.0), Vectorf3(-90, 0, 0));
+	InitTransformMesh(&scaleMesh_Z, cube, Vectorf3(0.0, 0.0, 0.8), Vectorf3(180, 0, 0));
+	//rotate
+	InitTransformMesh(&rotateMesh_X, ring, Vectorf3(0.8, 0.0, 0.0), Vectorf3(90, 0, 0));
+	InitTransformMesh(&rotateMesh_Y, ring, Vectorf3(0.0, 0.8, 0.0), Vectorf3(0, 90, 0));
+	InitTransformMesh(&rotateMesh_Z, ring, Vectorf3(0.0, 0.0, 0.8), Vectorf3(0, 0, 0));
+
 	InitPlatform();
 	InitConfine();
 	InitCoord();
-	setEye();
+	SetEye();
 	m_program->release();
 }
 
@@ -172,21 +256,19 @@ void GlWidget::paintGL()
 	m_program->setUniformValue(m_lightPosLoc,eye);
 	
 	//渲染模型
-	drawModel();
-
-	drawTranslationMesh();
-	
+	DrawModel();
+	DrawTranMesh();
 	glDisable(GL_CULL_FACE);
 
 	//渲染树状支撑
-	if (!dlprint->treeSupports.empty() && m_supEditControl == nullptr)
-		bindTreeSupport();
+	if (!m_dlprint->treeSupports.empty() && m_supEditControl == nullptr)
+		BindTreeSupport();
 
 	//添加支撑时的标识渲染
 	if (m_supEditControl != nullptr) {
-		bindOneSupport();
+		BindOneSupport();
 		if (!m_supEditControl->supportPoints.empty())
-			bindSupportEditBuffer();
+			BindSupportEditBuffer();
 	}
 	else {
 		//渲染边界
@@ -229,7 +311,7 @@ void GlWidget::resizeGL(int w, int h)
 //参数3：读取数组的起始位置
 //参数4：读取一个顶点的一个属性的距离（一小步）
 //参数5：读取一个顶点的所有属性的距离（一大步）
-void GlWidget::drawModel()//渲染模型
+void GlWidget::DrawModel()//渲染模型
 {
 	for (auto m = modelBuffers.begin(); m != modelBuffers.end(); ++m) {
 		ModelBuffer* mb = *m;
@@ -289,27 +371,7 @@ void GlWidget::DelModelBuffer(size_t id)//删除一个模型缓冲区
 	}
 }
 
-void GlWidget::delSupportBuffer(size_t id)
-{
-	//删除支撑，会将该支撑所有信息删除
-	int dis = -1;
-	for (auto s = treeSupportBuffers.begin(); s != treeSupportBuffers.end(); ++s) {
-		if ((*s)->id == id) {
-			dis = std::distance(treeSupportBuffers.begin(), s);
-			break;
-		}
-	}
-	if (dis >= 0) {
-		auto sb = treeSupportBuffers.begin() + dis;
-		delete (*sb)->buffer;
-		delete[](*sb)->stl;
-		delete *sb;
-		treeSupportBuffers.erase(sb);
-	}
-	update();
-}
-
-void GlWidget::clearModelBuffer()
+void GlWidget::ClearModelBuffer()
 {
 	while (!modelBuffers.empty()) {
 		auto m = modelBuffers.begin();
@@ -317,22 +379,18 @@ void GlWidget::clearModelBuffer()
 		modelBuffers.erase(m);
 	}
 
-	selectID = -1;
+	selectID = SelInvalidID;
 	m_selInstance = nullptr;
-	translationID = -1;
+	translationID = TranInvalidID;
 
 	UpdateConfine();
 	update();
 }
 
-void GlWidget::clearSupportBuffer()
+void GlWidget::ClearSupportBuffer()
 {
-	while (!treeSupportBuffers.empty())
-	{
+	while (!treeSupportBuffers.empty()){
 		auto s = treeSupportBuffers.begin();
-		delete (*s)->buffer;
-		delete[](*s)->stl;
-
 		delete *s;
 		treeSupportBuffers.erase(s);
 	}
@@ -351,7 +409,7 @@ void GlWidget::InitPlatform()
 	unsigned int c = W / 10;
 	unsigned int d = W % 10;
 
-	platformBuffer.size = a + c + 12;
+	platformBuffer.size = a + c + 12 - 2;
 	if (platformBuffer.stl != nullptr)
 		delete[] platformBuffer.stl;
 	platformBuffer.stl = new GLfloat[platformBuffer.size * 2 * 3];
@@ -421,7 +479,7 @@ void GlWidget::InitPlatform()
 
 void GlWidget::BindPlatform()
 {
-	initModelMatrix();
+	InitModelMatrix();
 
 	m_program->setUniformValue(func, 2);
 	m_program->enableAttributeArray(0);
@@ -481,7 +539,7 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 		xLastPos = event->pos().x();
 		yLastPos = event->pos().y();
 
-		setEye();
+		SetEye();
 		update();
 	}
 	else if (event->buttons() & Qt::MiddleButton)
@@ -537,42 +595,42 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 		update();
 	}
 
-	if (m_supEditControl == nullptr && event->buttons() == Qt::LeftButton && translationID != -1) {
+	if (m_supEditControl == nullptr && event->buttons() == Qt::LeftButton && translationID != TranInvalidID) {
 
 		int x = event->pos().x() - xLastPos;
 		int y = yLastPos - event->pos().y();
 
 		double _h, x_ratio, y_ratio;
-		if (translationID == translateMesh_X->id) {
+		if (translationID == translateMesh_X.id) {
 			_h = _horizonAngle - 90;
 			x_ratio = cosf((_h / 180.0) * PI);
 			y_ratio = sinf((_h / 180.0) * PI);
-			offsetValueChange((x * x_ratio + y * y_ratio) / _scale, 0, 0, true);
+			OffsetValueChange((x * x_ratio + y * y_ratio) / _scale, 0, 0, true);
 		}
-		else if (translationID == translateMesh_Y->id) {
+		else if (translationID == translateMesh_Y.id) {
 			_h = _horizonAngle - 180;
 			x_ratio = cosf((_h / 180.0) * PI);
 			y_ratio = sinf((_h / 180.0) * PI);
-			offsetValueChange(0, -(x * x_ratio + y * y_ratio) / _scale, 0, true);
+			OffsetValueChange(0, -(x * x_ratio + y * y_ratio) / _scale, 0, true);
 		}
-		else if (translationID == translateMesh_Z->id)
-			offsetValueChange(0, 0, y / _scale, true);
-		else if (translationID == scaleMesh_X->id) {
+		else if (translationID == translateMesh_Z.id)
+			OffsetValueChange(0, 0, y / _scale, true);
+		else if (translationID == scaleMesh_X.id) {
 			_h = _horizonAngle + 90;
 			x_ratio = cosf((_h / 180.0) * PI);
 			y_ratio = sinf((_h / 180.0) * PI);
-			scaleValueChange((x * x_ratio + y * y_ratio) / _scale, 0, 0, true);
+			ScaleValueChange((x * x_ratio + y * y_ratio) / _scale, 0, 0, true);
 		}
-		else if (translationID == scaleMesh_Y->id) {
+		else if (translationID == scaleMesh_Y.id) {
 			_h = _horizonAngle + 180;
 			x_ratio = cosf((_h / 180.0) * PI);
 			y_ratio = sinf((_h / 180.0) * PI);
-			scaleValueChange(0, -(x * x_ratio + y * y_ratio) / _scale, 0, true);
+			ScaleValueChange(0, -(x * x_ratio + y * y_ratio) / _scale, 0, true);
 		}
-		else if (translationID == scaleMesh_Z->id) {
-			scaleValueChange(0, 0, -y / _scale, true);
+		else if (translationID == scaleMesh_Z.id) {
+			ScaleValueChange(0, 0, -y / _scale, true);
 		}
-		else if (translationID == rotateMesh_Z->id || translationID == rotateMesh_X->id || translationID == rotateMesh_Y->id)
+		else if (translationID == rotateMesh_Z.id || translationID == rotateMesh_X.id || translationID == rotateMesh_Y.id)
 		{
 			Pointf3 p;
 
@@ -609,19 +667,19 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 			if (v2.y < 0)
 				angle2 = 360 - angle2;
 
-			if (translationID == rotateMesh_Z->id) {
+			if (translationID == rotateMesh_Z.id) {
 				if (_verticalAngle > 0)
 					rotateValueChange(angle2 - angle1, 0, 0, 1, true);
 				else
 					rotateValueChange(angle1 - angle2, 0, 0, 1, true);
 			}
-			else if (translationID == rotateMesh_X->id) {
+			else if (translationID == rotateMesh_X.id) {
 				if ((_horizonAngle >= 0 && _horizonAngle < 180) || (_horizonAngle <= -180 && _horizonAngle > -360))
 					rotateValueChange(angle1 - angle2, 0, 1, 0, true);
 				else
 					rotateValueChange(angle2 - angle1, 0, 1, 0, true);
 			}
-			else if (translationID == rotateMesh_Y->id) {
+			else if (translationID == rotateMesh_Y.id) {
 				if ((_horizonAngle >= 90 && _horizonAngle < 270) || (_horizonAngle <= -90 && _horizonAngle > -270))
 					rotateValueChange(angle1 - angle2, 1, 0, 0, true);
 				else
@@ -717,7 +775,7 @@ void GlWidget::mousePressEvent(QMouseEvent* event)
 	xLastPos = event->pos().x();
 	yLastPos = event->pos().y();
 
-	if (event->buttons() == Qt::LeftButton && selectID >= 0 && m_supEditControl == nullptr) {
+	if (event->buttons() == Qt::LeftButton && selectID > SelInvalidID && m_supEditControl == nullptr) {
 		GLint x = event->x();
 		GLint y = event->y();
 
@@ -768,11 +826,11 @@ void GlWidget::mousePressEvent(QMouseEvent* event)
 		//rotate
 		scaleM.scale(s);
 		translateM.translate(i->origin.x, i->origin.y, i->origin.z);
-		renderTranslationMesh_1(ring, rotateMesh_X->id, Vectorf3(90, 0, 0), scaleM, translateM);
+		RenderTranMeshCase(ring, rotateMesh_X.id, Vectorf3(90, 0, 0), scaleM, translateM);
 
-		renderTranslationMesh_1(ring, rotateMesh_Y->id, Vectorf3(0, 90, 0), scaleM, translateM);
+		RenderTranMeshCase(ring, rotateMesh_Y.id, Vectorf3(0, 90, 0), scaleM, translateM);
 
-		renderTranslationMesh_1(ring, rotateMesh_Z->id, Vectorf3(0, 0, 0), scaleM, translateM);
+		RenderTranMeshCase(ring, rotateMesh_Z.id, Vectorf3(0, 0, 0), scaleM, translateM);
 
 		TriangleMesh m(ring);
 		m.scale(s);
@@ -784,38 +842,38 @@ void GlWidget::mousePressEvent(QMouseEvent* event)
 		scaleM.scale(s);
 		translateM.setToIdentity();
 		translateM.translate(i->origin.x - x1, i->origin.y, i->origin.z);
-		renderTranslationMesh_1(cube, scaleMesh_X->id, Vectorf3(0, -90, 0), scaleM, translateM);
+		RenderTranMeshCase(cube, scaleMesh_X.id, Vectorf3(0, -90, 0), scaleM, translateM);
 
 		scaleM.setToIdentity();
 		scaleM.scale(s);
 		translateM.setToIdentity();
 		translateM.translate(i->origin.x, i->origin.y + x1, i->origin.z);
-		renderTranslationMesh_1(cube, scaleMesh_Y->id, Vectorf3(-90, 0, 0), scaleM, translateM);
+		RenderTranMeshCase(cube, scaleMesh_Y.id, Vectorf3(-90, 0, 0), scaleM, translateM);
 
 		scaleM.setToIdentity();
 		scaleM.scale(s);
 		translateM.setToIdentity();
 		translateM.translate(i->origin.x, i->origin.y, i->origin.z - x1);
-		renderTranslationMesh_1(cube, scaleMesh_Z->id, Vectorf3(180, 0, 0), scaleM, translateM);
+		RenderTranMeshCase(cube, scaleMesh_Z.id, Vectorf3(180, 0, 0), scaleM, translateM);
 
 		//translate
 		scaleM.setToIdentity();
 		scaleM.scale(s);
 		translateM.setToIdentity();
 		translateM.translate(i->origin.x + x1, i->origin.y, i->origin.z);
-		renderTranslationMesh_1(cone, translateMesh_X->id, Vectorf3(0, 90, 0), scaleM, translateM);
+		RenderTranMeshCase(cone, translateMesh_X.id, Vectorf3(0, 90, 0), scaleM, translateM);
 
 		scaleM.setToIdentity();
 		scaleM.scale(s);
 		translateM.setToIdentity();
 		translateM.translate(i->origin.x, i->origin.y - x1, i->origin.z);
-		renderTranslationMesh_1(cone, translateMesh_Y->id, Vectorf3(90, 0, 0), scaleM, translateM);
+		RenderTranMeshCase(cone, translateMesh_Y.id, Vectorf3(90, 0, 0), scaleM, translateM);
 
 		scaleM.setToIdentity();
 		scaleM.scale(s);
 		translateM.setToIdentity();
 		translateM.translate(i->origin.x, i->origin.y, i->origin.z + x1);
-		renderTranslationMesh_1(cone, translateMesh_Z->id, Vectorf3(0, 0, 0), scaleM, translateM);
+		RenderTranMeshCase(cone, translateMesh_Z.id, Vectorf3(0, 0, 0), scaleM, translateM);
 
 
 		glPopMatrix();
@@ -923,8 +981,8 @@ void GlWidget::mousePressEvent(QMouseEvent* event)
 
 void GlWidget::mouseReleaseEvent(QMouseEvent *event)
 {
-	if (translationID != -1) {
-		translationID = -1;
+	if (translationID != TranInvalidID) {
+		translationID = TranInvalidID;
 		update();
 	}
 }
@@ -1004,27 +1062,27 @@ void GlWidget::mouseDoubleClickEvent(QMouseEvent* event)
 			}
 		}
 		else {
-			selectID = -1;
+			selectID = SelInvalidID;
 			m_selInstance = nullptr;
 		}
 		update();
 	}
 }
 
-void GlWidget::setEye()
+void GlWidget::SetEye()
 {
 	eye.setX(500.0 * cos(PI * _verticalAngle / 180.0) * cos(PI * _horizonAngle / 180.0));
 	eye.setY(-500.0 * cos(PI * _verticalAngle / 180.0) * sin(PI * _horizonAngle / 180.0));
 	eye.setZ(500.0 * sin(PI * _verticalAngle / 180.0));
 }
 
-void GlWidget::ChangeView(int view)
+void GlWidget::ChangeView(VIEW view)
 {
 	switch (view)
 	{
 	case DEFAULT:
-		setDefaultView();
-		setEye();
+		SetDefaultView();
+		SetEye();
 		update();
 		break;
 
@@ -1032,7 +1090,7 @@ void GlWidget::ChangeView(int view)
 		_scale = 1.2;
 		_horizonAngle = 90; 
 		_verticalAngle = 89.99;
-		setEye();
+		SetEye();
 		update();
 		break;
 
@@ -1040,7 +1098,7 @@ void GlWidget::ChangeView(int view)
 		_scale = 1.2;
 		_horizonAngle = 180;
 		_verticalAngle = 0;
-		setEye();
+		SetEye();
 		update();
 		break;
 
@@ -1048,7 +1106,7 @@ void GlWidget::ChangeView(int view)
 		_scale = 1.2;
 		_horizonAngle = 0;
 		_verticalAngle = 0;
-		setEye();
+		SetEye();
 		update();
 		break;
 
@@ -1056,7 +1114,7 @@ void GlWidget::ChangeView(int view)
 		_scale = 1.2;
 		_horizonAngle = 90; 
 		_verticalAngle = 0;
-		setEye();
+		SetEye();
 		update();
 		break;
 
@@ -1064,7 +1122,7 @@ void GlWidget::ChangeView(int view)
 		_scale = 1.2;
 		_horizonAngle = -90; 
 		_verticalAngle = 0;
-		setEye();
+		SetEye();
 		update();
 		break;
 
@@ -1073,29 +1131,29 @@ void GlWidget::ChangeView(int view)
 	}
 }
 
-void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
+void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 {
-	TreeSupport* s = dlprint->chilck_tree_support(id);
+	TreeSupport* s = m_dlprint->chilck_tree_support(id);
 	if (s == nullptr)
 		return;
 
-	double height = dlprint->config.support_top_height;//写死的顶端与底端的高度
+	double height = m_dlprint->m_config->support_top_height;//写死的顶端与底端的高度
 
-	Pointfs _circle = dlprint->circle;
+	Pointfs _circle = m_dlprint->circle;
 
-	Pointf3s _topCircle, _supportCircle,branchCircle,_bottomCircle;//树枝的圆坐标
+	Pointf3s _topCircle, _supportCircle, branchCircle, _bottomCircle;//树枝的圆坐标
 
-	Pointf3 c4, c5, c6,c7;
+	Pointf3 c4, c5, c6, c7;
 	for (auto c = _circle.begin(); c != _circle.end(); ++c) {
 		c4.x = (*c).x; c4.y = (*c).y; c4.z = 0;
 		c5.x = (*c).x; c5.y = (*c).y; c5.z = 0;
 		c6.x = (*c).x; c6.y = (*c).y; c6.z = 0;
 		c7.x = (*c).x; c7.y = (*c).y; c7.z = 0;
 
-		c4.scale(dlprint->config.support_radius);
-		c5.scale(dlprint->config.support_top_radius);
-		c6.scale(dlprint->config.support_radius);
-		c7.scale(dlprint->config.support_bottom_radius);
+		c4.scale(m_dlprint->m_config->support_radius);
+		c5.scale(m_dlprint->m_config->support_top_radius);
+		c6.scale(m_dlprint->m_config->support_radius);
+		c7.scale(m_dlprint->m_config->support_bottom_radius);
 
 		//向x轴正坐标方向（1,0,0）旋转45度
 		c4.rotate_y(45);
@@ -1107,7 +1165,7 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 	}
 
 	TriangleMesh mesh;
-	Pointf3s topCircle3, supportCircle3A,supportCircle3B,bottomCircle3;
+	Pointf3s topCircle3, supportCircle3A, supportCircle3B, bottomCircle3;
 	Pointf3 p4, p5, p6, p7;
 	Linef3 line, line1;
 	size_t len2;
@@ -1119,7 +1177,7 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 	for (auto i = s->tree_support_bole.begin(); i != s->tree_support_bole.end(); ++i) {
 		if (progress != NULL) {
 			size_t id = std::distance(s->tree_support_bole.begin(), i);
-			int unit = (id + 1) / (s->tree_support_bole.size() / (80 - 76)+1);
+			int unit = (id + 1) / (s->tree_support_bole.size() / (80 - 76) + 1);
 			if (progress->value() < 76 + unit)
 				progress->setValue(76 + unit);
 		}
@@ -1181,7 +1239,7 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 		//81-85
 		if (progress != NULL) {
 			size_t id = std::distance(s->tree_support_leaf.begin(), i);
-			int unit = (id + 1) / (s->tree_support_leaf.size() / (85 - 81)+1);
+			int unit = (id + 1) / (s->tree_support_leaf.size() / (85 - 81) + 1);
 			if (progress->value() < 81 + unit)
 				progress->setValue(81 + unit);
 		}
@@ -1193,10 +1251,10 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 		m[1] = line.b.y - line.a.y;
 		m[2] = line.b.z - line.a.z;
 		stl_normalize_vector(m);
-	
+
 		//与z轴正方向所成的角度,在y轴方向上旋转
 		double z_angle = vector_angle_3D(Vectorf3(m[0], m[1], m[2]), Vectorf3(0, 0, 1));
-	
+
 		//与x轴正方向所成的角度，在z轴方向上旋转
 		double x_angle = atan2(m[1], m[0]) - atan2(0, -1);
 		//qDebug() << "z:   " << acos(z_angle) / PI * 180 << "x:   " << x_angle / PI * 180;
@@ -1231,9 +1289,9 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 			stl_add_face(p5.x, p5.y, p5.z, p4.x, p4.y, p4.z, line.b.x, line.b.y, line.b.z, mesh);
 
 			//中间三角面片
-			stl_add_face( p7.x, p7.y, p7.z, p6.x, p6.y, p6.z, p4.x, p4.y, p4.z, mesh);
+			stl_add_face(p7.x, p7.y, p7.z, p6.x, p6.y, p6.z, p4.x, p4.y, p4.z, mesh);
 
-			stl_add_face( p7.x, p7.y, p7.z, p4.x, p4.y, p4.z, p5.x, p5.y, p5.z, mesh);
+			stl_add_face(p7.x, p7.y, p7.z, p4.x, p4.y, p4.z, p5.x, p5.y, p5.z, mesh);
 		}
 
 	}
@@ -1243,20 +1301,20 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 		//86-90
 		if (progress != NULL) {
 			size_t id = std::distance(s->tree_support_branch.begin(), i);
-			int unit = (id + 1) / (s->tree_support_branch.size() / (86 - 90)+1);
+			int unit = (id + 1) / (s->tree_support_branch.size() / (86 - 90) + 1);
 			if (progress->value() < 86 + unit)
 				progress->setValue(86 + unit);
 		}
 
 		line = *i;
-	
+
 		//-----------求树枝在z轴方向旋转的角度值并旋转---------
 		float m[3];
 		m[0] = line.b.x - line.a.x;
 		m[1] = line.b.y - line.a.y;
 		m[2] = 0;
 		stl_normalize_vector(m);
-	
+
 		//将圆坐标绕z轴旋转至支撑线的方向
 		double angle = atan2(m[1], m[0]) - atan2(0, -1);
 
@@ -1264,32 +1322,32 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 		for (auto b = _branchCircle.begin(); b != _branchCircle.end(); ++b)
 			(*b).rotate_z_radian(angle);
 		//--------------------------------------------------------
-	
+
 		for (auto a = _branchCircle.begin(); a != _branchCircle.end() - 1; ++a) {
 			p4 = *a;
 			p5 = *(a + 1);
-	
+
 			p6 = *a;
 			p7 = *(a + 1);
-	
+
 			p4.translate(line.a.x, line.a.y, line.a.z);
 			p5.translate(line.a.x, line.a.y, line.a.z);
-	
+
 			p6.translate(line.b.x, line.b.y, line.b.z);
 			p7.translate(line.b.x, line.b.y, line.b.z);
-	
+
 			//低端三角面片
 			stl_add_face(p4.x, p4.y, p4.z, p5.x, p5.y, p5.z, line.a.x, line.a.y, line.a.z, mesh);
-	
+
 			//顶端三角面片
 			stl_add_face(p7.x, p7.y, p7.z, p6.x, p6.y, p6.z, line.b.x, line.b.y, line.b.z, mesh);
-	
+
 			//中间三角面片
 			stl_add_face(p5.x, p5.y, p5.z, p4.x, p4.y, p4.z, p6.x, p6.y, p6.z, mesh);
-	
+
 			stl_add_face(p6.x, p6.y, p6.z, p7.x, p7.y, p7.z, p5.x, p5.y, p5.z, mesh);
 		}
-	
+
 	}
 
 	//树根
@@ -1307,31 +1365,31 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 			//------------------圆坐标旋转-----------------------
 			supportCircle3A = _supportCircle;
 			bottomCircle3 = _bottomCircle;
-	
+
 			for (auto t = bottomCircle3.begin(); t != bottomCircle3.end(); ++t)
 				(*t).translate(line.a.x, line.a.y, line.a.z);
-	
+
 			for (auto s = supportCircle3A.begin(); s != supportCircle3A.end(); ++s)
 				(*s).translate(line.b.x, line.b.y, line.b.z);
 			//---------------------------------------------------
-	
+
 			for (auto l = supportCircle3A.begin(); l != supportCircle3A.end() - 1; ++l) {
 				len2 = std::distance(supportCircle3A.begin(), l);//第几个面单元
 				p4 = *l;
 				p5 = *(l + 1);
-	
+
 				p6 = *(bottomCircle3.begin() + len2);
 				p7 = *(bottomCircle3.begin() + len2 + 1);
-	
+
 				//低端三角面片
 				stl_add_face(p6.x, p6.y, p6.z, p7.x, p7.y, p7.z, line.a.x, line.a.y, line.a.z, mesh);
-	
+
 				//顶端三角面片
 				stl_add_face(p5.x, p5.y, p5.z, p4.x, p4.y, p4.z, line.b.x, line.b.y, line.b.z, mesh);
-	
+
 				//中间三角面片
 				stl_add_face(p7.x, p7.y, p7.z, p6.x, p6.y, p6.z, p4.x, p4.y, p4.z, mesh);
-	
+
 				stl_add_face(p7.x, p7.y, p7.z, p4.x, p4.y, p4.z, p5.x, p5.y, p5.z, mesh);
 			}
 		}
@@ -1386,11 +1444,11 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 				stl_add_face(p7.x, p7.y, p7.z, p4.x, p4.y, p4.z, p5.x, p5.y, p5.z, mesh);
 			}
 		}
-		
+
 	}
-	
+
 	//加强节点
-	for (auto p =s->tree_support_node.begin(); p != s->tree_support_node.end(); ++p) {
+	for (auto p = s->tree_support_node.begin(); p != s->tree_support_node.end(); ++p) {
 		if (progress != NULL) {
 			size_t id = std::distance(s->tree_support_node.begin(), p);
 			int unit = (id + 1) / (s->tree_support_node.size() / (100 - 95) + 1);
@@ -1399,7 +1457,7 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 		}
 
 		TriangleMesh mesh1 = ball;
-		mesh1.scale(dlprint->config.support_radius);
+		mesh1.scale(m_dlprint->m_config->support_radius);
 		mesh1.translate((*p).x, (*p).y, (*p).z);
 		mesh.merge(mesh1);
 	}
@@ -1455,7 +1513,7 @@ void GlWidget::initTreeSupport_id(size_t id, QProgressBar* progress)
 	update();
 }
 
-std::vector<TriangleMesh> GlWidget::return_support_model()
+std::vector<TriangleMesh> GlWidget::GetSupportModel()
 {
 	std::vector<TriangleMesh> support_meshs;
 	stl_facet face;
@@ -1481,7 +1539,7 @@ std::vector<TriangleMesh> GlWidget::return_support_model()
 	return support_meshs;
 }
 
-TriangleMesh GlWidget::saveSupport()
+TriangleMesh GlWidget::SaveSupport()
 {
 	TriangleMesh mesh;
 	stl_facet face;
@@ -1506,9 +1564,9 @@ TriangleMesh GlWidget::saveSupport()
 	return mesh;
 }
 
-void GlWidget::bindOneSupport()
+void GlWidget::BindOneSupport()
 {
-	initModelMatrix();
+	InitModelMatrix();
 
 	m_program->setUniformValue(func, 1);
 	m_supEditControl->m_curPoint->buffer->bind();
@@ -1525,7 +1583,7 @@ void GlWidget::bindOneSupport()
 }
 
 
-void GlWidget::saveOneView(char* _name)
+void GlWidget::SaveOneView(char* file)
 {
 	GLint viewPort[4] = { 0 };
 	glGetIntegerv(GL_VIEWPORT, viewPort);
@@ -1533,10 +1591,10 @@ void GlWidget::saveOneView(char* _name)
 	GLint height = viewPort[3];
 
 	GLint pixelLength;
-	GLubyte * pixelDate;
-	FILE * wfile;
+	GLubyte* pixelDate;
+	FILE* wfile;
 	//打开文件
-	wfile = fopen(_name, "wb");
+	wfile = fopen(file, "wb");
 	fwrite(head, 54, 1, wfile);
 	//更改grab.bmp的头文件中的高度和宽度
 	fseek(wfile, 0x0012, SEEK_SET);
@@ -1549,7 +1607,7 @@ void GlWidget::saveOneView(char* _name)
 		pixelLength += 4 - pixelLength % 4;
 	}
 	pixelLength *= height;
-	pixelDate = (GLubyte *)malloc(pixelLength);
+	pixelDate = (GLubyte*)malloc(pixelLength);
 	if (pixelDate == 0)
 	{
 		printf("/a/n分配内存失败!");
@@ -1577,8 +1635,8 @@ void GlWidget::SupportEditChange(QProgressBar* progress)
 		m_supEditControl->m_mesh = new TriangleMesh(m_selInstance->get_object()->volumes[0]->mesh);
 		m_selInstance->transform_mesh(m_supEditControl->m_mesh);
 
-		auto p = dlprint->treeSupports.find(selectID);
-		if (p != dlprint->treeSupports.end()) {
+		auto p = m_dlprint->treeSupports.find(selectID);
+		if (p != m_dlprint->treeSupports.end()) {
 			//有支撑点,将支撑点传入m_supportEditPoints并初始化渲染
 			Pointf3 temp(0, 0, 0);
 			std::vector<stl_vertex> ps = (*p).second->support_point;
@@ -1588,7 +1646,7 @@ void GlWidget::SupportEditChange(QProgressBar* progress)
 		}
 	}
 	else {
-		TreeSupport* sup = GetSelSupport();
+		TreeSupport* sup = m_dlprint->chilck_tree_support(selectID);
 		TreeSupport* sup_temp = new TreeSupport;
 
 		//支撑不存在，只进行手动支撑
@@ -1707,7 +1765,7 @@ void GlWidget::InitConfine()
 
 void GlWidget::BindConfine()
 {
-	initModelMatrix();
+	InitModelMatrix();
 
 	m_program->setUniformValue(func, 5);
 	m_program->enableAttributeArray(0);
@@ -1858,7 +1916,7 @@ void GlWidget::InitCoord()
 
 void GlWidget::BindCoord()
 {
-	initModelMatrix();
+	InitModelMatrix();
 
 	m_program->setUniformValue(func, 7);
 	m_program->enableAttributeArray(0);
@@ -1874,9 +1932,9 @@ void GlWidget::BindCoord()
 	m_program->disableAttributeArray(2);
 }
 
-void GlWidget::bindTreeSupport()
+void GlWidget::BindTreeSupport()
 {
-	initModelMatrix();
+	InitModelMatrix();
 
 	m_program->setUniformValue(func, 4);
 	for (auto s = treeSupportBuffers.begin(); s != treeSupportBuffers.end(); ++s) {
@@ -1895,9 +1953,9 @@ void GlWidget::bindTreeSupport()
 	}
 }
 
-void GlWidget::bindSupportEditBuffer()
+void GlWidget::BindSupportEditBuffer()
 {
-	initModelMatrix();
+	InitModelMatrix();
 
 	for (auto SB = m_supEditControl->supportPoints.begin(); SB != m_supEditControl->supportPoints.end(); ++SB) {
 		m_program->setUniformValue(func, 6);
@@ -1915,7 +1973,7 @@ void GlWidget::bindSupportEditBuffer()
 	}
 }
 
-TriangleMesh GlWidget::find_model(size_t id)
+TriangleMesh GlWidget::FindModel(size_t id)
 {
 	ModelInstance* i = m_model->find_instance(id);
 	ModelObject* o = i->get_object();
@@ -1924,7 +1982,7 @@ TriangleMesh GlWidget::find_model(size_t id)
 	return mesh;
 }
 
-void GlWidget::initModelMatrix()
+void GlWidget::InitModelMatrix()
 {
 	QMatrix4x4 rotateM, scaleM, translateM;
 	rotateM.setToIdentity();
@@ -1936,10 +1994,10 @@ void GlWidget::initModelMatrix()
 	m_program->setUniformValue(m_translateMatrixLoc, translateM);
 }
 
-void GlWidget::setPresprective()
+void GlWidget::SetViewPort(VIEWPORT view)
 {
-	if (viewport != PRESPRECTIVE) {
-		viewport = PRESPRECTIVE;
+	if (this->viewport != view) {
+		this->viewport = view;
 
 		GLint viewport[4];
 		glGetIntegerv(GL_VIEWPORT, viewport);
@@ -1949,20 +2007,7 @@ void GlWidget::setPresprective()
 	}
 }
 
-void GlWidget::setOrthogonality()
-{
-	if (viewport != ORTHOGONALITY) {
-		viewport = ORTHOGONALITY;
-
-		GLint viewport[4];
-		glGetIntegerv(GL_VIEWPORT, viewport);
-
-		resizeGL(viewport[2],viewport[3]);
-		update();
-	}
-}
-
-void GlWidget::setDefaultView()
+void GlWidget::SetDefaultView()
 {
 	if (viewport == PRESPRECTIVE) {
 		_scale = 0.8;
@@ -1982,136 +2027,41 @@ void GlWidget::setDefaultView()
 	}
 }
 
-void GlWidget::read_basics_mesh()
+void GlWidget::ReadBasicMesh()
 {
-	QString path = QDir::currentPath();
-	QString ball_path(path);
-	QString cube_path(path);
-	QString ring_path(path);
-	QString cone_path(path);
-	qDebug() << path;
+	QString ball_path(QString(e_setting.modelPath.c_str()) + "/ball.stl");
+	QString cube_path(QString(e_setting.modelPath.c_str()) + "/cube.stl");
+	QString ring_path(QString(e_setting.modelPath.c_str()) + "/ring.stl");
+	QString cone_path(QString(e_setting.modelPath.c_str()) + "/cone.stl");
 
-	cube_path.append("/ball1.stl");
 	QFileInfo f(cube_path);
-	if (f.isFile()) {
+	if (f.isFile())
 		cube.ReadSTLFile(cube_path.toStdString());
-	}
-	else {
+	else
 		qDebug() << "read cube error!";
-	}
 
-	ball_path.append("/ball.stl");
-    f.setFile(ball_path);
-	if (f.isFile()) {
+	f.setFile(ball_path);
+	if (f.isFile())
 		ball.ReadSTLFile(ball_path.toStdString());
-	}
-	else {
+	else
 		qDebug() << "read ball error!";
-	}
 
-	ring_path.append("/ring.stl");
 	f.setFile(ring_path);
-	if (f.isFile()) {
+	if (f.isFile())
 		ring.ReadSTLFile(ring_path.toStdString());
-	}
-	else {
+	else
 		qDebug() << "read ring error!";
-	}
 
-	cone_path.append("/cone.stl");
 	f.setFile(cone_path);
-	if (f.isFile()) {
+	if (f.isFile())
 		cone.ReadSTLFile(cone_path.toStdString());
-	}
-	else {
+	else
 		qDebug() << "read cone error!";
-	}
 }
 
-void GlWidget::initTransformMesh()
+void GlWidget::DrawTranMesh()
 {
-	//translation
-	translateMesh_X = new ModelBuffer();
-	initTransformMesh_1(translateMesh_X, cone, Vectorf3(0.8, 0.0, 0.0), Vectorf3(0, 90, 0));
-
-	translateMesh_Y = new ModelBuffer();
-	initTransformMesh_1(translateMesh_Y, cone, Vectorf3(0.0, 0.8, 0.0), Vectorf3(90, 0, 0));
-
-	translateMesh_Z = new ModelBuffer();
-	initTransformMesh_1(translateMesh_Z, cone, Vectorf3(0.0, 0.0, 0.8), Vectorf3(0, 0, 0));
-
-	//scale
-	scaleMesh_X = new ModelBuffer();
-	initTransformMesh_1(scaleMesh_X, cube, Vectorf3(0.8, 0.0, 0.0), Vectorf3(0, -90, 0));
-
-	scaleMesh_Y = new ModelBuffer();
-	initTransformMesh_1(scaleMesh_Y, cube, Vectorf3(0.0, 0.8, 0.0), Vectorf3(-90, 0, 0));
-
-	scaleMesh_Z = new ModelBuffer();
-	initTransformMesh_1(scaleMesh_Z, cube, Vectorf3(0.0, 0.0, 0.8), Vectorf3(180, 0, 0));
-
-	//rotate
-	rotateMesh_X = new ModelBuffer();
-	initTransformMesh_1(rotateMesh_X, ring, Vectorf3(0.8, 0.0, 0.0), Vectorf3(90, 0, 0));
-
-	rotateMesh_Y = new ModelBuffer();
-	initTransformMesh_1(rotateMesh_Y, ring, Vectorf3(0.0, 0.8, 0.0), Vectorf3(0, 90, 0));
-
-	rotateMesh_Z = new ModelBuffer();
-	initTransformMesh_1(rotateMesh_Z, ring, Vectorf3(0.0, 0.0, 0.8), Vectorf3(0, 0, 0));
-}
-
-void GlWidget::initTransformMesh_1(ModelBuffer* mb, TriangleMesh mesh, Vectorf3 color, Vectorf3 direction)
-{
-	mesh.rotate_x((direction.x / 180) * PI);
-	mesh.rotate_y((direction.y) / 180 * PI);
-	mesh.rotate_z((direction.z) / 180 * PI);
-
-	mb->size = mesh.stl.stats.number_of_facets;
-	mb->stl = new GLfloat[mb->size * 3 * 3 * 3];  //包含  坐标值  法向量  颜色
-
-	for (int i = 0; i < mb->size; ++i) {
-		mb->stl[i * 27] = mesh.stl.facet_start[i].vertex[0].x;
-		mb->stl[i * 27 + 1] = mesh.stl.facet_start[i].vertex[0].y;
-		mb->stl[i * 27 + 2] = mesh.stl.facet_start[i].vertex[0].z;
-		mb->stl[i * 27 + 3] = mesh.stl.facet_start[i].normal.x;
-		mb->stl[i * 27 + 4] = mesh.stl.facet_start[i].normal.y;
-		mb->stl[i * 27 + 5] = mesh.stl.facet_start[i].normal.z;
-		mb->stl[i * 27 + 6] = color.x;
-		mb->stl[i * 27 + 7] = color.y;
-		mb->stl[i * 27 + 8] = color.z;
-
-		mb->stl[i * 27 + 9] = mesh.stl.facet_start[i].vertex[1].x;
-		mb->stl[i * 27 + 10] = mesh.stl.facet_start[i].vertex[1].y;
-		mb->stl[i * 27 + 11] = mesh.stl.facet_start[i].vertex[1].z;
-		mb->stl[i * 27 + 12] = mesh.stl.facet_start[i].normal.x;
-		mb->stl[i * 27 + 13] = mesh.stl.facet_start[i].normal.y;
-		mb->stl[i * 27 + 14] = mesh.stl.facet_start[i].normal.z;
-		mb->stl[i * 27 + 15] = color.x;
-		mb->stl[i * 27 + 16] = color.y;
-		mb->stl[i * 27 + 17] = color.z;
-
-		mb->stl[i * 27 + 18] = mesh.stl.facet_start[i].vertex[2].x;
-		mb->stl[i * 27 + 19] = mesh.stl.facet_start[i].vertex[2].y;
-		mb->stl[i * 27 + 20] = mesh.stl.facet_start[i].vertex[2].z;
-		mb->stl[i * 27 + 21] = mesh.stl.facet_start[i].normal.x;
-		mb->stl[i * 27 + 22] = mesh.stl.facet_start[i].normal.y;
-		mb->stl[i * 27 + 23] = mesh.stl.facet_start[i].normal.z;
-		mb->stl[i * 27 + 24] = color.x;
-		mb->stl[i * 27 + 25] = color.y;
-		mb->stl[i * 27 + 26] = color.z;
-	}
-
-	mb->buffer = new QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-	mb->buffer->create();
-	mb->buffer->bind();
-	mb->buffer->allocate(mb->stl, mb->size * 3 * 3 * 3 * sizeof(GLfloat));
-	mb->buffer->release();
-}
-
-void GlWidget::drawTranslationMesh()
-{
-	if (selectID >= 0 && m_supEditControl == nullptr) {
+	if (selectID > SelInvalidID && m_supEditControl == nullptr) {
 		//得到模型实例
 		ModelInstance* i = m_selInstance;
 
@@ -2132,14 +2082,14 @@ void GlWidget::drawTranslationMesh()
 		scaleM.scale(s);
 		translateM.translate(i->origin.x, i->origin.y, i->origin.z);
 
-		if (translationID == rotateMesh_X->id || translationID == -1)
-			drawTranslationMesh_1(rotateMesh_X, scaleM, translateM);
+		if (translationID == rotateMesh_X.id || translationID == TranInvalidID)
+			DrawTranMeshCase(&rotateMesh_X, scaleM, translateM);
 
-		if (translationID == rotateMesh_Y->id || translationID == -1)
-			drawTranslationMesh_1(rotateMesh_Y, scaleM, translateM);
+		if (translationID == rotateMesh_Y.id || translationID == TranInvalidID)
+			DrawTranMeshCase(&rotateMesh_Y, scaleM, translateM);
 
-		if (translationID == rotateMesh_Z->id || translationID == -1)
-			drawTranslationMesh_1(rotateMesh_Z, scaleM, translateM);
+		if (translationID == rotateMesh_Z.id || translationID == TranInvalidID)
+			DrawTranMeshCase(&rotateMesh_Z, scaleM, translateM);
 
 		TriangleMesh m(ring);
 		m.scale(s);
@@ -2147,58 +2097,58 @@ void GlWidget::drawTranslationMesh()
 
 		s *= 2;
 		//scale
-		if (translationID == scaleMesh_X->id || translationID == -1) {
+		if (translationID == scaleMesh_X.id || translationID == TranInvalidID) {
 			scaleM.setToIdentity();
 			scaleM.scale(s);
 			translateM.setToIdentity();
 			translateM.translate(i->origin.x - x, i->origin.y, i->origin.z);
-			drawTranslationMesh_1(scaleMesh_X, scaleM, translateM);
+			DrawTranMeshCase(&scaleMesh_X, scaleM, translateM);
 		}
 
-		if (translationID == scaleMesh_Y->id || translationID == -1) {
+		if (translationID == scaleMesh_Y.id || translationID == TranInvalidID) {
 			scaleM.setToIdentity();
 			scaleM.scale(s);
 			translateM.setToIdentity();
 			translateM.translate(i->origin.x, i->origin.y + x, i->origin.z);
-			drawTranslationMesh_1(scaleMesh_Y, scaleM, translateM);
+			DrawTranMeshCase(&scaleMesh_Y, scaleM, translateM);
 		}
 
-		if (translationID == scaleMesh_Z->id || translationID == -1) {
+		if (translationID == scaleMesh_Z.id || translationID == TranInvalidID) {
 			scaleM.setToIdentity();
 			scaleM.scale(s);
 			translateM.setToIdentity();
 			translateM.translate(i->origin.x, i->origin.y, i->origin.z - x);
-			drawTranslationMesh_1(scaleMesh_Z, scaleM, translateM);
+			DrawTranMeshCase(&scaleMesh_Z, scaleM, translateM);
 		}
 
 		//translate
-		if (translationID == translateMesh_X->id || translationID == -1) {
+		if (translationID == translateMesh_X.id || translationID == TranInvalidID) {
 			scaleM.setToIdentity();
 			scaleM.scale(s);
 			translateM.setToIdentity();
 			translateM.translate(i->origin.x + x, i->origin.y, i->origin.z);
-			drawTranslationMesh_1(translateMesh_X, scaleM, translateM);
+			DrawTranMeshCase(&translateMesh_X, scaleM, translateM);
 		}
 
-		if (translationID == translateMesh_Y->id || translationID == -1) {
+		if (translationID == translateMesh_Y.id || translationID == TranInvalidID) {
 			scaleM.setToIdentity();
 			scaleM.scale(s);
 			translateM.setToIdentity();
 			translateM.translate(i->origin.x, i->origin.y - x, i->origin.z);
-			drawTranslationMesh_1(translateMesh_Y, scaleM, translateM);
+			DrawTranMeshCase(&translateMesh_Y, scaleM, translateM);
 		}
 
-		if (translationID == translateMesh_Z->id || translationID == -1) {
+		if (translationID == translateMesh_Z.id || translationID == TranInvalidID) {
 			scaleM.setToIdentity();
 			scaleM.scale(s);
 			translateM.setToIdentity();
 			translateM.translate(i->origin.x, i->origin.y, i->origin.z + x);
-			drawTranslationMesh_1(translateMesh_Z, scaleM, translateM);
+			DrawTranMeshCase(&translateMesh_Z, scaleM, translateM);
 		}
 	}
 }
 
-void GlWidget::drawTranslationMesh_1(ModelBuffer* mb, QMatrix4x4 scaleM, QMatrix4x4 translateM)
+void GlWidget::DrawTranMeshCase(ModelBuffer* mb, QMatrix4x4 scaleM, QMatrix4x4 translateM)
 {
 	mb->buffer->bind();
 	m_program->enableAttributeArray(0);
@@ -2223,7 +2173,7 @@ void GlWidget::drawTranslationMesh_1(ModelBuffer* mb, QMatrix4x4 scaleM, QMatrix
 	m_program->disableAttributeArray(2);
 }
 
-void GlWidget::renderTranslationMesh_1(TriangleMesh mesh, int id, Vectorf3 direction, QMatrix4x4 scaleM, QMatrix4x4 translateM)
+void GlWidget::RenderTranMeshCase(TriangleMesh mesh, int id, Vectorf3 direction, QMatrix4x4 scaleM, QMatrix4x4 translateM)
 {
 	stl_facet f;
 	glLoadName(id);
@@ -2243,33 +2193,8 @@ void GlWidget::renderTranslationMesh_1(TriangleMesh mesh, int id, Vectorf3 direc
 	glEnd();
 }
 
-void GlWidget::updateTranslationID()
-{
-	int ids = m_model->objects.size() * InstanceNum;
-	//translation
-	translateMesh_X->id = ids;
-
-	translateMesh_Y->id = ids + 1;
-
-	translateMesh_Z->id = ids + 2;
-
-	//scale
-	scaleMesh_X->id = ids + 3;
-
-	scaleMesh_Y->id = ids + 4;
-
-	scaleMesh_Z->id = ids + 5;
-
-	//rotate
-	rotateMesh_X->id = ids + 6;
-
-	rotateMesh_Y->id = ids + 7;
-
-	rotateMesh_Z->id = ids + 8;
-}
-
 //传入缩放的比例值
-void GlWidget::scaleValueChange(double x, double y, double z, bool back)
+void GlWidget::ScaleValueChange(double x, double y, double z, bool back)
 {
 	if (x != 0) m_selInstance->scaling_vector.x += x;
 	if (y != 0) m_selInstance->scaling_vector.y += y;
@@ -2297,7 +2222,7 @@ void GlWidget::rotateValueChange(double angle, int x, int y, int z, bool back)
 }
 
 //传入移动的距离数值
-void GlWidget::offsetValueChange(double x, double y, double z, bool back)
+void GlWidget::OffsetValueChange(double x, double y, double z, bool back)
 {
 	if (x != 0)m_selInstance->offset.x += x;
 	if (y != 0)m_selInstance->offset.y += y;
@@ -2320,7 +2245,7 @@ void GlWidget::slot_delSelectIntance()
 	UpdateConfine();
 
 	m_selInstance = nullptr;
-	selectID = -1;
+	selectID = SelInvalidID;
 }
 
 bool GlWidget::DelSelectSupport()
@@ -2328,7 +2253,7 @@ bool GlWidget::DelSelectSupport()
 	if (m_selInstance == nullptr)
 		return false;
 
-	if (dlprint->delete_tree_support(selectID)) {
+	if (m_dlprint->delete_tree_support(selectID)) {
 		//支撑数据删除成功同时删除支撑缓存区
 		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
 			if ((*sb)->id == selectID) {
@@ -2347,9 +2272,9 @@ void GlWidget::GenSelInstanceSupport(QProgressBar* progress)
 		return;
 
 	//支撑数值存入treeSupports
-	dlprint->insertSupports(selectID, dlprint->generate_support(selectID, &find_model(selectID), progress));
+	m_dlprint->insertSupports(selectID, m_dlprint->generate_support(selectID, &FindModel(selectID), progress));
 	//渲染支撑
-	initTreeSupport_id(selectID, progress);
+	InitTreeSupportID(selectID, progress);
 }
 
 void GlWidget::slot_dlprinterChange(QString name)
@@ -2369,11 +2294,11 @@ void GlWidget::slot_dlprinterChange(QString name)
 void GlWidget::UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress)
 {
 	//从支撑编辑里得到，只有支撑点
-	new_sup->generate_tree_support(find_model(selectID), dlprint->config.leaf_num
-		, dlprint->config.threads, progress, dlprint->config.support_top_height);
+	new_sup->generate_tree_support(FindModel(selectID), m_dlprint->m_config->leaf_num
+		, m_dlprint->m_config->threads, progress, m_dlprint->m_config->support_top_height);
 
-	dlprint->insertSupports(selectID, new_sup);
-	initTreeSupport_id(selectID, progress);
+	m_dlprint->insertSupports(selectID, new_sup);
+	InitTreeSupportID(selectID, progress);
 }
 
 void GlWidget::AddModelInstance(size_t id)

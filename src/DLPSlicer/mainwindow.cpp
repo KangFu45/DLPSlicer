@@ -13,6 +13,8 @@
 
 #include <quazip/JlCompress.h>
 
+#include "PreviewDialog.h"
+#include "SetupDialog.h"
 #include "IO.hpp"
 #include "tool.h"
 
@@ -123,20 +125,24 @@ AboutDialog::~AboutDialog()
 MainWindow::MainWindow(QWidget* parent)
 	: QMainWindow(parent)
 {
-	initDlprinter();
-	m_dlprint = new DLPrint(m_model);
-	initSetupDialog();
-	glwidget = new GlWidget(m_model, m_dlprint);
-	setCentralWidget(glwidget);//要先于中央界面上button初始化
-	initAction();
+	InitDlprinter();
+
+	m_config = new FKConfig;
+	SetupDialog setup(m_config);
+	setup.slot_writeConfig();
+
+	m_dlprint = new DLPrint(m_model, m_config);
+	m_glwidget = new GlWidget(m_model, m_dlprint);
+	setCentralWidget(m_glwidget);//要先于中央界面上button初始化
+	InitAction();
 	m_centerTopWidget = std::unique_ptr<CenterTopWidget>(new CenterTopWidget(this));
 
-	connect(glwidget, &GlWidget::sig_modelSelect, this, &MainWindow::slot_modelSelect);
-	connect(glwidget, &GlWidget::sig_offsetChange, this, &MainWindow::slot_offsetChange);
-	connect(glwidget, &GlWidget::sig_rotateChange, this, &MainWindow::slot_rotateChange);
-	connect(glwidget, &GlWidget::sig_scaleChange, this, &MainWindow::slot_scaleChange);
+	connect(m_glwidget, &GlWidget::sig_modelSelect, this, &MainWindow::slot_modelSelect);
+	connect(m_glwidget, &GlWidget::sig_offsetChange, this, &MainWindow::slot_offsetChange);
+	connect(m_glwidget, &GlWidget::sig_rotateChange, this, &MainWindow::slot_rotateChange);
+	connect(m_glwidget, &GlWidget::sig_scaleChange, this, &MainWindow::slot_scaleChange);
 
-	connect(m_centerTopWidget->m_printerCombo, SIGNAL(currentIndexChanged(QString)), glwidget, SLOT(slot_dlprinterChange(QString)));
+	connect(m_centerTopWidget->m_printerCombo, SIGNAL(currentIndexChanged(QString)), m_glwidget, SLOT(slot_dlprinterChange(QString)));
 
 	setAcceptDrops(true);
 	setWindowTitle("DLPSlicer");
@@ -146,10 +152,11 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-
+	//delete m_centerTopWidget.get();
+	//delete m_glwidget;
 }
 
-QString MainWindow::readStlTxt()
+QString MainWindow::ReadStlTxt()
 {
 	QFile dir(e_setting.ModelFile.c_str());
 	if (dir.exists()) {
@@ -163,49 +170,39 @@ QString MainWindow::readStlTxt()
 		return "";
 }
 
-void MainWindow::stroyStlTxt(QString stl)
+void MainWindow::StroyStlTxt(QString stl)
 {
-	QSettings* writeini = new QSettings(e_setting.ModelFile.c_str(), QSettings::IniFormat);
-	writeini->clear();
-	writeini->setValue("/modelPath/path", stl);
-	delete writeini;
+	QSettings writeini(e_setting.ModelFile.c_str(), QSettings::IniFormat);
+	writeini.clear();
+	writeini.setValue("/modelPath/path", stl);
 }
 
-void MainWindow::openStl()
+void MainWindow::slot_openStl()
 {
  	m_centerTopWidget->CenterButtonPush(OPENBTN);
 
 	QString temp, path;
-	path = readStlTxt();
+	path = ReadStlTxt();
 	int a = path.lastIndexOf("/");
 	QString s = path.left(a);
 	temp = QFileDialog::getOpenFileName(this, QStringLiteral("选择需要打开的文件"), s, "*.stl *.sm *.obj");
 
-	int format = -1;
-	if(temp.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0)
-		format = stl;
-	else if (temp.right(4).indexOf(".obj", 0, Qt::CaseInsensitive) >= 0)
-		format = obj;
-	else if (temp.right(4).indexOf(".amf", 0, Qt::CaseInsensitive) >= 0)
-		format = amf;
-
-	if(format>=0){
-		stroyStlTxt(temp);
+	if(temp.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0){
+		StroyStlTxt(temp);
 
 		m_centerTopWidget->showProgress(OPENBTN);
 		qDebug() << temp;
 		std::string file = temp.toStdString();
 		m_centerTopWidget->P(20);
-		size_t id = m_model->load_model(file, format);
+		size_t id = m_model->load_model(file);
 		m_centerTopWidget->P(60);
-		glwidget->AddModelInstance(id);
+		m_glwidget->AddModelInstance(id);
 		m_centerTopWidget->P(100);
 		m_centerTopWidget->hideProgress();
-		glwidget->UpdateConfine();
-		glwidget->updateTranslationID();
+		m_glwidget->UpdateConfine();
 	}
 	else if (temp.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0) 
-		showPreviewWidget1(temp);
+		ShowPreviewWidget(temp);
 
 	m_centerTopWidget->CenterButtonPush(OPENBTN);
 }
@@ -213,10 +210,10 @@ void MainWindow::openStl()
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
 	if (event->key() == Qt::Key_Delete) {
-		glwidget->slot_delSelectIntance();
+		m_glwidget->slot_delSelectIntance();
 	}
 	else if (event->key() == Qt::Key_Return) {
-		glwidget->AddNewSupportPoint();
+		m_glwidget->AddNewSupportPoint();
 	}
 }
 
@@ -239,37 +236,21 @@ void MainWindow::dropEvent(QDropEvent *event)
 
 	//打开stl文件
 	QString fileName = urls.first().toLocalFile();
-	int format = -1;
-	if (fileName.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0)
-		format = stl;
-	else if (fileName.right(4).indexOf(".obj", 0, Qt::CaseInsensitive) >= 0)
-		format = obj;
-	else if (fileName.right(4).indexOf(".amf", 0, Qt::CaseInsensitive) >= 0)
-		format = amf;
-
-	if (format >= 0) {
-		stroyStlTxt(fileName);
+	if (fileName.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0){
+		StroyStlTxt(fileName);
 
 		m_centerTopWidget->showProgress(OPENBTN);
 		std::string file = fileName.toStdString();
 		m_centerTopWidget->P(20);
-		size_t id = m_model->load_model(file, format);
+		size_t id = m_model->load_model(file);
 		m_centerTopWidget->P(60);
-		glwidget->AddModelInstance(id);
+		m_glwidget->AddModelInstance(id);
 		m_centerTopWidget->P(100);
 		m_centerTopWidget->hideProgress();
-		glwidget->UpdateConfine();
-
-		glwidget->updateTranslationID();
+		m_glwidget->UpdateConfine();
 	}
-	else if (fileName.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0) {
-		showPreviewWidget1(fileName);
-	}
-}
-
-void MainWindow::_exit()
-{
-	exit(0);
+	else if (fileName.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0)
+		ShowPreviewWidget(fileName);
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event)
@@ -277,28 +258,28 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 	m_centerTopWidget->resize(event->size());
 }
 
-void MainWindow::initAction()
+void MainWindow::InitAction()
 {
 	//“文件”主菜单
 	QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("文件(F)"));
 
 	QAction* newAct = new QAction(QStringLiteral("新建项目"), this);
 	fileMenu->addAction(newAct);
-	connect(newAct, SIGNAL(triggered()), this, SLOT(newJob()));
+	connect(newAct, SIGNAL(triggered()), this, SLOT(slot_newJob()));
 
 	QAction* openAct = new QAction(QStringLiteral("打开文件"), this);
 	fileMenu->addAction(openAct);
-	connect(openAct, SIGNAL(triggered()), this, SLOT(openStl()));
+	connect(openAct, SIGNAL(triggered()), this, SLOT(slot_openStl()));
 
 	QAction* deleteAct = new QAction(QStringLiteral("删除模型"), this);
 	fileMenu->addAction(deleteAct);
-	connect(deleteAct, SIGNAL(triggered()), glwidget, SLOT(slot_delSelectIntance()));
+	connect(deleteAct, SIGNAL(triggered()), m_glwidget, SLOT(slot_delSelectIntance()));
 
 	fileMenu->addSeparator();
 
 	QAction* exitAct = new QAction(QStringLiteral("退出"), this);
 	fileMenu->addAction(exitAct);
-	connect(exitAct, SIGNAL(triggered()), this, SLOT(_exit()));
+	connect(exitAct, SIGNAL(triggered()), this, SLOT(slot_exit()));
 
 	//“编辑”主菜单
 	QMenu* editMenu = menuBar()->addMenu(QStringLiteral("编辑(E)"));
@@ -311,22 +292,22 @@ void MainWindow::initAction()
 
 	QAction* autoAct = new QAction(QStringLiteral("自动排列"), this);
 	editMenu->addAction(autoAct);
-	connect(autoAct, SIGNAL(triggered()), this, SLOT(autoArrange()));
+	connect(autoAct, SIGNAL(triggered()), this, SLOT(slot_autoArrange()));
 
 	QAction*saveViewAct = new QAction(QStringLiteral("截图"), this);
 	editMenu->addAction(saveViewAct);
-	connect(saveViewAct, SIGNAL(triggered()), this, SLOT(saveView()));
+	connect(saveViewAct, SIGNAL(triggered()), this, SLOT(slot_saveView()));
 
 	QAction* duplicateAct = new QAction(QStringLiteral("复制"), this);
 	editMenu->addAction(duplicateAct);
-	connect(duplicateAct, SIGNAL(triggered()), this, SLOT(_duplicate()));
+	connect(duplicateAct, SIGNAL(triggered()), this, SLOT(slot_duplicate()));
 
 	//“支撑”主菜单
 	QMenu* supportMenu = menuBar()->addMenu(QStringLiteral("支撑(S)"));
 
 	QAction* supportAct = new QAction(QStringLiteral("支撑"), this);
 	supportMenu->addAction(supportAct);
-	connect(supportAct, SIGNAL(triggered()), this, SLOT(generateSupport()));
+	connect(supportAct, SIGNAL(triggered()), this, SLOT(slot_generateSupport()));
 
 	QAction* deleteSupportAct = new QAction(QStringLiteral("删除支撑"));
 	supportMenu->addAction(deleteSupportAct);
@@ -335,170 +316,159 @@ void MainWindow::initAction()
 
 	QAction* supportAllAct = new QAction(QStringLiteral("支撑所有模型"));
 	supportMenu->addAction(supportAllAct);
-	connect(supportAllAct, SIGNAL(triggered()), this, SLOT(generateAllSupport()));
-
-	QAction* deleteAllSupportAct = new QAction(QStringLiteral("删除所有支撑"));
-	supportMenu->addAction(deleteAllSupportAct);
-	connect(deleteAllSupportAct, SIGNAL(triggered()), this, SLOT(deleteAllSupport()));
+	connect(supportAllAct, SIGNAL(triggered()), this, SLOT(slot_generateAllSupport()));
 
     //“视图”主菜单
 	QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图(V)"));
 
 	QAction* defaultAct = new QAction(QIcon(":/icon/images/iso.png"), QStringLiteral("默认视图"), this);
 	viewMenu->addAction(defaultAct);
-	connect(defaultAct, SIGNAL(triggered()), this, SLOT(defaultView()));
+	connect(defaultAct, SIGNAL(triggered()), this, SLOT(slot_defaultView()));
 
 	QAction* overlookAct = new QAction(QIcon(":/icon/images/top.png"),QStringLiteral("俯视图"), this);
 	viewMenu->addAction(overlookAct);
-	connect(overlookAct, SIGNAL(triggered()), this, SLOT(overlookView()));
+	connect(overlookAct, SIGNAL(triggered()), this, SLOT(slot_overlookView()));
 
 	QAction* leftAct = new QAction(QIcon(":/icon/images/left.png"), QStringLiteral("左视图"), this);
 	viewMenu->addAction(leftAct);
-	connect(leftAct, SIGNAL(triggered()), this, SLOT(leftView()));
+	connect(leftAct, SIGNAL(triggered()), this, SLOT(slot_leftView()));
 
 	QAction* rightAct = new QAction(QIcon(":/icon/images/right.png"), QStringLiteral("右视图"), this);
 	viewMenu->addAction(rightAct);
-	connect(rightAct, SIGNAL(triggered()), this, SLOT(rightView()));
+	connect(rightAct, SIGNAL(triggered()), this, SLOT(slot_rightView()));
 
 	QAction* frontAct = new QAction(QIcon(":/icon/images/front.png"), QStringLiteral("前视图"), this);
 	viewMenu->addAction(frontAct);
-	connect(frontAct, SIGNAL(triggered()), this, SLOT(frontView()));
+	connect(frontAct, SIGNAL(triggered()), this, SLOT(slot_frontView()));
 
 	QAction* behindAct = new QAction(QIcon(":/icon/images/back.png"), QStringLiteral("后视图"), this);
 	viewMenu->addAction(behindAct);
-	connect(behindAct, SIGNAL(triggered()), this, SLOT(behindView()));
+	connect(behindAct, SIGNAL(triggered()), this, SLOT(slot_behindView()));
 
 	viewMenu->addSeparator();
 
 	QAction* persperctiveAct = new QAction(QStringLiteral("透视投影"), this);
 	viewMenu->addAction(persperctiveAct);
-	connect(persperctiveAct, SIGNAL(triggered()), this, SLOT(setPersperctive()));
+	connect(persperctiveAct, SIGNAL(triggered()), this, SLOT(slot_setPersperctive()));
 
 	QAction* orthogonalityAct = new QAction(QStringLiteral("正交投影"), this);
 	viewMenu->addAction(orthogonalityAct);
-	connect(orthogonalityAct, SIGNAL(triggered()), this, SLOT(setOrthogonality()));
+	connect(orthogonalityAct, SIGNAL(triggered()), this, SLOT(slot_setOrthogonality()));
 
 	//“帮助”主菜单
 	QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("帮助(H)"));
 
 	QAction* messageAct = new QAction(QStringLiteral("版本信息"), this);
 	helpMenu->addAction(messageAct);
-	connect(messageAct, SIGNAL(triggered()), this, SLOT(showAboutDialog()));
+	connect(messageAct, SIGNAL(triggered()), this, SLOT(slot_showAboutDialog()));
 }
 
-void MainWindow::ZPosZero()
+void MainWindow::slot_ZPosZero()
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-	TriangleMesh mesh = glwidget->m_selInstance->get_object()->volumes[0]->mesh;
-	glwidget->m_selInstance->transform_mesh(&mesh);
+	TriangleMesh mesh = m_glwidget->m_selInstance->get_object()->volumes[0]->mesh;
+	m_glwidget->m_selInstance->transform_mesh(&mesh);
 	BoundingBoxf3 box = mesh.bounding_box();
 
-	glwidget->DelSelectSupport();
-	glwidget->offsetValueChange(0, 0, -box.min.z);
+	m_glwidget->DelSelectSupport();
+	m_glwidget->OffsetValueChange(0, 0, -box.min.z);
 }
 
-void MainWindow::setOffsetValue(ModelInstance* instance)
+void MainWindow::SetOffsetValue(ModelInstance* instance)
 {
 	m_centerTopWidget->x_offset_spin->setValue(instance->offset.x);
 	m_centerTopWidget->y_offset_spin->setValue(instance->offset.y);
 	m_centerTopWidget->z_offset_spin->setValue(instance->z_translation);
 }
 
-void MainWindow::AddOffsetValue(double x, double y, double z)
+void MainWindow::slot_xoffsetValueChange(double value)
 {
-	m_centerTopWidget->x_offset_spin->setValue(m_centerTopWidget->x_offset_spin->value() + x);
-	m_centerTopWidget->y_offset_spin->setValue(m_centerTopWidget->y_offset_spin->value() + y);
-	m_centerTopWidget->z_offset_spin->setValue(m_centerTopWidget->z_offset_spin->value() + z);
-}
-
-void MainWindow::xoffsetValueChange(double value)
-{
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-	double x = value - glwidget->m_selInstance->offset.x;
+	double x = value - m_glwidget->m_selInstance->offset.x;
 	if (fabs(x) >= 0.1) {
-		glwidget->DelSelectSupport();
-		glwidget->offsetValueChange(x, 0, 0);
+		m_glwidget->DelSelectSupport();
+		m_glwidget->OffsetValueChange(x, 0, 0);
 	}
 }
 
-void MainWindow::yoffsetValueChange(double value)
+void MainWindow::slot_yoffsetValueChange(double value)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-	double y = value - glwidget->m_selInstance->offset.y;
+	double y = value - m_glwidget->m_selInstance->offset.y;
 	if (fabs(y) >= 0.1) {
-		glwidget->DelSelectSupport();
-		glwidget->offsetValueChange(0, y, 0);
+		m_glwidget->DelSelectSupport();
+		m_glwidget->OffsetValueChange(0, y, 0);
 	}
 }
 
-void MainWindow::zoffsetValueChange(double value)
+void MainWindow::slot_zoffsetValueChange(double value)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-	double z = value - glwidget->m_selInstance->z_translation;
+	double z = value - m_glwidget->m_selInstance->z_translation;
 	if (fabs(z) >= 0.1) {
-		glwidget->DelSelectSupport();
-		glwidget->offsetValueChange(z, 0, 0);
+		m_glwidget->DelSelectSupport();
+		m_glwidget->OffsetValueChange(z, 0, 0);
 	}
 }
 
-void MainWindow::setRotateValue(ModelInstance* instance)
+void MainWindow::SetRotateValue(ModelInstance* instance)
 {
 	//m_centerTopWidget->x_rotate_spin->setValue(m_centerTopWidget->x_rotate);
 	//m_centerTopWidget->y_rotate_spin->setValue(m_centerTopWidget->y_rotate);
 	//m_centerTopWidget->z_rotate_spin->setValue(m_centerTopWidget->z_rotate);
 }
 
-void MainWindow::xRotateValueChange(double angle)
+void MainWindow::slot_xRotateValueChange(double angle)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-		double x = angle - m_centerTopWidget->x_rotate;
-		
-		if (angle == 360 || angle == -360){
-			m_centerTopWidget->x_rotate = 0;
-			m_centerTopWidget->x_rotate_spin->setValue(0);
-		}
-		else
-			m_centerTopWidget->x_rotate = angle;
+	double x = angle - m_centerTopWidget->x_rotate;
 
-		if (fabs(x) > 0.01) {
-			glwidget->DelSelectSupport();
-			glwidget->rotateValueChange(x, 1, 0, 0);
-		}
+	if (angle == 360 || angle == -360) {
+		m_centerTopWidget->x_rotate = 0;
+		m_centerTopWidget->x_rotate_spin->setValue(0);
+	}
+	else
+		m_centerTopWidget->x_rotate = angle;
+
+	if (fabs(x) > 0.01) {
+		m_glwidget->DelSelectSupport();
+		m_glwidget->rotateValueChange(x, 1, 0, 0);
+	}
 }
 
-void MainWindow::yRotateValueChange(double angle)
+void MainWindow::slot_yRotateValueChange(double angle)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-		double y = angle - m_centerTopWidget->y_rotate;
-		
-		if (angle == 360 || angle == -360){
-			m_centerTopWidget->y_rotate = 0;
-			m_centerTopWidget->y_rotate_spin->setValue(0);
-		}
-		else
-			m_centerTopWidget->y_rotate = angle;
+	double y = angle - m_centerTopWidget->y_rotate;
 
-		if (fabs(y) > 0.01) {
-			glwidget->DelSelectSupport();
-			glwidget->rotateValueChange(y, 0, 1, 0);
-		}
+	if (angle == 360 || angle == -360) {
+		m_centerTopWidget->y_rotate = 0;
+		m_centerTopWidget->y_rotate_spin->setValue(0);
+	}
+	else
+		m_centerTopWidget->y_rotate = angle;
+
+	if (fabs(y) > 0.01) {
+		m_glwidget->DelSelectSupport();
+		m_glwidget->rotateValueChange(y, 0, 1, 0);
+	}
 }
 
-void MainWindow::zRotateValueChange(double angle)
+void MainWindow::slot_zRotateValueChange(double angle)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
 	double z = angle - m_centerTopWidget->z_rotate;
@@ -511,19 +481,19 @@ void MainWindow::zRotateValueChange(double angle)
 		m_centerTopWidget->z_rotate = angle;
 
 	if (fabs(z) > 0.01) {
-		glwidget->DelSelectSupport();
-		glwidget->rotateValueChange(z, 0, 0, 1);
+		m_glwidget->DelSelectSupport();
+		m_glwidget->rotateValueChange(z, 0, 0, 1);
 	}
 }
 
-void MainWindow::setScaleValue(ModelInstance* instance)
+void MainWindow::SetScaleValue(ModelInstance* instance)
 {
 	m_centerTopWidget->x_scale_spin->setValue(instance->scaling_vector.x * 100);
 	m_centerTopWidget->y_scale_spin->setValue(instance->scaling_vector.y * 100);
 	m_centerTopWidget->z_scale_spin->setValue(instance->scaling_vector.z * 100);
 }
 
-void MainWindow::setSizeValue(ModelInstance* instance)
+void MainWindow::SetSizeValue(ModelInstance* instance)
 {
 	//得到实例的包围盒
 	TriangleMesh mesh = instance->get_object()->volumes[0]->mesh;
@@ -535,76 +505,67 @@ void MainWindow::setSizeValue(ModelInstance* instance)
 	m_centerTopWidget->z_size_label->setValue(box.size().z);
 }
 
-void MainWindow::xScaleValueChange(double value)
+void MainWindow::slot_xScaleValueChange(double value)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-	double x = value / 100 - glwidget->m_selInstance->scaling_vector.x;
+	double x = value / 100 - m_glwidget->m_selInstance->scaling_vector.x;
 	if (fabs(x) > 0.01) {
-		glwidget->DelSelectSupport();
+		m_glwidget->DelSelectSupport();
 		if (m_centerTopWidget->isUnityScale())
-			glwidget->scaleValueChange(x, 0, 0);
+			m_glwidget->ScaleValueChange(x, 0, 0);
 		else {
-			double y = glwidget->m_selInstance->scaling_vector.y * (x / glwidget->m_selInstance->scaling_vector.x);
-			double z = glwidget->m_selInstance->scaling_vector.z * (x / glwidget->m_selInstance->scaling_vector.x);
-			glwidget->scaleValueChange(x, y, z);
+			double y = m_glwidget->m_selInstance->scaling_vector.y * (x / m_glwidget->m_selInstance->scaling_vector.x);
+			double z = m_glwidget->m_selInstance->scaling_vector.z * (x / m_glwidget->m_selInstance->scaling_vector.x);
+			m_glwidget->ScaleValueChange(x, y, z);
 		}
 	}
 }
 
-void MainWindow::yScaleValueChange(double value)
+void MainWindow::slot_yScaleValueChange(double value)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-	double y = value / 100 - glwidget->m_selInstance->scaling_vector.y;
+	double y = value / 100 - m_glwidget->m_selInstance->scaling_vector.y;
 	if (fabs(y) > 0.01) {
-		glwidget->DelSelectSupport();
+		m_glwidget->DelSelectSupport();
 		if (m_centerTopWidget->isUnityScale())
-			glwidget->scaleValueChange(0, y, 0);
+			m_glwidget->ScaleValueChange(0, y, 0);
 		else {
-			double x = glwidget->m_selInstance->scaling_vector.x * (y / glwidget->m_selInstance->scaling_vector.y);
-			double z = glwidget->m_selInstance->scaling_vector.z * (y / glwidget->m_selInstance->scaling_vector.y);
-			glwidget->scaleValueChange(x, y, z);
+			double x = m_glwidget->m_selInstance->scaling_vector.x * (y / m_glwidget->m_selInstance->scaling_vector.y);
+			double z = m_glwidget->m_selInstance->scaling_vector.z * (y / m_glwidget->m_selInstance->scaling_vector.y);
+			m_glwidget->ScaleValueChange(x, y, z);
 		}
 	}
 }
 
-void MainWindow::zScaleValueChange(double value)
+void MainWindow::slot_zScaleValueChange(double value)
 {
-	if (glwidget->m_selInstance == nullptr)
+	if (m_glwidget->m_selInstance == nullptr)
 		return;
 
-	double z = value / 100 - glwidget->m_selInstance->scaling_vector.z;
+	double z = value / 100 - m_glwidget->m_selInstance->scaling_vector.z;
 	if (fabs(z) > 0.01) {
-		glwidget->DelSelectSupport();
+		m_glwidget->DelSelectSupport();
 		if (m_centerTopWidget->isUnityScale())
-			glwidget->scaleValueChange(0, 0, z);
+			m_glwidget->ScaleValueChange(0, 0, z);
 		else {
-			double x = glwidget->m_selInstance->scaling_vector.x * (z / glwidget->m_selInstance->scaling_vector.z);
-			double y = glwidget->m_selInstance->scaling_vector.y * (z / glwidget->m_selInstance->scaling_vector.z);
-			glwidget->scaleValueChange(x, y, z);
+			double x = m_glwidget->m_selInstance->scaling_vector.x * (z / m_glwidget->m_selInstance->scaling_vector.z);
+			double y = m_glwidget->m_selInstance->scaling_vector.y * (z / m_glwidget->m_selInstance->scaling_vector.z);
+			m_glwidget->ScaleValueChange(x, y, z);
 		}
 	}
 }
 
-void MainWindow::newJob()//新建项目
+void MainWindow::slot_newJob()//新建项目
 {
 	m_model->clear_materials();
 	m_model->clear_objects();
 	m_dlprint->delete_all_support();
-	glwidget->clearModelBuffer();
-	glwidget->clearSupportBuffer();
-}
-
-void MainWindow::deleteAllSupport()
-{
-	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
-		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-			m_dlprint->delete_tree_support(m_model->find_id(*i));
-		}
-	}
+	m_glwidget->ClearModelBuffer();
+	m_glwidget->ClearSupportBuffer();
 }
 
 void MainWindow::slot_modelSelect()
@@ -615,11 +576,11 @@ void MainWindow::slot_modelSelect()
 	//slot_scaleChange();
 }
 
-void MainWindow::generateSupport()
+void MainWindow::slot_generateSupport()
 {
 	m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
 
-	if (glwidget->m_selInstance == nullptr) {
+	if (m_glwidget->m_selInstance == nullptr) {
 		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("请选中一个模型。"));
 		m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
 		return;
@@ -629,17 +590,17 @@ void MainWindow::generateSupport()
 	m_centerTopWidget->P(10);
 
 	//删除选中支撑，提升一定高度
-	if (!glwidget->DelSelectSupport())
-		glwidget->offsetValueChange(0, 0, m_dlprint->config.model_lift);
+	if (!m_glwidget->DelSelectSupport())
+		m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
 
-	glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
+	m_glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
 	m_centerTopWidget->P(100);
 	m_centerTopWidget->hideProgress();
 
 	m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
 }
 
-void MainWindow::generateAllSupport()
+void MainWindow::slot_generateAllSupport()
 {
 	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
@@ -648,10 +609,10 @@ void MainWindow::generateAllSupport()
 			m_centerTopWidget->showProgress(SUPPORTBTN);
 			m_centerTopWidget->P(10);
 
-			if (!glwidget->DelSelectSupport())
-				glwidget->offsetValueChange(0, 0, m_dlprint->config.model_lift);
+			if (!m_glwidget->DelSelectSupport())
+				m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
 
-			glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
+			m_glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
 			m_centerTopWidget->P(100);
 			m_centerTopWidget->hideProgress();
 
@@ -659,76 +620,35 @@ void MainWindow::generateAllSupport()
 	}
 }
 
-void MainWindow::DlpPrintLoadSetup()
-{
-	DLPrintConfig* config = &m_dlprint->config;
-	config->normIlluTime.setInt(setupDialog->normIlluSpin->value());
-	config->norm_inttersity.setInt(setupDialog->norm_inttersity_spin->value());
-	config->overIlluTime = setupDialog->overIlluSpin->value();
-	config->overLayer.setInt(setupDialog->overLayerSpin->value());
-	config->over_inttersity.setInt(setupDialog->over_inttersity_spin->value());
-
-	config->support_top_height = setupDialog->top_height_spin->value();
-	config->support_top_radius = setupDialog->top_radius_spin->value();
-	config->support_radius = setupDialog->support_radius_spin->value();
-	config->support_bottom_radius = setupDialog->bottom_radius_spin->value();
-	config->space.setInt(setupDialog->support_space_spin->value());
-	config->angle.setInt(setupDialog->support_angle_spin->value());
-	config->leaf_num = setupDialog->leaf_num_spin->value();
-	config->model_lift = setupDialog->model_lift_spin->value();
-
-	config->hollow_out = int(setupDialog->hollow_out_box->isChecked());
-
-	if (setupDialog->fill_pattern_combo->currentIndex() == 0)
-		config->fill_pattern.value = ipHoneycomb;
-	else if (setupDialog->fill_pattern_combo->currentIndex() == 1)
-		config->fill_pattern.value = ip3DSupport;
-
-	config->wall_thickness = setupDialog->wall_thickness_spin->value();
-	config->fill_density = setupDialog->density_spin->value();
-
-	if (setupDialog->thicknessCombo->currentText() == "0.05mm")
-		config->layer_height = 0.05;
-	else if (setupDialog->thicknessCombo->currentText() == "0.1mm")
-		config->layer_height = 0.1;
-	else if (setupDialog->thicknessCombo->currentText() == "0.025mm")
-		config->layer_height = 0.025;
-
-	config->raft_layers.setInt(setupDialog->raftSpin->value());
-	config->raft_offset.setInt(setupDialog->raftOffsetSpin->value());
-	config->arrange_space = setupDialog->arrange_space_spin->value();
-	config->threads.setInt(setupDialog->threadSpin->value());
-}
-
-void MainWindow::saveView()
+void MainWindow::slot_saveView()
 {
 	QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
 	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), desktop, "histogram file(*.bmp)");
 	if (path.size() > 0) {
 		QByteArray a = path.toLocal8Bit();
-		char* _path = a.data();
-		glwidget->saveOneView(_path);
+		char* file = a.data();
+		m_glwidget->SaveOneView(file);
 	}
 }
 
-void MainWindow::SupportEdit()
+void MainWindow::slot_supportEdit()
 {
 	if (!m_centerTopWidget->m_supportEditBtn->c_isChecked())
 	{
 		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
-		glwidget->SupportEditChange();
+		m_glwidget->SupportEditChange();
 	}
 	else {
 		//-----------退出支撑编辑模式，更新支撑点------------
 		m_centerTopWidget->showProgress(SUPPORTEDITBTN);
-		glwidget->SupportEditChange(m_centerTopWidget->m_progressBar);
+		m_glwidget->SupportEditChange(m_centerTopWidget->m_progressBar);
 		m_centerTopWidget->hideProgress();
 
 		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
 	}
 }
 
-void MainWindow::slice()
+void MainWindow::slot_slice()
 {
 	m_centerTopWidget->CenterButtonPush(SLICEBTN);
 
@@ -737,7 +657,7 @@ void MainWindow::slice()
 		return;
 	}
 
-	if (!glwidget->CheckConfine()) {
+	if (!m_glwidget->CheckConfine()) {
 		QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
 		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), desktop, "histogram file(*.sm)");
 		if (path.size() > 0) {
@@ -754,14 +674,14 @@ void MainWindow::slice()
 			QString view(e_setting.ZipTempPath.c_str());
 			view.append("/A_Front.bmp");
 			char* _path = view.toLocal8Bit().data();
-			glwidget->saveOneView(_path);
+			m_glwidget->SaveOneView(_path);
 			
 			m_centerTopWidget->showProgress(SLICEBTN);
 			
 			m_centerTopWidget->P(10);
-			generate_all_inside_support();
+			GenAllInsideSupport();
 			m_centerTopWidget->P(20);
-			m_dlprint->slice(glwidget->return_support_model(), m_centerTopWidget->m_progressBar);
+			m_dlprint->slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
 			m_centerTopWidget->P(98);
 			m_dlprint->savePNG(e_setting.ZipTempPath.c_str());
 			m_centerTopWidget->P(99);
@@ -776,7 +696,7 @@ void MainWindow::slice()
 			switch (QMessageBox::question(this, QStringLiteral("提示"), QStringLiteral("切片完成，是否预览切片文件？"), QMessageBox::Cancel, QMessageBox::Ok))
 			{
 			case QMessageBox::Ok:
-				showPreviewWidget1(path);
+				ShowPreviewWidget(path);
 				break;
 			case QMessageBox::Cancel:
 				break;
@@ -793,7 +713,7 @@ void MainWindow::slice()
 	m_centerTopWidget->CenterButtonPush(SLICEBTN);
 }
 
-void MainWindow::showPreviewWidget1(QString zipPath)
+void MainWindow::ShowPreviewWidget(QString zipPath)
 {
 	//解压zip包到用户目录下
 	clearDir(e_setting.ZipTempPath.c_str());
@@ -804,14 +724,12 @@ void MainWindow::showPreviewWidget1(QString zipPath)
 			exit(2);
 	}
 
-	if (extractZipPath(zipPath)) {
+	if (ExtractZipPath(zipPath)) {
 		JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
-	
-		previewDialog = new PreviewDialog();
-		if (previewDialog->readIni(e_setting.ZipTempPath.c_str())) {
-			previewDialog->exec();
-			delete previewDialog;
-		}
+
+		PreviewDialog previewDialog;
+		if (previewDialog.readIni(e_setting.ZipTempPath.c_str()))
+			previewDialog.exec();
 	}
 	else {
 		QString text(QStringLiteral("打开文件"));
@@ -821,7 +739,7 @@ void MainWindow::showPreviewWidget1(QString zipPath)
 	}
 }
 
-bool MainWindow::extractZipPath(QString zipPath)
+bool MainWindow::ExtractZipPath(QString zipPath)
 {
 	bool bmpBool = false;
 	bool pngBool = false;
@@ -840,26 +758,13 @@ bool MainWindow::extractZipPath(QString zipPath)
 	return bmpBool && pngBool && iniBool;
 }
 
-void MainWindow::saveModelSupport()
+void MainWindow::slot_showAboutDialog()
 {
-	if (m_model->objects.size() > 0) {
-		QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), desktop, "histogram file(*.stl)");
-		if (!path.isEmpty()) {
-			TriangleMesh mesh = glwidget->saveSupport();
-			m_model->wirteStlBinary(path.toStdString(), mesh);
-		}
-	}
+	AboutDialog aboutDialog;
+	aboutDialog.exec();
 }
 
-void MainWindow::showAboutDialog()
-{
-	aboutDialog = new AboutDialog();
-	aboutDialog->exec();
-	delete aboutDialog;
-}
-
-void MainWindow::autoArrange()
+void MainWindow::slot_autoArrange()
 {
 	double L = double(e_setting.m_printers.begin()->length / 2);
 	double W = double(e_setting.m_printers.begin()->width / 2);
@@ -871,9 +776,9 @@ void MainWindow::autoArrange()
 	box.max.y = W;
 	box.defined = true;
 	//未删除支撑？？？
-	Pointfs positions = m_model->arrange_objects(m_dlprint->config.arrange_space, &box);
+	Pointfs positions = m_model->arrange_objects(m_config->arrange_space, &box);
 
-	glwidget->clearSupportBuffer();
+	m_glwidget->ClearSupportBuffer();
 
 	/*
 	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
@@ -890,7 +795,7 @@ void MainWindow::autoArrange()
 				TreeSupport* s1 = NULL;
 				if (m_dlprint->chilck_tree_support(id, s1)) {
 					s1->support_offset(x, y);
-					glwidget->initTreeSupport_id(id, s1, NULL);
+					glwidget->InitTreeSupportID(id, s1, NULL);
 				}
 			}
 	    }
@@ -899,7 +804,7 @@ void MainWindow::autoArrange()
 	*/
 }
 
-void MainWindow::duplicate(size_t num, bool arrange)
+void MainWindow::Duplicate(size_t num, bool arrange)
 {
 	int distance = 0;
 
@@ -935,9 +840,9 @@ void MainWindow::duplicate(size_t num, bool arrange)
 }
 
 
-void MainWindow::_duplicate()
+void MainWindow::slot_duplicate()
 {
-	if (glwidget->m_selInstance == nullptr) {
+	if (m_glwidget->m_selInstance == nullptr) {
 		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("请选中一个模型进行复制。"));
 		return;
 	}
@@ -945,10 +850,10 @@ void MainWindow::_duplicate()
 	bool ret;
 	int num = QInputDialog::getInt(this, QStringLiteral("复制"), QStringLiteral("请输入复制模型的个数："), 1, 1, 50, 1, &ret);
 	if (ret) 
-		duplicate(num, true);
+		Duplicate(num, true);
 }
 
-void MainWindow::initDlprinter()
+void MainWindow::InitDlprinter()
 {
 	if (QFile(e_setting.DlprinterFile.c_str()).exists()) {
 		QSettings readini(e_setting.DlprinterFile.c_str(), QSettings::IniFormat);
@@ -958,83 +863,75 @@ void MainWindow::initDlprinter()
 	}
 }
 
-void MainWindow::initSetupDialog()
-{
-	setupDialog = new SetupDialog(this);
-	DlpPrintLoadSetup();
-	delete setupDialog;
-}
-
-void MainWindow::showSetupDialog()
+void MainWindow::slot_showSetupDialog()
 {
 	m_centerTopWidget->CenterButtonPush(SETUPBTN);
 
 	if (m_centerTopWidget->m_setupBtn->c_isChecked()) {
-		setupDialog = new SetupDialog(this);
-		setupDialog->exec();
-		delete setupDialog;
+		SetupDialog setupDialog(m_config);
+		setupDialog.exec();
 	}
 
 	m_centerTopWidget->CenterButtonPush(SETUPBTN);
 }
 
-void MainWindow::showOffsetWidget()
+void MainWindow::slot_showOffsetWidget()
 {
 	m_centerTopWidget->CenterButtonPush(OFFSETBTN);
 
-	if (m_centerTopWidget->m_offsetBtn->c_isChecked() && glwidget->m_selInstance != nullptr)
-		setOffsetValue(glwidget->m_selInstance);
+	if (m_centerTopWidget->m_offsetBtn->c_isChecked() && m_glwidget->m_selInstance != nullptr)
+		SetOffsetValue(m_glwidget->m_selInstance);
 }
 
-void MainWindow::showRotateWidget()
+void MainWindow::slot_showRotateWidget()
 {
 	m_centerTopWidget->CenterButtonPush(ROTATEBTN);
 }
 
-void MainWindow::showScaleWidget()
+void MainWindow::slot_showScaleWidget()
 {
 	m_centerTopWidget->CenterButtonPush(SCALEBTN);
 
-	if (m_centerTopWidget->m_scaleBtn->c_isChecked() && glwidget->m_selInstance != nullptr) {
-		setScaleValue(glwidget->m_selInstance);
-		setSizeValue(glwidget->m_selInstance);
+	if (m_centerTopWidget->m_scaleBtn->c_isChecked() && m_glwidget->m_selInstance != nullptr) {
+		SetScaleValue(m_glwidget->m_selInstance);
+		SetSizeValue(m_glwidget->m_selInstance);
 	}
 }
 
-void MainWindow::generate_all_inside_support()
+void MainWindow::GenAllInsideSupport()
 {
 	m_dlprint->delete_all_inside_support();
-	if (m_dlprint->config.hollow_out && m_dlprint->config.fill_pattern == ip3DSupport) {
-		for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
-			size_t a = std::distance(m_model->objects.begin(), o);
-			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-				size_t b = std::distance((*o)->instances.begin(), i);
-				size_t id = a * InstanceNum + b;
-				TriangleMesh mesh((*o)->volumes[0]->mesh);
-				(*i)->transform_mesh(&mesh);
-				m_dlprint->generate_inside_support(id, &mesh);
-			}
-		}
-	}
+	//if (m_config->hollow_out && m_config->fill_pattern == ip3DSupport) {
+	//	for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
+	//		size_t a = std::distance(m_model->objects.begin(), o);
+	//		for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+	//			size_t b = std::distance((*o)->instances.begin(), i);
+	//			size_t id = a * InstanceNum + b;
+	//			TriangleMesh mesh((*o)->volumes[0]->mesh);
+	//			(*i)->transform_mesh(&mesh);
+	//			m_dlprint->generate_inside_support(id, &mesh);
+	//		}
+	//	}
+	//}
 }
 
 void MainWindow::slot_offsetChange()
 {
-	glwidget->DelSelectSupport();
+	m_glwidget->DelSelectSupport();
 	if (!m_centerTopWidget->m_offsetWidget->isHidden())
-		setOffsetValue(glwidget->m_selInstance);
+		SetOffsetValue(m_glwidget->m_selInstance);
 }
 
 void MainWindow::slot_scaleChange()
 {
-	glwidget->DelSelectSupport();
+	m_glwidget->DelSelectSupport();
 	if (!m_centerTopWidget->m_scaleWidget->isHidden())
-		setScaleValue(glwidget->m_selInstance);
+		SetScaleValue(m_glwidget->m_selInstance);
 }
 
 void MainWindow::slot_rotateChange()
 {
-	glwidget->DelSelectSupport();
+	m_glwidget->DelSelectSupport();
 	if (!m_centerTopWidget->m_rotateWidget->isHidden())
-		setRotateValue(glwidget->m_selInstance);
+		SetRotateValue(m_glwidget->m_selInstance);
 }

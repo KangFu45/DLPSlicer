@@ -7,5 +7,6 @@
   <Machine>
     <Number1 name="S250" length="250" width="140" height="300" />
     <Number2 name="S288" length="288" width="162" height="300" />
+    <Number3 name="S100" length="100" width="100" height="100" />
   </Machine>
 </config>

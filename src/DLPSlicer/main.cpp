@@ -246,7 +246,7 @@ int main(int argc, char *argv[])
 	//Setting* m_setting = new Setting((QCoreApplication::applicationDirPath() + "/AppSet.xml").toStdString());
 	//注意使用全局类时线程安全---全局配置类只读
 	//将初始化放在第一次声明时会报错？？？
-	e_setting = *(new Setting((QCoreApplication::applicationDirPath() + "/AppSet.xml").toStdString()));
+	e_setting = *(new Setting((QCoreApplication::applicationDirPath()).toStdString()));
 
 	MainWindow w;
 	w.show();

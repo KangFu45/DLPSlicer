@@ -12,9 +12,14 @@ inline void ifNotExistCreate(const path& _path)
 		create_directory(_path);
 }
 
-Setting::Setting(string filename)
-	:m_XmlConfig(new XmlConfig(filename))
+Setting::Setting(string _appPath)
+	:appPath(_appPath)
 {
+	resourcePath = this->appPath + "/resources";
+	xmlFile = this->resourcePath + "/AppSet.xml";
+	modelPath = this->resourcePath + "/model";
+
+	m_XmlConfig = new XmlConfig(this->xmlFile);
 	string NodePath("App");
 	appName = m_XmlConfig->getString(NodePath + ":Name", "DLPSlicer");
 	appVersion = m_XmlConfig->getString(NodePath + ":Version", "0.0.0v");
@@ -29,7 +34,7 @@ Setting::Setting(string filename)
 		}
 		UserPath = _path.string();
 		m_XmlConfig->set("Path.UserFile:path", UserPath);
-		m_XmlConfig->toXmlFile(filename);//覆盖原xml文件
+		m_XmlConfig->toXmlFile(this->xmlFile);//覆盖原xml文件
 	}
 
 	ZipTempPath = UserPath + "ZipTemp";
