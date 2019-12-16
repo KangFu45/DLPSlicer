@@ -127,7 +127,7 @@ MainWindow::MainWindow(QWidget* parent)
 {
 	InitDlprinter();
 
-	m_config = new FKConfig;
+	m_config = new Config;
 	SetupDialog setup(m_config);
 	setup.slot_writeConfig();
 
@@ -563,7 +563,7 @@ void MainWindow::slot_newJob()//新建项目
 {
 	m_model->clear_materials();
 	m_model->clear_objects();
-	m_dlprint->delete_all_support();
+	m_dlprint->DelAllSupport();
 	m_glwidget->ClearModelBuffer();
 	m_glwidget->ClearSupportBuffer();
 }
@@ -681,9 +681,7 @@ void MainWindow::slot_slice()
 			m_centerTopWidget->P(10);
 			GenAllInsideSupport();
 			m_centerTopWidget->P(20);
-			m_dlprint->slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
-			m_centerTopWidget->P(98);
-			m_dlprint->savePNG(e_setting.ZipTempPath.c_str());
+			m_dlprint->Slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
 			m_centerTopWidget->P(99);
 			JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
 			m_centerTopWidget->P(100);
@@ -900,7 +898,7 @@ void MainWindow::slot_showScaleWidget()
 
 void MainWindow::GenAllInsideSupport()
 {
-	m_dlprint->delete_all_inside_support();
+	//m_dlprint->delete_all_inside_support();
 	//if (m_config->hollow_out && m_config->fill_pattern == ip3DSupport) {
 	//	for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 	//		size_t a = std::distance(m_model->objects.begin(), o);

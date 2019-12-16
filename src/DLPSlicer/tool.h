@@ -105,20 +105,14 @@ namespace Slic3r{
 		normal.z = a1[0] * a2[1] - a1[1] * a2[0];
 	}
 
-	//************************
-	//日期：2017
 	//功能：求出单位圆的点。
-	//参数1：单位圆点的集合。
-	//************************
-	inline void CirclePoints(std::vector<Pointf>& circle,int angle)
+	inline Pointfs CirclePoints(int angle)
 	{
+		Pointfs circle;
 		float factor = 0.5;
-		for (int i = angle; i<376;){
-			float x = sin(PI / 180 * i)*factor;
-			float y = cos(PI / 180 * i)*factor;
-			circle.push_back(Pointf(x, y));
-			i += angle*2;
-		}
+		for (int i = angle; i < 376; i += angle * 2)
+			circle.emplace_back(Pointf(sin(PI / 180 * i) * factor, cos(PI / 180 * i) * factor));
+		return circle;
 	}
 
 	//****************************

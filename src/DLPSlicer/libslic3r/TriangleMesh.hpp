@@ -18,6 +18,7 @@ namespace Slic3r {
 
 class TriangleMesh;
 template <Axis A> class TriangleMeshSlicer;
+typedef std::vector<TriangleMesh> TriangleMeshs;
 typedef std::vector<TriangleMesh*> TriangleMeshPtrs;
 
 class TriangleMesh

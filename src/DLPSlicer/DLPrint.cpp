@@ -1,30 +1,30 @@
-#include"DLPrint.h"
-#include"Geometry.hpp"
-#include"ClipperUtils.hpp"
-#include"qstring.h"
-#include"qfile.h"
-#include"qtextstream.h"
-#include"qimage.h"
-#include"qpainter.h"
-#include"tool.h"
-#include"qbuffer.h"
-#include"qdebug.h"
+#include "DLPrint.h"
+#include "Geometry.hpp"
+#include "ClipperUtils.hpp"
 
+#include <qstring.h>
+#include <qfile.h>
+#include <qtextstream.h>
+#include <qimage.h>
+#include <qpainter.h>
+#include <qbuffer.h>
+#include <qdebug.h>
+
+#include "tool.h"
 #include "Setting.h"
 extern Setting e_setting;
 
 namespace Slic3r {
 
-	DLPrint::DLPrint(Model* _model, FKConfig* config)
+	DLPrint::DLPrint(Model* _model, Config* config)
 		:model(_model)
 		, m_config(config)
 	{
-		CirclePoints(circle, 15);
 	}
 
-	void DLPrint::slice(const std::vector<TriangleMesh>& support_meshs, QProgressBar* progress)
+	void DLPrint::Slice(const TriangleMeshs& supMeshs, QProgressBar* progress)
 	{
-		m_progress = progress;
+		BoundingBoxf3 box;
 		bool ret = true;
 		int count = 0;//实例计数
 		for (auto o = model->objects.begin(); o != model->objects.end(); ++o) {
@@ -33,45 +33,42 @@ namespace Slic3r {
 				TriangleMesh mesh = (*o)->volumes[0]->mesh;
 				(*i)->transform_mesh(&mesh);
 				if (ret) {
-					this->bb = mesh.bounding_box();
+					box = mesh.bounding_box();
 					ret = false;
 				}
 				else {
-					this->bb.defined = true;
-					this->bb.merge(mesh.bounding_box());
+					box.defined = true;
+					box.merge(mesh.bounding_box());
 				}
 			}
 		}
 
 		const float lh = this->m_config->layer_height;
-		std::vector<Layer> ls;
-		ls.push_back(Layer(lh / 2, lh));
-		while (ls.back().print_z + lh / 2 <= this->bb.max.z) {
-			ls.push_back(Layer(ls.back().print_z + lh / 2, ls.back().print_z + lh));
-		}
+		Layers ls;
+		ls.emplace_back(Layer(lh / 2, lh));
+		while (ls.back().print_z + lh / 2 <= box.max.z)
+			ls.emplace_back(Layer(ls.back().print_z + lh / 2, ls.back().print_z + lh));
 
-		layer_num = ls.size();
+		size_t layerNum = ls.size();
 		std::vector<float> slice_z;
 		//准备切片并得到切片层
 		{
-			for (size_t i = 0; i < ls.size(); ++i) {
-				slice_z.push_back(ls[i].slice_z);
-			}
+			for (size_t i = 0; i < ls.size(); ++i)
+				slice_z.emplace_back(ls[i].slice_z);
 
-			while (!layers.empty())
-			{
-				auto l = layers.begin();
-				(*l).clear();
-				layers.erase(l);
+			while (!layerPtrs.empty()) {
+				auto l = layerPtrs.begin();
+				delete* l;
+				layerPtrs.erase(l);
 			}
 
 			int aaa = 0;
+			Layers* t_layers = new Layers;
 			for (auto o = this->model->objects.begin(); o != this->model->objects.end(); ++o) {
 				for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-					_layers.clear();
 
 					for (auto a = ls.begin(); a != ls.end(); ++a)
-						_layers.push_back(*a);
+						t_layers->emplace_back(*a);
 
 					//切片
 					std::vector<ExPolygons> slices;
@@ -80,10 +77,10 @@ namespace Slic3r {
 
 					TriangleMeshSlicer<Z>(&mesh).slice(slice_z, &slices, m_config->threads);//切片函数
 					for (size_t i = 0; i < slices.size(); ++i)
-						_layers.at(i).slices.expolygons = slices[i];
+						t_layers->at(i).slices.expolygons = slices[i];
 
 					//切片进度条范围21->98
-					if (progress != NULL) {
+					if (progress != nullptr) {
 						int unit = (aaa + 1) / (count / (98 - 21) + 1);
 						if (progress->value() < 21 + unit)
 							progress->setValue(21 + unit);
@@ -140,32 +137,31 @@ namespace Slic3r {
 
 							parallelize<size_t>(
 								0,
-								_layers.size() - 1,
-								boost::bind(&DLPrint::_infill_layer, this, _1, pattern),
+								t_layers->size() - 1,
+								boost::bind(&DLPrint::InfillLayer, this, _1, pattern, *t_layers),
 								m_config->threads
 								);
 						}
 					}
-					layers.push_back(_layers);
+					layerPtrs.emplace_back(t_layers);
 				}
-
 			}
 
 			//切支撑
 			{
 				TriangleMesh SMesh;
-				for (auto s = support_meshs.begin(); s != support_meshs.end(); ++s)
+				for (auto s = supMeshs.begin(); s != supMeshs.end(); ++s)
 					SMesh.merge(*s);
 
-				_layers.clear();
+				Layers* t_layers1 = new Layers;
 				for (auto a = ls.begin(); a != ls.end(); ++a)
-					_layers.push_back(*a);
+					t_layers1->emplace_back(*a);
 
 				std::vector<ExPolygons> slices;
 				TriangleMeshSlicer<Z>(&SMesh).slice(slice_z, &slices, m_config->threads);//切片函数
 				for (size_t i = 0; i < slices.size(); ++i)
-					_layers.at(i).slices.expolygons = slices[i];
-				layers.push_back(_layers);
+					t_layers1->at(i).slices.expolygons = slices[i];
+				layerPtrs.emplace_back(t_layers1);
 			}
 		}
 
@@ -176,33 +172,30 @@ namespace Slic3r {
 			double L = double(e_setting.m_printers.begin()->length / 2);
 			double W = double(e_setting.m_printers.begin()->width / 2);
 
-			BoundingBoxf bbb;
-			bbb.min.x = this->bb.min.x - m_config->raft_offset > -L ? this->bb.min.x - m_config->raft_offset : -L;
-			bbb.min.y = this->bb.min.y - m_config->raft_offset > -W ? this->bb.min.y - m_config->raft_offset : -W;
-			bbb.max.x = this->bb.max.x + m_config->raft_offset < L ? this->bb.max.x + m_config->raft_offset : L;
-			bbb.max.y = this->bb.max.y + m_config->raft_offset < W ? this->bb.max.y + m_config->raft_offset : W;
+			BoundingBoxf bb;
+			bb.min.x = box.min.x - m_config->raft_offset > -L ? box.min.x - m_config->raft_offset : -L;
+			bb.min.y = box.min.y - m_config->raft_offset > -W ? box.min.y - m_config->raft_offset : -W;
+			bb.max.x = box.max.x + m_config->raft_offset < L ? box.max.x + m_config->raft_offset : L;
+			bb.max.y = box.max.y + m_config->raft_offset < W ? box.max.y + m_config->raft_offset : W;
 
 			ExPolygons raft;
-			Polygon p;
-			p.points.push_back(Point(scale_(bbb.min.x), scale_(bbb.min.y)));
-			p.points.push_back(Point(scale_(bbb.min.x), scale_(bbb.max.y)));
-			p.points.push_back(Point(scale_(bbb.max.x), scale_(bbb.max.y)));
-			p.points.push_back(Point(scale_(bbb.max.x), scale_(bbb.min.y)));
-			ExPolygon _raft;
-			_raft.contour = p;
-			raft.push_back(_raft);
+			Polygon poly;
+			poly.points.emplace_back(Point(scale_(bb.min.x), scale_(bb.min.y)));
+			poly.points.emplace_back(Point(scale_(bb.min.x), scale_(bb.max.y)));
+			poly.points.emplace_back(Point(scale_(bb.max.x), scale_(bb.max.y)));
+			poly.points.emplace_back(Point(scale_(bb.max.x), scale_(bb.min.y)));
+			raft.emplace_back(ExPolygon(poly));
 
+			this->r_layers.clear();
 			for (int i = this->m_config->raft_layers; i >= 1; --i) {
 				this->r_layers.insert(this->r_layers.begin(), Layer(0, lh * i));
 				this->r_layers.front().slices.expolygons = raft;
 			}
 
 			// prepend total raft height to all sliced layers
-			for (auto l = this->layers.begin(); l != this->layers.end(); ++l) {
-				for (auto l1 = (*l).begin(); l1 != (*l).end(); ++l1) {
+			for (auto l = layerPtrs.begin(); l != layerPtrs.end(); ++l)
+				for (auto l1 = (*l)->begin(); l1 != (*l)->end(); ++l1)
 					(*l1).print_z += lh * this->m_config->raft_layers;
-				}
-			}
 
 			for (auto i = this->inside_supports.begin(); i != this->inside_supports.end(); ++i) {
 				linef3s* l = (*i).second;
@@ -212,22 +205,25 @@ namespace Slic3r {
 				}
 			}
 		}
+
+		//导出图片
+		this->SavePng(box, layerNum);
 	}
 
-	void DLPrint::_infill_layer(size_t i, ExPolygons pattern)
+	void DLPrint::InfillLayer(size_t i, ExPolygons pattern, Layers t_layers)
 	{
-		Layer& layer = this->_layers[i];
+		Layer& layer = t_layers[i];
 
 		// const float shell_thickness = this->config.get_abs_value("perimeter_extrusion_width", this->config.layer_height.value);
 		const float shell_thickness = m_config->wall_thickness;
 		// In order to detect what regions of this layer need to be solid,
 		// perform an intersection with layers within the requested shell thickness.
 		Polygons internal = layer.slices;
-		for (size_t j = 0; j < this->_layers.size(); ++j) {
-			const Layer& other = this->_layers[j];
+		for (size_t j = 0; j < t_layers.size(); ++j) {
+			const Layer& other = t_layers[j];
 			if (std::abs(other.print_z - layer.print_z) > shell_thickness) continue;
 
-			if (j == 0 || j == this->_layers.size() - 1) {
+			if (j == 0 || j == t_layers.size() - 1) {
 				internal.clear();
 				break;
 			}
@@ -271,30 +267,64 @@ namespace Slic3r {
 		//);
 	}
 
-	ExPolygon DLPrint::generate_honeycomb_pattern(BoundingBox box, double wall, double radius)
+	inline void GenHoneycomb(const BoundingBoxf& box, Pointfs& ps, double radius, Pointf p, double angle, bool again)
+	{
+		//超出边界退出
+		if ((p.x + radius) < box.min.x || (p.x - radius) > box.max.x
+			|| (p.y + radius) < box.min.y || (p.y - radius) > box.max.y)
+			return;
+
+		if (again)
+			ps.push_back(p);
+
+		double angle1 = angle / 180 * PI;
+
+		Pointf p1;
+		if (angle == 30)
+		{
+			p1.x = p.x + cos(angle1) * radius;
+			p1.y = p.y + sin(angle1) * radius;
+
+			GenHoneycomb(box, ps, radius, p1, 30, true);
+			GenHoneycomb(box, ps, radius, p1, 90, false);
+			GenHoneycomb(box, ps, radius, p1, 330, false);
+		}
+		else if (angle == 90)
+		{
+			p1.x = p.x;
+			p1.y = p.y + radius;
+
+			GenHoneycomb(box, ps, radius, p1, 90, true);
+		}
+		else if (angle == 330)
+		{
+			p1.x = p.x + cos(angle1) * radius;
+			p1.y = p.y + sin(angle1) * radius;
+
+			GenHoneycomb(box, ps, radius, p1, 330, true);
+		}
+	}
+
+	ExPolygon DLPrint::GenHoneycombPattern(BoundingBox box, double wall, double radius)
 	{
 		box.offset(scale_(radius * 2));
 
 		ExPolygon pattern;
 		pattern.contour = box.polygon();
 
-		BoundingBoxf _box;
-		_box.max.x = unscale(box.max.x);
-		_box.max.y = unscale(box.max.y);
-		_box.min.x = unscale(box.min.x);
-		_box.min.y = unscale(box.min.y);
+		BoundingBoxf box1;
+		box1.max.x = unscale(box.max.x);
+		box1.max.y = unscale(box.max.y);
+		box1.min.x = unscale(box.min.x);
+		box1.min.y = unscale(box.min.y);
 
-		Pointf p = _box.min;
+		Pointfs ps;
+		GenHoneycomb(box1, ps, radius + wall / 2, box1.min, 30, true);
 
-		std::vector<Pointf> ps;
-
-		generate_honeycomb(_box, ps, radius + wall / 2, p, 30, true);
-
-		std::vector<Pointf> circle1;
-		CirclePoints(circle1, 30);
+		Pointfs circle= CirclePoints(30);
 		Points ps1;
-		for (auto s = circle1.begin(); s != circle1.end(); ++s)
-			ps1.push_back(Point(scale_((*s).x), scale_((*s).y)));
+		for (auto s = circle.begin(); s != circle.end(); ++s)
+			ps1.emplace_back(Point(scale_((*s).x), scale_((*s).y)));
 
 		Polygon _hole(ps1);
 
@@ -309,53 +339,12 @@ namespace Slic3r {
 		return pattern;
 	}
 
-	void DLPrint::generate_honeycomb(BoundingBoxf box, std::vector<Pointf>& ps, double radius, Pointf p, double angle, bool again)
-	{
-		//超出边界退出
-		if ((p.x + radius) < box.min.x || (p.x - radius) > box.max.x
-			|| (p.y + radius) < box.min.y || (p.y - radius) > box.max.y)
-			return;
-
-		if (again)
-			ps.push_back(p);
-
-		double _angle;
-
-		if (angle != 90)
-			_angle = angle / 180 * PI;
-
-		Pointf p1;
-
-		if (angle == 30)
-		{
-			p1.x = p.x + cos(_angle) * radius;
-			p1.y = p.y + sin(_angle) * radius;
-
-			generate_honeycomb(box, ps, radius, p1, 30, true);
-			generate_honeycomb(box, ps, radius, p1, 90, false);
-			generate_honeycomb(box, ps, radius, p1, 330, false);
-		}
-		else if (angle == 90)
-		{
-			p1.x = p.x;
-			p1.y = p.y + radius;
-
-			generate_honeycomb(box, ps, radius, p1, 90, true);
-		}
-		else if (angle == 330)
-		{
-			p1.x = p.x + cos(_angle) * radius;
-			p1.y = p.y + sin(_angle) * radius;
-
-			generate_honeycomb(box, ps, radius, p1, 330, true);
-		}
-	}
-
-	ExPolygon DLPrint::generate_pattern(BoundingBox box)
+	ExPolygon DLPrint::GenPattern(const BoundingBox& box)
 	{
 		ExPolygon pattern;
 		pattern.contour = box.polygon();
 
+		Pointfs circle = CirclePoints(15);
 		Points ps;
 		for (auto s = circle.begin(); s != circle.end(); ++s)
 			ps.push_back(Point(scale_((*s).x), scale_((*s).y)));
@@ -388,7 +377,7 @@ namespace Slic3r {
 	}
 
 
-	void DLPrint::generate_inside_support(size_t id, TriangleMesh* mesh)
+	void DLPrint::GenInsideSupport(size_t id, TriangleMesh* mesh)
 	{
 		BoundingBoxf3 bb = mesh->bounding_box();
 		linef3s* lines = new linef3s();
@@ -396,22 +385,22 @@ namespace Slic3r {
 
 		//计算填充密度
 		double space = (1 - double(m_config->fill_density / 100)) * 10;
-		space = m_config->support_radius >= space ? m_config->support_radius + 1 : space;
+		space = m_config->support_radius >= space ? m_config->support_radius + 1.0 : space;
 
-		radiate_point(bb, pointf3_xz_45, space, XZ_45);
-		radiate_point(bb, pointf3_xz_135, space, XZ_135);
-		radiate_point(bb, pointf3_yz_45, space, YZ_45);
-		radiate_point(bb, pointf3_yz_135, space, YZ_135);
+		RadiatePoint(bb, pointf3_xz_45, space, XZ_45);
+		RadiatePoint(bb, pointf3_xz_135, space, XZ_135);
+		RadiatePoint(bb, pointf3_yz_45, space, YZ_45);
+		RadiatePoint(bb, pointf3_yz_135, space, YZ_135);
 
-		radiate_intersection(mesh, pointf3_xz_45, *lines, XZ_45);
-		radiate_intersection(mesh, pointf3_xz_135, *lines, XZ_135);
-		radiate_intersection(mesh, pointf3_yz_45, *lines, YZ_45);
-		radiate_intersection(mesh, pointf3_yz_135, *lines, YZ_135);
+		RadiateInter(mesh, pointf3_xz_45, *lines, XZ_45);
+		RadiateInter(mesh, pointf3_xz_135, *lines, XZ_135);
+		RadiateInter(mesh, pointf3_yz_45, *lines, YZ_45);
+		RadiateInter(mesh, pointf3_yz_135, *lines, YZ_135);
 		inside_supports.insert(std::make_pair(id, lines));
 	}
 
 
-	TreeSupport* DLPrint::generate_support(size_t id, TriangleMesh* mesh, QProgressBar* progress)
+	TreeSupport* DLPrint::GenSupport(size_t id, TriangleMesh* mesh, QProgressBar* progress)
 	{
 		mesh->require_shared_vertices_faces();
 		mesh->extract_feature_face(m_config->angle);
@@ -426,7 +415,7 @@ namespace Slic3r {
 	}
 
 	//更新键值只对删除模型时有效
-	bool DLPrint::delete_tree_support(size_t id)
+	bool DLPrint::DelTreeSupport(size_t id)
 	{
 		auto s = treeSupports.find(id);
 		if (s != treeSupports.end()) {
@@ -438,17 +427,12 @@ namespace Slic3r {
 		return false;
 	}
 
-	void DLPrint::savePNG(QString ini_file1)
+	void DLPrint::SavePng(const BoundingBoxf3& box, size_t layerNum)
 	{
-		double _area = 0;
-
-		QString file = ini_file1;
-		file.append("/buildscipt.ini");
-		QFile _file(file);
-
-		if (_file.open(QFile::WriteOnly | QFile::Truncate))
+		QFile file(string(e_setting.ZipTempPath + "/buildscipt.ini").c_str());
+		if (file.open(QFile::WriteOnly | QFile::Truncate))
 		{
-			QTextStream stream(&_file);
+			QTextStream stream(&file);
 			stream << "Slice thickness = " << m_config->layer_height << "\n";
 			stream << "norm illumination time = " << m_config->normIlluTime << "\n";
 			stream << "norm illumination inttersity = " << m_config->norm_inttersity << "\n";
@@ -457,64 +441,61 @@ namespace Slic3r {
 			stream << "override illumination inttersity =" << m_config->over_inttersity << "\n";
 			stream << "first layer_illumination_time = " << m_config->overIlluTime << "\n";
 			stream << "first illumination inttersity = " << m_config->over_inttersity << "\n";
-			stream << "number of slices = " << layer_num + m_config->raft_layers << "\n";
-			stream << "length = " << this->bb.max.x - this->bb.min.x << "\n";
-			stream << "width = " << this->bb.max.y - this->bb.min.y << "\n";
-			stream << "height = " << this->bb.max.z + m_config->layer_height * m_config->raft_layers << "\n";
+			stream << "number of slices = " << layerNum + m_config->raft_layers << "\n";
+			stream << "length = " << box.max.x - box.min.x << "\n";
+			stream << "width = " << box.max.y - box.min.y << "\n";
+			stream << "height = " << box.max.z + m_config->layer_height * m_config->raft_layers << "\n";
 
-			this->ini_file = ini_file1;
+			if (this->m_areas != nullptr)
+				delete this->m_areas;
 
-
+			this->m_areas = new double[layerNum + m_config->raft_layers];
 
 			parallelize<size_t>(
 				0,
-				layer_num + m_config->raft_layers - 1,
-				boost::bind(&DLPrint::saveOnePNG, this, _1),
-				this->m_config->threads
+				layerNum + m_config->raft_layers - 1,
+				boost::bind(&DLPrint::SaveOnePng, this, _1, e_setting.ZipTempPath),
+				m_config->threads
 				);
 
-			double area = 0;
-			for (auto a = areas.begin(); a != areas.end(); ++a) {
-				area += (*a) * m_config->layer_height;
-			}
-			areas.clear();
+			double vol = 0;
+			for (int i = 0; i < layerNum + m_config->raft_layers; ++i)
+				vol += m_areas[i] * m_config->layer_height;
 
-			_area = area / 1000;
-			stream << "model volume = " << _area << "\n";
+			stream << "model volume = " << vol / 1000 << "\n";
 
 			float aaa = 0;
-			for (int num = 0; num < layer_num + m_config->raft_layers; ++num) {
-				if (num < m_config->raft_layers)
-					aaa = (this->bb.max.x - this->bb.min.x) * (this->bb.max.y - this->bb.min.y);
+			for (int j = 0; j < layerNum + m_config->raft_layers; ++j) {
+				if (j < m_config->raft_layers)
+					aaa = (box.max.x - box.min.x) * (box.max.y - box.min.y);
 				else
-					aaa = *(areas.begin() + num - m_config->raft_layers);
-				if (num < m_config->overLayer) {
+					aaa = m_areas[j];
+				if (j < m_config->overLayer) {
 					//长曝光层
-					stream << num * m_config->layer_height << " , " << "slice" << num << ".png , " << aaa << "\n";
+					stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
 				}
 				else {
 					//正常曝光层
-					stream << num * m_config->layer_height << " , " << "slice" << num << ".png , " << aaa << "\n";
+					stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
 				}
 			}
-
 		}
-		_file.close();
-
-		layers.clear();
-		areas.clear();
-		_layers.clear();
-		r_layers.clear();
-		if (!inside_supports.empty())
-		{
-			auto i = inside_supports.begin();
-			delete (*i).second;
-			inside_supports.erase(i);
-		}
-		inside_supports.clear();
+		file.close();
 	}
 
-	void DLPrint::saveOnePNG(size_t num)
+	inline QPolygonF poly2Qpoly(const Polygon& p)//将Polygon装换为QPolygonF
+	{
+		QVector<QPointF> pfs;
+		for each (Point p in p.points)
+		{
+			Pointf pf(unscale(p.x), unscale(p.y));
+			pf.scale(e_setting.m_printers.begin()->factor);
+			pfs.push_back(QPointF(pf.x + 960, pf.y + 540));
+		}
+		return QPolygonF(pfs);
+	}
+
+	void DLPrint::SaveOnePng(size_t num,const std::string& path)
 	{
 		QImage image(1920, 1080, QImage::Format_RGB32);
 		QPainter painter(&image);
@@ -523,8 +504,8 @@ namespace Slic3r {
 		painter.setBrush(QBrush(QColor(255, 255, 255)));
 		painter.setPen(QPen(Qt::Dense7Pattern, 1));
 
-		QPainterPath _path;
-		_path.setFillRule(Qt::WindingFill);
+		QPainterPath painterPath;
+		painterPath.setFillRule(Qt::WindingFill);
 
 		float raft = m_config->layer_height * m_config->raft_layers;//底板高度
 		float now = m_config->layer_height * num;
@@ -533,22 +514,17 @@ namespace Slic3r {
 		if (m_config->raft_layers > num) {
 			ExPolygons exp = r_layers[num].slices.expolygons;
 			for (ExPolygons::iterator exps = exp.begin(); exps != exp.end(); ++exps) {
-				ExPolygon _exps = *exps;
-				QPolygonF qp = polTpQpol(_exps.contour);
-				_path.addPolygon(qp);
-				for (Polygons::iterator ps = _exps.holes.begin(); ps != _exps.holes.end(); ++ps) {
-					QPolygonF qp = polTpQpol(*ps);
-					_path.addPolygon(qp);
-				}
+				painterPath.addPolygon(poly2Qpoly((*exps).contour));
+				for (Polygons::iterator ps = (*exps).holes.begin(); ps != (*exps).holes.end(); ++ps)
+					painterPath.addPolygon(poly2Qpoly(*ps));
 			}
 		}
 		else {
-			ExPolygons temp;
+			ExPolygons t_expoly;
 			ExPolygons contour;
-			size_t num1 = num - m_config->raft_layers;
-			for (auto l = layers.begin(); l != layers.end(); ++l) {
-				std::vector<Layer>* _layers1 = &(*l);
-				Layer _l = *(_layers1->begin() + num1);
+			for (auto l = layerPtrs.begin(); l != layerPtrs.end(); ++l) {
+				Layers* t_layers = *l;
+				Layer _l = *(t_layers->begin() + num - m_config->raft_layers);
 
 				ExPolygons exp;
 				if (_l.solid) {
@@ -566,9 +542,8 @@ namespace Slic3r {
 					//存储外部轮廓多边形
 					ExPolygon t;
 					t.contour = (*exps).contour;
-					contour.push_back(t);
-
-					temp.push_back(*exps);
+					contour.emplace_back(t);
+					t_expoly.emplace_back(*exps);
 				}
 			}
 
@@ -608,28 +583,21 @@ namespace Slic3r {
 				//	temp = temp + contour;
 				//}
 
-			temp = union_ex(temp);
+			t_expoly = union_ex(t_expoly);
 
-			Polygons poly = to_polygons(temp);
+			Polygons poly = to_polygons(t_expoly);
 			double area = 0;
 			for (Polygons::iterator ps = poly.begin(); ps != poly.end(); ++ps) {
 				//求面积
 				area += (*ps).area() * SCALING_FACTOR * SCALING_FACTOR;
-
-				QPolygonF qp = polTpQpol(*ps);
-				_path.addPolygon(qp);
+				painterPath.addPolygon(poly2Qpoly(*ps));
 			}
-			areas.push_back(area);
+			this->m_areas[num] = area;
 		}
 
-		painter.drawPath(_path);
-		QString path(QObject::tr("/slice%1.png").arg(num));
+		painter.drawPath(painterPath);
 
-		QString _pa;
-		_pa.append(ini_file);
-		_pa.append(path);
-		QFile file(_pa);
-
+		QFile file(path.c_str() + QObject::tr("/slice%1.png").arg(num));
 		if (!file.open(QIODevice::ReadWrite))
 			return;
 		QByteArray ba;
@@ -639,18 +607,7 @@ namespace Slic3r {
 		file.write(ba);
 	}
 
-	QPolygonF DLPrint::polTpQpol(Polygon& p)//将Polygon装换为QPolygonF
-	{
-		QVector<QPointF> f;
-		for (Points::iterator ps = p.points.begin(); ps != p.points.end(); ++ps) {
-			Pointf pf(unscale((*ps).x), unscale((*ps).y));
-			pf.scale(e_setting.m_printers.begin()->factor);
-			f.push_back(QPointF(pf.x + 960, pf.y + 540));
-		}
-		return QPolygonF(f);
-	}
-
-	void DLPrint::radiate_point(BoundingBoxf3 bb, Pointf3s& ps, float space, int xyz)
+	void DLPrint::RadiatePoint(const BoundingBoxf3& bb, Pointf3s& ps, float space, int xyz)
 	{
 		Pointfs pfs;
 		switch (xyz)
@@ -779,7 +736,22 @@ namespace Slic3r {
 		}
 	}
 
-	void DLPrint::radiate_intersection(TriangleMesh* mesh, Pointf3s& ps, linef3s& lines, int xyz)
+	//将点按z轴高度按升序排列
+	inline void pointf3sSortZ(Pointf3s& ps)
+	{
+		for (int i = 0; i < ps.size(); ++i) {
+			for (auto b = ps.begin(); b != ps.end() - 1; ++b) {
+				auto c = b + 1;
+				if ((*b).z > (*c).z) {
+					Pointf3 temp((*b).x, (*b).y, (*b).z);
+					(*b).x = (*c).x; (*b).y = (*c).y; (*b).z = (*c).z;
+					(*c).x = temp.x; (*c).y = temp.y; (*c).z = temp.z;
+				}
+			}
+		}
+	}
+
+	void DLPrint::RadiateInter(const TriangleMesh* mesh,const Pointf3s& ps, linef3s& lines, int xyz)
 	{
 		Vectorf3 xz_45(1, 0, 1);
 		Vectorf3 xz_135(-1, 0, 1);
@@ -806,7 +778,7 @@ namespace Slic3r {
 				}
 				//支撑点按z轴高度排序
 				if (!pf3s.empty()) {
-					pointf3_sort_z(pf3s);
+					pointf3sSortZ(pf3s);
 
 					//得到支撑柱
 					for (auto d = pf3s.begin(); d != pf3s.end() && d != pf3s.end() - 1; ++d) {
@@ -836,7 +808,7 @@ namespace Slic3r {
 				}
 				//支撑点按z轴高度排序
 				if (!pf3s.empty()) {
-					pointf3_sort_z(pf3s);
+					pointf3sSortZ(pf3s);
 
 					//得到支撑柱
 					for (auto d = pf3s.begin(); d != pf3s.end() && d != pf3s.end() - 1; ++d) {
@@ -865,7 +837,7 @@ namespace Slic3r {
 				}
 				//支撑点按z轴高度排序
 				if (!pf3s.empty()) {
-					pointf3_sort_z(pf3s);
+					pointf3sSortZ(pf3s);
 
 					//得到支撑柱
 					for (auto d = pf3s.begin(); d != pf3s.end() && d != pf3s.end() - 1; ++d) {
@@ -894,7 +866,7 @@ namespace Slic3r {
 				}
 				//支撑点按z轴高度排序
 				if (!pf3s.empty()) {
-					pointf3_sort_z(pf3s);
+					pointf3sSortZ(pf3s);
 
 					//得到支撑柱
 					for (auto d = pf3s.begin(); d != pf3s.end() && d != pf3s.end() - 1; ++d) {
@@ -910,42 +882,14 @@ namespace Slic3r {
 		}
 	}
 
-	void DLPrint::pointf3_sort_z(std::vector<Pointf3>& ps)
+	void DLPrint::InsertSupport(size_t id, TreeSupport* s)
 	{
-		for (int i = 0; i < ps.size(); ++i) {
-			for (auto b = ps.begin(); b != ps.end() - 1; ++b) {
-				auto c = b + 1;
-				if ((*b).z > (*c).z) {
-					Pointf3 temp((*b).x, (*b).y, (*b).z);
-					(*b).x = (*c).x; (*b).y = (*c).y; (*b).z = (*c).z;
-					(*c).x = temp.x; (*c).y = temp.y; (*c).z = temp.z;
-				}
-			}
-		}
-	}
-
-	int DLPrint::instanceToId(ModelInstance* i)
-	{
-		for (auto o = model->objects.begin(); o != model->objects.end(); ++o) {
-			int a = std::distance(model->objects.begin(), o);
-			for (auto n = (*o)->instances.begin(); n != (*o)->instances.end(); ++n) {
-				int b = std::distance((*o)->instances.begin(), n);
-				if (i == *n) {
-					return a * InstanceNum + b;
-				}
-			}
-		}
-		return -1;
-	}
-
-	void DLPrint::insertSupports(size_t id, TreeSupport* s)
-	{
-		delete_tree_support(id);
+		DelTreeSupport(id);
 		treeSupports.insert(std::make_pair(id, s));
 	}
 
 	//传出指针的引用
-	TreeSupport* DLPrint::chilck_tree_support(size_t id)
+	TreeSupport* DLPrint::GetTreeSupport(size_t id)
 	{
 		auto s1 = treeSupports.find(id);
 		if (s1 != treeSupports.end())
@@ -954,5 +898,21 @@ namespace Slic3r {
 		return nullptr;
 	}
 
+	void DLPrint::DelAllInsideSup() {
+		while (!inside_supports.empty()) {
+			auto s = inside_supports.begin();
+			delete (*s).second;
+			inside_supports.erase(s);
+		}
+	}
+
+	void DLPrint::DelAllSupport()
+	{
+		while (!treeSupports.empty()) {
+			auto s = treeSupports.begin();
+			delete (*s).second;
+			treeSupports.erase(s);
+		}
+	}
 
 }

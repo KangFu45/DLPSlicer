@@ -62,7 +62,7 @@ inline bool clearDir(QString path)
 	return dir.rmpath(dir.absolutePath()); // 删除文件夹  
 }
 
-class FKConfig;
+class Config;
 
 class MainWindow : public QMainWindow
 {
@@ -77,7 +77,7 @@ private:
 	Model* m_model = { new Model };
 	DLPrint* m_dlprint;
 	GlWidget* m_glwidget;	//三维视图部件
-	FKConfig* m_config;
+	Config* m_config;
 
 	void SetOffsetValue(ModelInstance* instance);
 	void SetRotateValue(ModelInstance* instance);

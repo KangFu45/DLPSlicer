@@ -10,9 +10,9 @@
 
 extern Setting e_setting;
 
-//---------------FKConfig--------------
+//---------------Config--------------
 
-void FKConfig::writeConfig()
+void Config::writeConfig()
 {
 	QSettings writeini(e_setting.ConfigFile.c_str(), QSettings::IniFormat);
 	writeini.clear();
@@ -45,7 +45,7 @@ void FKConfig::writeConfig()
 
 //------------------SetupDialog---------------
 
-SetupDialog::SetupDialog(FKConfig* config)
+SetupDialog::SetupDialog(Config* config)
 	:m_config(config)
 {
 	initLayout();

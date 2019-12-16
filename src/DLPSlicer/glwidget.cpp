@@ -261,7 +261,7 @@ void GlWidget::paintGL()
 	glDisable(GL_CULL_FACE);
 
 	//渲染树状支撑
-	if (!m_dlprint->treeSupports.empty() && m_supEditControl == nullptr)
+	if (!m_dlprint->TreeSupportsEmpty() && m_supEditControl == nullptr)
 		BindTreeSupport();
 
 	//添加支撑时的标识渲染
@@ -1133,18 +1133,18 @@ void GlWidget::ChangeView(VIEW view)
 
 void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 {
-	TreeSupport* s = m_dlprint->chilck_tree_support(id);
+	TreeSupport* s = m_dlprint->GetTreeSupport(id);
 	if (s == nullptr)
 		return;
 
 	double height = m_dlprint->m_config->support_top_height;//写死的顶端与底端的高度
 
-	Pointfs _circle = m_dlprint->circle;
+	Pointfs circle = CirclePoints(15);
 
 	Pointf3s _topCircle, _supportCircle, branchCircle, _bottomCircle;//树枝的圆坐标
 
 	Pointf3 c4, c5, c6, c7;
-	for (auto c = _circle.begin(); c != _circle.end(); ++c) {
+	for (auto c = circle.begin(); c != circle.end(); ++c) {
 		c4.x = (*c).x; c4.y = (*c).y; c4.z = 0;
 		c5.x = (*c).x; c5.y = (*c).y; c5.z = 0;
 		c6.x = (*c).x; c6.y = (*c).y; c6.z = 0;
@@ -1635,18 +1635,18 @@ void GlWidget::SupportEditChange(QProgressBar* progress)
 		m_supEditControl->m_mesh = new TriangleMesh(m_selInstance->get_object()->volumes[0]->mesh);
 		m_selInstance->transform_mesh(m_supEditControl->m_mesh);
 
-		auto p = m_dlprint->treeSupports.find(selectID);
-		if (p != m_dlprint->treeSupports.end()) {
+		TreeSupport* p = m_dlprint->GetTreeSupport(selectID);
+		if (p != nullptr) {
 			//有支撑点,将支撑点传入m_supportEditPoints并初始化渲染
 			Pointf3 temp(0, 0, 0);
-			std::vector<stl_vertex> ps = (*p).second->support_point;
-			ps.insert(ps.end(), (*p).second->support_point_face.begin(), (*p).second->support_point_face.end());
+			std::vector<stl_vertex> ps = p->support_point;
+			ps.insert(ps.end(), p->support_point_face.begin(), p->support_point_face.end());
 			for each (const stl_vertex & i in ps)
 				m_supEditControl->AddSupportPoint(i);
 		}
 	}
 	else {
-		TreeSupport* sup = m_dlprint->chilck_tree_support(selectID);
+		TreeSupport* sup = m_dlprint->GetTreeSupport(selectID);
 		TreeSupport* sup_temp = new TreeSupport;
 
 		//支撑不存在，只进行手动支撑
@@ -2253,7 +2253,7 @@ bool GlWidget::DelSelectSupport()
 	if (m_selInstance == nullptr)
 		return false;
 
-	if (m_dlprint->delete_tree_support(selectID)) {
+	if (m_dlprint->DelTreeSupport(selectID)) {
 		//支撑数据删除成功同时删除支撑缓存区
 		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
 			if ((*sb)->id == selectID) {
@@ -2272,7 +2272,7 @@ void GlWidget::GenSelInstanceSupport(QProgressBar* progress)
 		return;
 
 	//支撑数值存入treeSupports
-	m_dlprint->insertSupports(selectID, m_dlprint->generate_support(selectID, &FindModel(selectID), progress));
+	m_dlprint->InsertSupport(selectID, m_dlprint->GenSupport(selectID, &FindModel(selectID), progress));
 	//渲染支撑
 	InitTreeSupportID(selectID, progress);
 }
@@ -2297,7 +2297,7 @@ void GlWidget::UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress)
 	new_sup->generate_tree_support(FindModel(selectID), m_dlprint->m_config->leaf_num
 		, m_dlprint->m_config->threads, progress, m_dlprint->m_config->support_top_height);
 
-	m_dlprint->insertSupports(selectID, new_sup);
+	m_dlprint->InsertSupport(selectID, new_sup);
 	InitTreeSupportID(selectID, progress);
 }
 

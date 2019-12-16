@@ -4,38 +4,11 @@
 
 namespace Slic3r {
 
-	void TreeSupport::support_offset(double x, double y)
-	{
-		for (auto t = tree_support_branch.begin(); t != tree_support_branch.end(); ++t) {
-			(*t).a.translate(x, y, 0);
-			(*t).b.translate(x, y, 0);
-		}
-
-		for (auto t = tree_support_bole.begin(); t != tree_support_bole.end(); ++t) {
-			(*t).a.translate(x, y, 0);
-			(*t).b.translate(x, y, 0);
-		}
-
-		for (auto t = tree_support_leaf.begin(); t != tree_support_leaf.end(); ++t) {
-			(*t).a.translate(x, y, 0);
-			(*t).b.translate(x, y, 0);
-		}
-
-		for (auto t = tree_support_bottom.begin(); t != tree_support_bottom.end(); ++t) {
-			(*t).a.translate(x, y, 0);
-			(*t).b.translate(x, y, 0);
-		}
-
-		for (auto t = tree_support_node.begin(); t != tree_support_node.end(); ++t) {
-			(*t).translate(x, y, 0);
-		}
-	}
-
 	void TreeSupport::generate_tree_support(TriangleMesh& mesh, size_t leaf_num, size_t thread, QProgressBar* progress, double TDHeight)
 	{
 		//进度条范围35->81
 		double MinHeight = 1.0;
-		std::vector<treeNode> node;//树的节点（不会存储树的结构关系）
+		std::vector<TreeNode> node;//树的节点（不会存储树的结构关系）
 
 		//-----------------悬吊面上待支撑点生成顶端与一级树节点--------------------
 		std::vector<stl_vertex> deleteVector;
@@ -117,7 +90,7 @@ namespace Slic3r {
 					Pointf3 p3(-face.normal.x*0.1 + p1.x, -face.normal.y*0.1 + p1.y, -face.normal.z*0.1 + p1.z);//延伸0.1mm
 					tree_support_leaf.push_back(Linef3(p2, p3));
 					//存储树的节点
-					treeNode n = { 1,p2 };
+					TreeNode n = { 1,p2 };
 					node.push_back(n);
 
 					if (p2.z > 0.5)//防止加强求穿过底板
@@ -148,7 +121,7 @@ namespace Slic3r {
 
 					tree_support_leaf.push_back(Linef3(p2, p1));
 					//存储树的节点
-					treeNode n = { 1,p2 };
+					TreeNode n = { 1,p2 };
 					node.push_back(n);
 
 					if (p2.z > 0.5)//防止加强求穿过底板
@@ -195,7 +168,7 @@ namespace Slic3r {
 
 				tree_support_leaf.push_back(Linef3(p2, p1));
 				//存储树的节点
-				treeNode n = { 1,p2 };
+				TreeNode n = { 1,p2 };
 				node.push_back(n);
 
 				if (p2.z > 0.5)//防止加强求穿过底板
@@ -240,9 +213,9 @@ namespace Slic3r {
 		}
 
 		//对节点进行分区域
-		std::vector<std::vector<treeNode>> nodes;
+		std::vector<std::vector<TreeNode>> nodes;
 		for (auto a = areas.begin(); a != areas.end(); ++a) {
-			std::vector<treeNode> ps;
+			std::vector<TreeNode> ps;
 			for (auto n = node.begin(); n != node.end(); ++n) {
 				if ((*n).p.x >= (*a).a.x && (*n).p.x < (*a).b.x &&
 					(*n).p.y >= (*a).a.y && (*n).p.y < (*a).b.y) {
@@ -272,22 +245,51 @@ namespace Slic3r {
 		generate_support_beam(mesh);
 	}
 
-	void TreeSupport::generate_tree_support_area(size_t i, std::vector<std::vector<treeNode>> nodes, TriangleMesh& mesh, size_t leaf_num, double TDHeight)
+	//将节点按z轴方向按降序排列
+	inline void RankNode(TreeNodes& nodes)
+	{
+		if (nodes.empty())
+			return;
+
+		TreeNode t_node;
+		for (int i = 0; i < nodes.size() - 1; ++i) {
+			for (auto p2 = nodes.begin() + 1; p2 != nodes.end(); ++p2) {
+				if ((*p2).p.z > (*(p2 - 1)).p.z) {
+					t_node = *p2;
+					*p2 = *(p2 - 1);
+					*(p2 - 1) = t_node;
+				}
+			}
+		}
+	}
+
+	//从节点集里删除指定节点
+	void DeleteNode(TreeNodes& nodes, const TreeNode& node)
+	{
+		for (auto i = nodes.begin(); i != nodes.end(); ++i) {
+			if (node.p == (*i).p) {
+				nodes.erase(i);
+				return;
+			}
+		}
+	}
+
+	void TreeSupport::generate_tree_support_area(size_t i, std::vector<std::vector<TreeNode>> nodes, TriangleMesh& mesh, size_t leaf_num, double TDHeight)
 	{
 		//------------生成树状结构-------------
-		std::vector<treeNode> node = *(nodes.begin() + i);
-		treeNode n;
+		std::vector<TreeNode> node = *(nodes.begin() + i);
+		TreeNode n;
 
 		//由高到底排序
-		rank_node(node);
+		RankNode(node);
 
 		while (!node.empty())
 		{
 			//选择节点最高点
-			treeNode MaxNode = *(node.begin());
+			TreeNode MaxNode = *(node.begin());
 
 			//选择两点之间距离小于lenght的点
-			std::map<float, treeNode> DisNode;
+			std::map<float, TreeNode> DisNode;
 			float dis;
 			for (auto p3 = node.begin(); p3 != node.end(); ++p3) {
 				if ((*p3).p != MaxNode.p) {
@@ -304,7 +306,7 @@ namespace Slic3r {
 			//以两个节点为圆锥顶点，以约束角度(45度)为最大角度的圆锥，求两点与圆锥交点最短距离的交点。
 			bool ok = false;//判断配对是否成功
 			for (auto p4 = DisNode.begin(); p4 != DisNode.end(); ++p4) {
-				treeNode SecondNode = (*p4).second;
+				TreeNode SecondNode = (*p4).second;
 				//求射线的法向量,先得到xy平面上的法向量，再在z轴方向上旋转约束角。
 				float MN[3], SN[3];//两个射线的法向量
 				MN[0] = SecondNode.p.x - MaxNode.p.x; MN[1] = SecondNode.p.y - MaxNode.p.y; MN[2] = 0.0;
@@ -478,12 +480,12 @@ namespace Slic3r {
 					}
 					else {
 						node.push_back(n);
-						rank_node(node);
+						RankNode(node);
 					}
 
 					//删除两个旧的节点
-					delete_node(node, MaxNode);
-					delete_node(node, SecondNode);
+					DeleteNode(node, MaxNode);
+					DeleteNode(node, SecondNode);
 
 					//配对成功
 					ok = true;
@@ -609,9 +611,27 @@ namespace Slic3r {
 				}
 
 				//删除一个节点
-				delete_node(node, MaxNode);
+				DeleteNode(node, MaxNode);
 			}
 		}
+	}
+
+	//a,b点作xy平面垂线，height为横梁高度,生成单位横梁
+	inline Pointf3s TwoLineBeam(Pointf a, Pointf b, int height)
+	{
+		float dis = distance_point(a, b);
+		if (dis == 0)
+			return Pointf3s();
+
+		Pointf3s ps;
+		int k = height / dis;
+		for (int i = 0; i < k; ++i) {
+			if (i % 2 == 0)
+				ps.emplace_back(Pointf3(a.x, a.y, dis * i));
+			else
+				ps.emplace_back(Pointf3(b.x, b.y, dis * i));
+		}
+		return ps;
 	}
 
 	void TreeSupport::generate_support_beam(TriangleMesh& mesh)//生成支撑横梁
@@ -648,8 +668,8 @@ namespace Slic3r {
 					Linef3 line2 = l2.second;
 
 					//生成单位横梁
-					std::vector<Pointf3> ps = two_line_beam(Pointf(line1.a.x, line1.a.y), Pointf(line2.a.x, line2.a.y), 300);
-					std::vector<Pointf3> ps1;
+					Pointf3s ps = TwoLineBeam(Pointf(line1.a.x, line1.a.y), Pointf(line2.a.x, line2.a.y), 300);
+					Pointf3s ps1;
 
 					//挑选横梁
 					for (std::vector<Pointf3>::iterator _p3 = ps.begin(); _p3 != ps.end(); ++_p3) {
@@ -691,63 +711,6 @@ namespace Slic3r {
 				}
 			}
 		}
-	}
-
-	void TreeSupport::clear(bool point)
-	{
-		if (point) {
-			support_point.clear();
-			support_point_face.clear();
-		}
-		tree_support_leaf.clear();
-		tree_support_bole.clear();
-		tree_support_branch.clear();
-		tree_support_bottom.clear();
-	}
-
-
-	void TreeSupport::delete_node(std::vector<treeNode>& node, treeNode& p)
-	{
-		for (auto i = node.begin(); i != node.end(); ++i) {
-			if (p.p == (*i).p) {
-				node.erase(i);
-				return;
-			}
-		}
-	}
-
-	void TreeSupport::rank_node(std::vector<treeNode>& node)
-	{
-		if (node.size() > 1) {
-			treeNode temp;
-			for (int i = 0; i < node.size() - 1; ++i) {
-				for (auto p2 = node.begin() + 1; p2 != node.end(); ++p2) {
-					if ((*p2).p.z > (*(p2 - 1)).p.z) {
-						temp = *p2;
-						*p2 = *(p2 - 1);
-						*(p2 - 1) = temp;
-					}
-				}
-			}
-		}
-	}
-
-	std::vector<Pointf3> TreeSupport::two_line_beam(Pointf a, Pointf b, int height)//生成单位横梁
-	{
-		std::vector<Pointf3> ps;
-		float dis = distance_point(a, b);
-		if (dis == 0)
-			return ps;
-		int k = height / dis;
-		for (int i = 0; i<k; ++i) {
-			if (i % 2 == 0) {
-				ps.push_back(Pointf3(a.x, a.y, dis*i));
-			}
-			else {
-				ps.push_back(Pointf3(b.x, b.y, dis*i));
-			}
-		}
-		return ps;
 	}
 }
 

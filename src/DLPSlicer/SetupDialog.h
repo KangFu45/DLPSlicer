@@ -8,7 +8,7 @@
 #include <qcombobox.h>
 #include <qpushbutton.h>
 
-struct FKConfig
+struct Config
 {
 	float	fill_angle;
 	float	fill_density;
@@ -46,12 +46,12 @@ class SetupDialog : public QDialog
 {
 	Q_OBJECT
 public:
-	SetupDialog(FKConfig* config);
+	SetupDialog(Config* config);
 	~SetupDialog();
 
 	void initLayout();
 
-	FKConfig* m_config;
+	Config* m_config;
 
 	//光照设置
 	QSpinBox* normIlluSpin;                       //正常曝光时间
