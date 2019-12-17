@@ -16,6 +16,17 @@
 
 namespace Slic3r {
 
+inline bool 
+operator==(const Pointf3 p, const stl_vertex& v)
+{
+    if (p.x == v.x && p.y == v.y && p.z == v.z)
+        return true;
+    return false;
+}
+
+inline Pointf3 Vec2Pf3(const stl_vertex& v) { return Pointf3(v.x, v.y, v.z); }
+inline Vectorf3 Nor2Vt3(const stl_normal& n) { return Vectorf3(n.x, n.y, n.z); }
+
 class TriangleMesh;
 template <Axis A> class TriangleMeshSlicer;
 typedef std::vector<TriangleMesh> TriangleMeshs;

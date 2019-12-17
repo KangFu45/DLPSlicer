@@ -129,6 +129,7 @@ class Pointf3 : public Pointf
     public:
     coordf_t z;
     explicit Pointf3(coordf_t _x = 0, coordf_t _y = 0, coordf_t _z = 0): Pointf(_x, _y), z(_z) {};
+    explicit Pointf3(float* v) :Pointf(v[0], v[1]), z(v[2]) {};
     static Pointf3 new_unscale(coord_t x, coord_t y, coord_t z) {
         return Pointf3(unscale(x), unscale(y), unscale(z));
     };
@@ -143,6 +144,9 @@ class Pointf3 : public Pointf
 
 	// Cross product 叉积
 	Vectorf3 Cross(const Vectorf3& v) const;
+    //矢量求反
+    Vectorf3 Reverse();
+    float* data();
 
 	void rotate_x(double angle);
 	void rotate_y(double angle);

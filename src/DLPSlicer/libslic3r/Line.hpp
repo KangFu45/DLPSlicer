@@ -12,6 +12,7 @@ class Linef3;
 class Polyline;
 class ThickLine;
 typedef std::vector<Line> Lines;
+typedef std::vector<Linef3> linef3s;
 typedef std::vector<ThickLine> ThickLines;
 
 class Line

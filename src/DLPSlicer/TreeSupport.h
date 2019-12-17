@@ -1,14 +1,14 @@
 #pragma once
 
-#include<Point.hpp>
-#include<Line.hpp>
-#include<admesh\stl.h>
-#include<TriangleMesh.hpp>
-#include"qprogressbar.h"
+#include "Point.hpp"
+#include "Line.hpp"
+#include "admesh/stl.h"
+#include "TriangleMesh.hpp"
+
+#include <qprogressbar.h>
 
 namespace Slic3r {
 
-	typedef std::vector<Linef3> linef3s;
 	typedef std::vector<std::pair<int, Linef3>> int_linef3;
 
 	struct TreeNode {
@@ -31,11 +31,18 @@ namespace Slic3r {
 		linef3s tree_support_bottom;	//树根
 		Pointf3s tree_support_node;		//需要加强的节点
 
+		struct Paras
+		{
+			int leaf_num;
+			int thread;
+			double td_height;
+		};
+
 		//功能：生成树状支撑模型。
 		//参数1：被支撑的模型
 		//参数2：一颗树上树枝的数量
 		//参数3：线程数
-		void generate_tree_support(TriangleMesh& mesh, size_t leaf_num, size_t thread, QProgressBar* progress,double TDHeight);
+		void generate_tree_support(TriangleMesh& mesh,const Paras& paras, QProgressBar* progress);
 
 	private:
 		//功能：生成支撑横梁。
@@ -46,7 +53,10 @@ namespace Slic3r {
 		//参数1：树的节点
 		//参数2：被支撑模型
 		//参数3：一颗树树枝最大数量
-		void generate_tree_support_area(size_t i, std::vector<TreeNodes> nodes, TriangleMesh& mesh, size_t leaf_num,double TDHeight);
+		void GenTreeSupArea(size_t i, std::vector<TreeNodes>* nodes,TriangleMesh& mesh, const Paras& paras);
+
+		//支撑向下延伸与模型相交
+		void ModelInterSupport(TriangleMesh mesh,const Pointf3& p, const Paras& paras);
 	};
 
 }

@@ -425,7 +425,6 @@ bool Pointf3::operator==(const Pointf3& p) const
 {
     if (this->x == p.x && this->y == p.y && this->z == p.z)
         return true;
-
     return false;
 }
 
@@ -433,13 +432,21 @@ bool Pointf3::operator!=(const Pointf3& p) const
 {
     if (this->x != p.x || this->y != p.y || this->z != p.z)
         return true;
-
     return false;
 }
 
 Vectorf3 Pointf3::operator-(const Pointf3& v) const
 {
 	return Vectorf3(x - v.x, y - v.y, z - v.z);
+}
+
+float* Pointf3::data()
+{
+    float* v = new float[3];
+    v[0] = this->x;
+    v[1] = this->y;
+    v[2] = this->z;
+    return v;
 }
 
 float Pointf3::Dot(const Vectorf3& v) const
@@ -453,6 +460,11 @@ Vectorf3 Pointf3::Cross(const Vectorf3& v) const
 		y * v.z - z * v.y,
 		z * v.x - x * v.z,
 		x * v.y - y * v.x);
+}
+
+Vectorf3 Pointf3::Reverse()
+{
+    return Vectorf3(-this->x, -this->y, -this->z);
 }
 
 void Pointf3::rotate_x(double angle)

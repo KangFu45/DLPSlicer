@@ -410,7 +410,7 @@ namespace Slic3r {
 		TreeSupport* s = new TreeSupport;
 		s->support_point = mesh->feature_point(progress);
 		s->support_point_face = mesh->feature_point_face(m_config->space, progress);
-		s->generate_tree_support(*mesh, m_config->leaf_num, m_config->threads, progress, m_config->support_top_height);
+		s->generate_tree_support(*mesh, TreeSupport::Paras{ m_config->leaf_num ,m_config->threads ,m_config->support_top_height }, progress);
 		return s;
 	}
 

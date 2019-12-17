@@ -2294,8 +2294,8 @@ void GlWidget::slot_dlprinterChange(QString name)
 void GlWidget::UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress)
 {
 	//从支撑编辑里得到，只有支撑点
-	new_sup->generate_tree_support(FindModel(selectID), m_dlprint->m_config->leaf_num
-		, m_dlprint->m_config->threads, progress, m_dlprint->m_config->support_top_height);
+	new_sup->generate_tree_support(FindModel(selectID), TreeSupport::Paras{ m_dlprint->m_config->leaf_num
+		,m_dlprint->m_config->threads ,m_dlprint->m_config->support_top_height }, progress);
 
 	m_dlprint->InsertSupport(selectID, new_sup);
 	InitTreeSupportID(selectID, progress);

@@ -67,8 +67,6 @@ namespace Slic3r{
 
 	}
 
-
-
 	// Same side method
 	// Determine whether point P in triangle ABC
 	inline bool PointinTriangle1(Pointf3 A, Pointf3 B, Pointf3 C, Pointf3 P)
@@ -76,6 +74,11 @@ namespace Slic3r{
 		return SameSide(A, B, C, P) &&
 			SameSide(B, C, A, P) &&
 			SameSide(C, A, B, P);
+	}
+
+	inline bool PointinTriangle1(stl_facet face, Pointf3 P)
+	{
+		return PointinTriangle1(Vec2Pf3(face.vertex[0]), Vec2Pf3(face.vertex[1]), Vec2Pf3(face.vertex[2]), P);
 	}
 
 	//*************************
