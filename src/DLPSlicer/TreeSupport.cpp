@@ -1,249 +1,137 @@
 #include "TreeSupport.h"
-#include "tool.h"
-
-#include <qdebug.h>
 
 namespace Slic3r {
 
-	void TreeSupport::generate_tree_support(TriangleMesh& mesh, const Paras& paras, QProgressBar* progress)
+	//功能：在模型上找到包含指定点的三角面
+	//参数1：基础模型
+	//参数2：指定点
+	//参数3：包含点的三角面
+	//返回：是否找到
+	inline bool PointFindTrangle(const TriangleMesh* mesh, Pointf3 p, stl_facet& face)
+	{
+		//求包含支撑点的三角面片
+		for (int i = 0; i < mesh->stl.stats.number_of_facets; ++i) {
+			face = mesh->stl.facet_start[i];
+			//判断是否是三角面的顶点或在三角面上
+			if (p == face.vertex[0] || p == face.vertex[1] || p == face.vertex[2])
+				return true;
+
+			//三角面向xy平面投影判断是否包含点
+			if (!PointInTriangle3(face, p))
+				continue;
+
+			//判断点是否在当前面上即点与面的距离为零
+			if (DisPoint3(CalPlaneLineIntersectPoint(Nor2Vt3(face.normal),
+				Ver2Pf3(face.vertex[0]), Nor2Vt3(face.normal).Reverse(), p), p) <= 0.001)//0.001为允许的精度误差
+				return true;
+		}
+		return false;
+	}
+
+	void TreeSupport::SupportPointDown(TriangleMesh mesh, const Pointf3& p1, TreeNodes& nodes, const Paras& paras)
+	{
+		//向下延伸
+		Pointf3 p2 = mesh.point_model_intersection_Z(p1);
+		double dis = p1.z - p2.z;
+
+		if (dis < paras.td_height * 2) {//小于顶端距离直接分两段处理
+			Pointf3 p3(p1.x, p1.y, p1.z - (dis /= 2.0));
+			tree_support_leaf.emplace_back(Linef3(p3, p1));
+			tree_support_bottom.emplace_back(Linef3(p2, p3));
+		}
+		else {//生成顶端并添加树节点
+			p2.x = p1.x; p2.y = p1.y; p2.z = p1.z - paras.td_height * 2;
+			tree_support_leaf.emplace_back(Linef3(p2, p1));
+			//存储树的节点
+			nodes.emplace_back(TreeNode{ 1,p2 });
+		}
+		if (p2.z > 0.5)//防止加强求穿过底板
+			tree_support_node.emplace_back(p2);
+	}
+
+	void TreeSupport::GenTreeSupport(TriangleMesh& mesh, const Paras& paras, QProgressBar* progress)
 	{
 		//进度条范围35->81
-		double MinHeight = 1.0;
-		std::vector<TreeNode> node;//树的节点（不会存储树的结构关系）
+		TreeNodes nodes;//树的节点（不会存储树的结构关系）
 
 		//-----------------悬吊面上待支撑点生成顶端与一级树节点--------------------
-		std::vector<stl_vertex> deleteVector;
-		for (auto p = support_point_face.begin(); p != support_point_face.end(); ++p) {
-			size_t id = std::distance(support_point_face.begin(), p);
-			int unit = (id + 1) / (support_point_face.size() / (60 - 35) + 1);
-			if (progress->value() < 35 + unit)
-				progress->setValue(35 + unit);
+		for each (const stl_vertex & v  in support_point_face)
+		{
+			//支撑点
+			Pointf3 p1 = Ver2Pf3(v);
+			//parent
+			stl_facet face;
+			bool ret = PointFindTrangle(&mesh, p1, face);
 
-			stl_facet f, face;
-			int i1;
-			int count = 0;
+			//支撑点延面法向量方向延长的顶端点
+			Pointf3 p2(face.normal.x * paras.td_height + p1.x
+				, face.normal.y * paras.td_height + p1.y
+				, face.normal.z * paras.td_height + p1.z);
 
-			Pointf3 p1((*p).x, (*p).y, (*p).z);
-
-			//-----------------求包含支撑点的三角面片-------------------------
-			//支撑点数据直接带所在三角面片即可省去一段求所在三角面片的代码！！！
-			bool ret = false;
-			double dis = 1;
-			for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
-				f = mesh.stl.facet_start[i];
-				//判断是否是三角面的顶点或在三角面上
-				if ((f.vertex[0].x == p1.x && f.vertex[0].y == p1.y && f.vertex[0].z == p1.z) ||
-					(f.vertex[1].x == p1.x && f.vertex[1].y == p1.y && f.vertex[1].z == p1.z) ||
-					(f.vertex[2].x == p1.x && f.vertex[2].y == p1.y && f.vertex[2].z == p1.z))
-				{
-					ret = true;//当前点为悬吊点
-					i1 = i;
-					face = f;
-				}
-
-				if (PointinTriangle1(Pointf3(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z),
-					Pointf3(f.vertex[1].x, f.vertex[1].y, f.vertex[1].z),
-					Pointf3(f.vertex[2].x, f.vertex[2].y, f.vertex[2].z), p1)) {
-
-					Pointf3 t = CalPlaneLineIntersectPoint(Vectorf3(f.normal.x, f.normal.y, f.normal.z), Pointf3(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z),
-						Vectorf3(-f.normal.x, -f.normal.y, -f.normal.z), p1);
-					double dis1 = distance_point_3(t, p1);
-					if (!ret && dis1 < 0.1) {
-						if (dis1 == 0) {
-							i1 = i;
-							face = f;
-							break;
-						}
-						else if (dis1 < dis) {
-							dis = dis1;
-							i1 = i;
-							face = f;
-						}
-					}
-				}
-
-			}
-			//-------------------------------------
-			Pointf3 p2;
-			p2.x = face.normal.x * paras.td_height + p1.x;
-			p2.y = face.normal.y * paras.td_height + p1.y;
-			p2.z = face.normal.z * paras.td_height + p1.z;
-
-			bool chlik = true;//判断是否检查延伸与模型相交
 			bool down = false;//支撑点是否向下延伸
-			//检查（如果发生碰撞，则向Z轴负方向延伸）
-			if (chlik) {
-				Pointf3 a;
+			if (p2.z >= 0) {
+				//检查（如果发生碰撞，则向Z轴负方向延伸）
 				for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
-					f = mesh.stl.facet_start[i];
-					if (i1 != i) {
-						if (line_to_triangle_bool(f, Linef3(p1, p2))) {
-							down = true;
-							break;
-						}
+					if (mesh.stl.facet_start[i] == face)
+						continue;
+
+					if (isLineCrossTriangle(mesh.stl.facet_start[i], Linef3(p1, p2))) {
+						down = true;
+						break;
 					}
 				}
 			}
+			else
+				down = true;
 
 			if (!down) {//向其法向量方向延伸
-				double ccc = face.normal.x + face.normal.y + face.normal.z;
-				if (p2.z >= 0 && ccc < 2) {
-					Pointf3 p3(-face.normal.x * 0.1 + p1.x, -face.normal.y * 0.1 + p1.y, -face.normal.z * 0.1 + p1.z);//延伸0.1mm
-					tree_support_leaf.push_back(Linef3(p2, p3));
-					//存储树的节点
-					TreeNode n = { 1,p2 };
-					node.push_back(n);
-
-					if (p2.z > 0.5)//防止加强求穿过底板
-						tree_support_node.push_back(p2);
-				}
-				else
-					down = true;
+				//延伸0.1mm
+				tree_support_leaf.emplace_back(Linef3(p2, Pointf3(-face.normal.x * 0.1 + p1.x, -face.normal.y * 0.1 + p1.y, -face.normal.z * 0.1 + p1.z)));
+				//存储树的节点
+				nodes.emplace_back(TreeNode{ 1,p2 });
+				if (p2.z > 0.5)//防止加强求穿过底板
+					tree_support_node.emplace_back(p2);
 			}
-
-			if (down) {//向下延伸
-				p2 = mesh.point_model_intersection_Z(p1);
-				double dis = p1.z - p2.z;
-
-				if (dis < MinHeight) {//删除过短的线段
-					deleteVector.push_back(*p);
-				}
-				else if (dis < paras.td_height * 2 && dis >= MinHeight) {//小于顶端距离直接分两段处理
-					dis /= 2.0;
-					Pointf3 p3(p1.x, p1.y, p1.z - dis);
-					tree_support_leaf.push_back(Linef3(p3, p1));
-					tree_support_bottom.push_back(Linef3(p2, p3));
-				}
-				//生成顶端并添加树节点
-				else {
-					p2.x = p1.x;
-					p2.y = p1.y;
-					p2.z = p1.z - paras.td_height * 2;
-
-					tree_support_leaf.push_back(Linef3(p2, p1));
-					//存储树的节点
-					TreeNode n = { 1,p2 };
-					node.push_back(n);
-
-					if (p2.z > 0.5)//防止加强求穿过底板
-						tree_support_node.push_back(p2);
-				}
-			}
+			else
+				SupportPointDown(mesh, p1, nodes, paras);
 		}
-
-		//删除过短线段的支撑点
-		for (auto d = deleteVector.begin(); d != deleteVector.end(); ++d) {
-			int dis = -1;
-			for (auto t = support_point_face.begin(); t != support_point_face.end(); ++t) {
-				if (equal_vertex(*t, *d))
-					dis = std::distance(support_point_face.begin(), t);
-			}
-			support_point_face.erase(support_point_face.begin() + dis);
-		}
-		deleteVector.clear();
 
 		//-----------------悬吊点生成顶端与一级树节点--------------------
-		for (auto p = support_point.begin(); p != support_point.end(); ++p) {
-			size_t id = std::distance(support_point.begin(), p);
-			int unit = (id + 1) / (support_point.size() / (75 - 61) + 1);
-			if (progress->value() < 61 + unit)
-				progress->setValue(61 + unit);
+		for each (const stl_vertex & v in support_point)
+			SupportPointDown(mesh, Ver2Pf3(v), nodes, paras);
 
-			Pointf3 p1((*p).x, (*p).y, (*p).z);
-			Pointf3 p2 = mesh.point_model_intersection_Z(p1);
-			double dis = p1.z - p2.z;
-			if (dis < MinHeight) {//删除过短的线段
-				deleteVector.push_back(*p);
-			}
-			else if (dis <= paras.td_height * 2 && dis >= MinHeight) {//小于顶端距离直接分两段处理
-				dis /= 2.0;
-				Pointf3 p3(p1.x, p1.y, p1.z - dis);
-				tree_support_leaf.push_back(Linef3(p3, p1));
-				tree_support_bottom.push_back(Linef3(p2, p3));
-			}
-			//生成顶端并添加树节点
-			else {
-				p2.x = p1.x;
-				p2.y = p1.y;
-				p2.z = p1.z - paras.td_height * 2;
-
-				tree_support_leaf.push_back(Linef3(p2, p1));
-				//存储树的节点
-				TreeNode n = { 1,p2 };
-				node.push_back(n);
-
-				if (p2.z > 0.5)//防止加强求穿过底板
-					tree_support_node.push_back(p2);
-			}
-		}
-
-		//删除过短线段的支撑点
-		for (auto d = deleteVector.begin(); d != deleteVector.end(); ++d) {
-			int dis = -1;
-			for (auto t = support_point.begin(); t != support_point.end(); ++t) {
-				if (equal_vertex(*t, *d))
-					dis = std::distance(support_point.begin(), t);
-			}
-			support_point.erase(support_point.begin() + dis);
-		}
-		deleteVector.clear();
-
-		//划分区域
+		//TODO:对节点进行分区域，根据线程数划分区域，使用并行计算
 		BoundingBoxf3 box = mesh.bounding_box();
-		box.min.x -= paras.td_height;
-		box.min.y -= paras.td_height;
-		box.max.x += paras.td_height;
-		box.max.y += paras.td_height;
-
-		size_t a = 2;
-		std::vector<float> x, y;
-		float eachx = (box.max.x - box.min.x) / a;
-		float eachy = (box.max.y - box.min.y) / a;
-		for (int j = 0; j < a; ++j) {
-			x.push_back(box.min.x + j * eachx);
-			y.push_back(box.min.y + j * eachy);
-		}
-		x.push_back(box.max.x + 1);
-		y.push_back(box.max.y + 1);
-
-		std::vector<Linef> areas;
-		for (auto i = y.begin(); i != y.end() - 1; ++i) {
-			for (auto j = x.begin(); j != x.end() - 1; ++j) {
-				areas.push_back(Linef(Pointf(*j, *i), Pointf(*(j + 1), *(i + 1))));
-			}
+		float space_z = (box.max.z - box.min.z) / 4;
+		TreeNodes nodes1, nodes2, nodes3, nodes4;
+		for each (const TreeNode& node in nodes)
+		{
+			if (node.p.z < space_z + box.min.z)
+				nodes1.emplace_back(node);
+			else if (node.p.z < space_z * 2 + box.min.z)
+				nodes2.emplace_back(node);
+			else if (node.p.z < space_z * 3 + box.min.z)
+				nodes3.emplace_back(node);
+			else if (node.p.z < space_z * 4 + box.min.z)
+				nodes4.emplace_back(node);
 		}
 
-		//对节点进行分区域
-		std::vector<std::vector<TreeNode>> nodes;
-		for (auto a = areas.begin(); a != areas.end(); ++a) {
-			std::vector<TreeNode> ps;
-			for (auto n = node.begin(); n != node.end(); ++n) {
-				if ((*n).p.x >= (*a).a.x && (*n).p.x < (*a).b.x &&
-					(*n).p.y >= (*a).a.y && (*n).p.y < (*a).b.y) {
-					ps.push_back(*n);
-				}
-			}
-			nodes.push_back(ps);
-		}
+		std::vector<TreeNodes> nodess;
+		nodess.emplace_back(nodes1);
+		nodess.emplace_back(nodes2);
+		nodess.emplace_back(nodes3);
+		nodess.emplace_back(nodes4);
 
 		progress->setValue(75);
 
-		size_t thread = paras.thread > 1 ? paras.thread : 1;
-
-		//for (int i = 0; i < nodes.size(); ++i) {
-		//	GenTreeSupArea(i, nodes, mesh, leaf_num, TDHeight);
-		//}
-
-		//if (nodes.size() < 100) {
 		parallelize<size_t>(
 			0,
-			nodes.size() - 1,
-			boost::bind(&TreeSupport::GenTreeSupArea, this, _1, &nodes, mesh, paras),
-			thread
+			nodess.size() - 1,
+			boost::bind(&TreeSupport::GenTreeSupArea, this, _1, &nodess, mesh, paras),
+			paras.thread > 1 ? paras.thread : 1
 			);
-		//}
 
-		generate_support_beam(mesh);
+		GenSupportBeam(mesh);
 	}
 
 	//将节点按z轴方向按降序排列
@@ -275,52 +163,11 @@ namespace Slic3r {
 		}
 	}
 
-	inline stl_facet PointFindTrangle(const TriangleMesh* mesh, Pointf3 p)
-	{
-		stl_facet face;
-		bool ret = false;
-		double dis2 = 1;
-		//求包含支撑点的三角面片
-		for (int i = 0; i < mesh->stl.stats.number_of_facets; ++i) {
-			stl_facet f = mesh->stl.facet_start[i];
-			//判断是否是三角面的顶点或在三角面上
-			if (p == f.vertex[0] || p == f.vertex[1] || p == f.vertex[2]) {
-				ret = true;//当前点为悬吊点
-				face = f;
-			}
-
-			if (PointinTriangle1(f, p)) {
-				double dis1 = distance_point_3(CalPlaneLineIntersectPoint(Nor2Vt3(f.normal), Vec2Pf3(f.vertex[0])
-					, Nor2Vt3(f.normal).Reverse(), p), p);
-				if (!ret && dis1 < 0.1) {
-					if (dis1 == 0) {
-						face = f;
-						break;
-					}
-					else if (dis1 < dis2) {
-						dis2 = dis1;
-						face = f;
-					}
-				}
-			}
-		}
-		return face;
-	}
-
 	void TreeSupport::ModelInterSupport(TriangleMesh mesh, const Pointf3& p, const Paras& paras)
 	{
 		//-------------向下延伸时判断底端是否与模型成角度----------------
 		Pointf3 bottom = mesh.point_model_intersection_Z(p);
 		if (bottom.z == 0) {//直接延伸至平台
-			//删除不需要的增强的节点
-			//if (MaxNode.num == 1) {
-			//	int dis = -1;
-			//	for (auto t = tree_support_node.begin(); t != tree_support_node.end(); ++t) {
-			//		if ((*t).x == MaxNode.p.x && (*t).y == MaxNode.p.y && (*t).z == MaxNode.p.z)
-			//			dis = std::distance(tree_support_node.begin(), t);
-			//	}
-			//	tree_support_node.erase(tree_support_node.begin() + dis);
-			//}
 			if (p.z > paras.td_height) {
 				Pointf3 p1(bottom.x, bottom.y, paras.td_height);
 				tree_support_bottom.emplace_back(Linef3(bottom, p1));
@@ -331,15 +178,16 @@ namespace Slic3r {
 		}
 		else {
 			//与模型相交
-
 			Pointf3 p1;
 			double angle;
 			bool down = false;
 			double hei = paras.td_height;
 
-			stl_facet face = PointFindTrangle(&mesh, bottom);
+			stl_facet face;
+			//TODO:未找到面的处理（几率极小）
+			bool ret = PointFindTrangle(&mesh, bottom, face);
 			//通过底端长度来降低树干的角度
-			if (180 / PI * vector_angle_3D(Vectorf3(0, 0, -1), Nor2Vt3(face.normal)) >= 90) {
+			if (180 / PI * vector_angle_3(Vectorf3(0, 0, -1), Nor2Vt3(face.normal)) >= 90) {
 				do
 				{
 					p1.x = face.normal.x * hei + bottom.x;
@@ -350,7 +198,7 @@ namespace Slic3r {
 					stl_normalize_vector(v);
 
 					if (v[0] != 0 && v[1] != 0 && v[2] != 0) {
-						angle = 180 / PI * vector_angle_3D(Vectorf3(0, 0, -1), Vectorf3(v));
+						angle = 180 / PI * vector_angle_3(Vectorf3(0, 0, -1), Vectorf3(v));
 
 						if (hei >= 0.5)
 							hei -= 0.5;
@@ -405,7 +253,7 @@ namespace Slic3r {
 			for each (const TreeNode & p3 in nodes) {
 				//限制树枝数量
 				if (p3.num + MaxNode.num <= paras.leaf_num) {
-					float dis = distance_point_3(MaxNode.p, p3.p);
+					float dis = DisPoint3(MaxNode.p, p3.p);
 					if (dis <= 30)
 						dis_nodes.insert(std::make_pair(dis, p3));
 				}
@@ -456,8 +304,8 @@ namespace Slic3r {
 					for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
 						stl_facet f = mesh.stl.facet_start[i];
 						//--------------两个树枝--------------
-						if (line_to_triangle_bool(f, Linef3(NextNode, MaxNode.p)) ||
-							line_to_triangle_bool(f, Linef3(NextNode, SecondNode.p))) {
+						if (isLineCrossTriangle(f, Linef3(NextNode, MaxNode.p)) ||
+							isLineCrossTriangle(f, Linef3(NextNode, SecondNode.p))) {
 							across = true;
 							break;
 						}
@@ -497,99 +345,105 @@ namespace Slic3r {
 		}
 	}
 
-	//a,b点作xy平面垂线，height为横梁高度,生成单位横梁
-	inline Pointf3s TwoLineBeam(Pointf a, Pointf b, int height)
+	//生成l1与l2两条垂直线的交叉横梁，ps1为l1上的横梁点，ps2为l2上的横梁点
+	inline void TwoLineBeam(Linef3 l1, Linef3 l2, Pointf3s& ps1, Pointf3s& ps2)
 	{
-		float dis = distance_point(a, b);
+		float dis = DisPoint2(Pointf(l1.a.x, l1.a.y), Pointf(l2.a.x, l2.a.y));
 		if (dis == 0)
-			return Pointf3s();
+			return;
 
-		Pointf3s ps;
-		int k = height / dis;
-		for (int i = 0; i < k; ++i) {
-			if (i % 2 == 0)
-				ps.emplace_back(Pointf3(a.x, a.y, dis * i));
-			else
-				ps.emplace_back(Pointf3(b.x, b.y, dis * i));
-		}
-		return ps;
-	}
+		float low = l1.a.z > l2.a.z ? l2.a.z : l1.a.z;
+		float high = l1.b.z < l2.b.z ? l1.b.z : l2.b.z;
 
-	void TreeSupport::generate_support_beam(TriangleMesh& mesh)//生成支撑横梁
-	{
-		int_linef3 lines_i;//对支撑线的横梁计数
-		for (auto l = tree_support_bole.begin(); l != tree_support_bole.end(); ++l) {
-			if ((*l).a.x == (*l).b.x && (*l).a.y == (*l).b.y) {
-				float dis = (*l).b.z - (*l).a.z;
-				//大于30mm的支撑不需要横梁
-				if (dis > 30)
-					lines_i.push_back(std::make_pair(0, *l));
+		float pos, pos1;
+		for (int i = 0; i < high / dis; ++i) {
+			pos = low + dis * i;//从树干最低点开始
+			pos1 = low + dis * (i + 1);
+			if (pos1 > high)
+				break;
+
+
+			if (i % 2 == 0) {
+				ps1.emplace_back(Pointf3(l1.a.x, l1.a.y, pos));
+				ps2.emplace_back(Pointf3(l2.b.x, l2.b.y, pos1));
+			}
+			else {
+				ps1.emplace_back(Pointf3(l1.b.x, l1.b.y, pos1));
+				ps2.emplace_back(Pointf3(l2.b.x, l2.b.y, pos));
 			}
 		}
-		for (int_linef3::iterator _l = lines_i.begin(); _l != lines_i.end(); ++_l) {
-			std::pair<int, Linef3> l = *_l;
-			std::map<float, int> lines_0;//可以连接的支撑线
-			if (l.first == 0) {//没有连接横梁的支撑去加横梁
-				for (int_linef3::iterator _l1 = lines_i.begin(); _l1 != lines_i.end(), _l1 != _l; ++_l1) {
-					float dis = distance_point(Pointf(l.second.a.x, l.second.a.y), Pointf((*_l1).second.a.x, (*_l1).second.a.y));
-					if (dis < 30) { //控制可生成支撑柱之间的距离范围
-						int len = std::distance(lines_i.begin(), _l1);
-						if (_l1->first == 0 || _l1->first == 1) {
-							lines_0.insert(std::make_pair(dis, len));
-						}
+	}
+
+	void TreeSupport::GenSupportBeam(const TriangleMesh& mesh)//生成支撑横梁
+	{
+		//树干的临时数据结构
+		struct TreeBole {
+			unsigned short num; //横梁数 warning:未使用
+			Linef3 bole;	//树干
+		};
+
+		std::vector<TreeBole> boles;//对支撑线的横梁计数
+		for each (const Linef3 & l in tree_support_bole) {
+			if (l.a.x == l.b.x && l.a.y == l.b.y) {
+				//大于30mm的支撑需要横梁
+				//if (l.b.z - l.a.z > 30)//TODO:将长度限制参数化
+				boles.emplace_back(TreeBole{ 0,l });
+			}
+		}
+
+		//for (auto b = boles.begin(); b != boles.end(); ++b) {
+		for each (const TreeBole & b in boles)
+		{
+			if (b.num > 0)
+				continue;
+
+			//参数化
+			float len = 30;//存储匹配树干之间的长度
+			TreeBole b2;
+			//for (auto b3 = boles.begin(); b3 != boles.end(); ++b3) {
+			for each (const TreeBole & b3 in boles) {
+				float t_len = DisPoint2(Pointf(b.bole.a.x, b.bole.a.y), Pointf(b3.bole.a.x, b3.bole.a.y));
+				if (t_len < 30 && t_len < len && t_len != 0) {
+					len = t_len;
+					b2 = b3;
+				}
+			}
+
+			if (len == 30)
+				continue;
+
+			//生成单位横梁
+			Pointf3s ps1, ps2;
+			TwoLineBeam(b.bole, b2.bole, ps1, ps2);
+
+			if (ps1.empty() || ps1.size() != ps2.size())
+				continue;
+
+			bool dir = true;
+			for (auto p1 = ps1.begin(); p1 != ps1.end(); ++p1) {
+				auto p2 = ps2.begin() + std::distance(ps1.begin(), p1);
+				bool across = false;
+
+				Linef3 line;
+				if (dir) {
+					line.a = *p1;
+					line.b = *p2;
+				}
+				else {
+					line.a = *p2;
+					line.b = *p1;
+				}
+				dir = !dir;
+
+				for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
+					if (isLineCrossTriangle(mesh.stl.facet_start[i], line)) {
+						across = true;
+						break;
 					}
 				}
 
-				if (lines_0.size() > 0) {
-					std::map<float, int>::iterator m = lines_0.begin();
-					int_linef3::iterator _l2 = lines_i.begin() + (*m).second;
-					++_l2->first;//横梁数加一
-					std::pair<int, Linef3> l2 = *_l2;
-					Linef3 line1 = l.second;
-					Linef3 line2 = l2.second;
-
-					//生成单位横梁
-					Pointf3s ps = TwoLineBeam(Pointf(line1.a.x, line1.a.y), Pointf(line2.a.x, line2.a.y), 300);
-					Pointf3s ps1;
-
-					//挑选横梁
-					for (std::vector<Pointf3>::iterator _p3 = ps.begin(); _p3 != ps.end(); ++_p3) {
-						Pointf3 p3 = *_p3;
-						if (line1.a.x == p3.x&&line1.a.y == p3.y&&line1.a.z >= 0 && line1.b.z < 300) {
-							if (p3.z > line1.a.z&&p3.z < line1.b.z)
-								ps1.push_back(p3);
-						}
-						if (line2.a.x == p3.x&&line2.a.y == p3.y&&line2.a.z >= 0 && line2.b.z < 300) {
-							if (p3.z > line2.a.z&&p3.z < line2.b.z)
-								ps1.push_back(p3);
-						}
-					}
-
-					if (ps1.size() > 1) {
-						//size_t a = ps1.size() / 5 + 1;//控制横梁数量
-						for (std::vector<Pointf3>::iterator p = ps1.begin(); p != ps1.end() - 1; ++p) {
-							int b = std::distance(ps1.begin(), p);
-							//if (b % a == 0) {
-								//判断横梁是否穿过模型
-								Linef3 line(*p, *(p + 1));
-								bool across = false;
-
-								if (distance_point_3(line.a, line.b) > 10) {
-									for (int i = 0; i < mesh.stl.stats.number_of_facets; ++i) {
-										if (line_to_triangle_bool(mesh.stl.facet_start[i], line)) {
-											across = true;
-											break;
-										}
-									}
-								}
-								
-								if (!across) {
-									tree_support_branch.push_back(line);
-								}
-							//}
-						}
-					}
-				}
+				if (!across)
+					tree_support_branch.emplace_back(line);
 			}
 		}
 	}

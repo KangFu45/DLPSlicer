@@ -65,18 +65,19 @@ stl_initialize(stl_file *stl) {
   stl->facet_start = NULL;
   stl->v_indices = NULL;
   stl->v_shared = NULL;
+  stl->v_shared_faces = NULL;
 }
 
 void
 stl_count_facets(stl_file *stl, const ADMESH_CHAR *file) {
   long           file_size;
   uint32_t       header_num_facets;
-  int            num_facets;
+  uint32_t       num_facets;
   int            i;
   size_t         s;
   unsigned char  chtest[128];
   int            num_lines = 1;
-  char           *error_msg;
+  //char           *error_msg;
 
   if (stl->error) return;
 
@@ -113,7 +114,7 @@ stl_count_facets(stl_file *stl, const ADMESH_CHAR *file) {
     /* Test if the STL file has the right size  */
     if(((file_size - HEADER_SIZE) % SIZEOF_STL_FACET != 0)
         || (file_size < STL_MIN_FILE_SIZE)) {
-      fprintf(stderr, "The file %s has the wrong size.\n", file);
+      fprintf(stderr, "The file %ws has the wrong size.\n", file);
       stl->error = 1;
       return;
     }
@@ -125,7 +126,7 @@ stl_count_facets(stl_file *stl, const ADMESH_CHAR *file) {
     }
 
     /* Read the int following the header.  This should contain # of facets */
-    if((!fread(&header_num_facets, sizeof(uint32_t), 1, stl->fp)) || (uint32_t)num_facets != le32toh(header_num_facets)) {
+    if((!fread(&header_num_facets, sizeof(uint32_t), 1, stl->fp)) || num_facets != le32toh(header_num_facets)) {
       fprintf(stderr,
               "Warning: File size doesn't match number of facets in the header\n");
 
@@ -445,5 +446,7 @@ stl_close(stl_file *stl) {
     free(stl->v_indices);
   if(stl->v_shared != NULL)
     free(stl->v_shared);
+  if (stl->v_shared_faces != NULL)
+      free(stl->v_shared_faces);
 }
 

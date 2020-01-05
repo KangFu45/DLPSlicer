@@ -37,263 +37,176 @@ stl_invalidate_shared_vertices(stl_file *stl) {
     free(stl->v_shared);
     stl->v_shared = NULL;
   }
+  if (stl->v_shared_faces != NULL) {
+      free(stl->v_shared_faces);
+      stl->v_shared_faces = NULL;
+  }
 }
 
 void
-stl_generate_shared_vertices(stl_file *stl) {
-  int i;
-  int j;
-  int first_facet;
-  int direction;
-  int facet_num;
-  int vnot;
-  int next_edge;
-  int pivot_vertex;
-  int next_facet;
-  int reversed;
+stl_generate_shared_vertices_faces(stl_file* stl) {
+    int i;
+    int j;
+    int first_facet;
+    int direction;
+    int facet_num;
+    int vnot;
+    int next_edge;
+    int pivot_vertex;
+    int next_facet;
+    int reversed;
+    int num;
 
-  if (stl->error) return;
+    if (stl->error) return;
 
-  /* make sure this function is idempotent and does not leak memory */
-  stl_invalidate_shared_vertices(stl);
+    /* make sure this function is idempotent幂等 and does not leak memory内存泄漏 */
+    stl_invalidate_shared_vertices(stl);
 
-  stl->v_indices = (v_indices_struct*)
-                   calloc(stl->stats.number_of_facets, sizeof(v_indices_struct));
-  if(stl->v_indices == NULL) perror("stl_generate_shared_vertices");
-  stl->v_shared = (stl_vertex*)
-                  calloc((stl->stats.number_of_facets / 2), sizeof(stl_vertex));
-  if(stl->v_shared == NULL) perror("stl_generate_shared_vertices");
-  stl->stats.shared_malloced = stl->stats.number_of_facets / 2;
-  stl->stats.shared_vertices = 0;
+    stl->v_indices = (v_indices_struct*)
+        calloc(stl->stats.number_of_facets, sizeof(v_indices_struct));
+    if (stl->v_indices == NULL) perror("stl_generate_shared_vertices");
+    stl->v_shared = (stl_vertex*)
+        calloc((stl->stats.number_of_facets / 2), sizeof(stl_vertex));
+    if (stl->v_shared == NULL) perror("stl_generate_shared_vertices");
 
-  for(i = 0; i < stl->stats.number_of_facets; i++) {
-    stl->v_indices[i].vertex[0] = -1;
-    stl->v_indices[i].vertex[1] = -1;
-    stl->v_indices[i].vertex[2] = -1;
-  }
+    //---------add----------
+    stl->v_shared_faces = (v_face_struct*)
+        calloc(stl->stats.number_of_facets / 2, sizeof(v_face_struct));
+    if (stl->v_shared_faces == NULL) perror("stl_generate_shared_vertices");
+    //----------------------
 
+    stl->stats.shared_malloced = stl->stats.number_of_facets / 2;
+    stl->stats.shared_vertices = 0;
 
-  for(i = 0; i < stl->stats.number_of_facets; i++) {
-    first_facet = i;
-    for(j = 0; j < 3; j++) {
-      if(stl->v_indices[i].vertex[j] != -1) {
-        continue;
-      }
-      if(stl->stats.shared_vertices == stl->stats.shared_malloced) {
-        stl->stats.shared_malloced += 1024;
-        stl->v_shared = (stl_vertex*)realloc(stl->v_shared,
-                                             stl->stats.shared_malloced * sizeof(stl_vertex));
-        if(stl->v_shared == NULL) perror("stl_generate_shared_vertices");
-      }
-
-      stl->v_shared[stl->stats.shared_vertices] =
-        stl->facet_start[i].vertex[j];
-
-      direction = 0;
-      reversed = 0;
-      facet_num = i;
-      vnot = (j + 2) % 3;
-
-      for(;;) {
-        if(vnot > 2) {
-          if(direction == 0) {
-            pivot_vertex = (vnot + 2) % 3;
-            next_edge = pivot_vertex;
-            direction = 1;
-          } else {
-            pivot_vertex = (vnot + 1) % 3;
-            next_edge = vnot % 3;
-            direction = 0;
-          }
-        } else {
-          if(direction == 0) {
-            pivot_vertex = (vnot + 1) % 3;
-            next_edge = vnot;
-          } else {
-            pivot_vertex = (vnot + 2) % 3;
-            next_edge = pivot_vertex;
-          }
-        }
-        stl->v_indices[facet_num].vertex[pivot_vertex] =
-          stl->stats.shared_vertices;
-
-        next_facet = stl->neighbors_start[facet_num].neighbor[next_edge];
-        if(next_facet == -1) {
-          if(reversed) {
-            break;
-          } else {
-            direction = 1;
-            vnot = (j + 1) % 3;
-            reversed = 1;
-            facet_num = first_facet;
-          }
-        } else if(next_facet != first_facet) {
-          vnot = stl->neighbors_start[facet_num].
-                 which_vertex_not[next_edge];
-          facet_num = next_facet;
-        } else {
-          break;
-        }
-      }
-      stl->stats.shared_vertices += 1;
+    for (i = 0; i < stl->stats.number_of_facets; i++) {
+        stl->v_indices[i].vertex[0] = -1;
+        stl->v_indices[i].vertex[1] = -1;
+        stl->v_indices[i].vertex[2] = -1;
     }
-  }
-}
-
-void
-stl_generate_shared_vertices_faces(stl_file *stl, v_face_struct* v_shared_faces) {
-	int i;
-	int j;
-	int first_facet;
-	int direction;
-	int facet_num;
-	int vnot;
-	int next_edge;
-	int pivot_vertex;
-	int next_facet;
-	int reversed;
-	int num;
-
-	if (stl->error) return;
-
-	/* make sure this function is idempotent幂等 and does not leak memory内存泄漏 */
-	stl_invalidate_shared_vertices(stl);
-
-	stl->v_indices = (v_indices_struct*)
-		calloc(stl->stats.number_of_facets, sizeof(v_indices_struct));
-	if (stl->v_indices == NULL) perror("stl_generate_shared_vertices");
-	stl->v_shared = (stl_vertex*)
-		calloc((stl->stats.number_of_facets / 2), sizeof(stl_vertex));
-	if (stl->v_shared == NULL) perror("stl_generate_shared_vertices");
-
-	stl->stats.shared_malloced = stl->stats.number_of_facets / 2;
-	stl->stats.shared_vertices = 0;
-
-	for (i = 0; i < stl->stats.number_of_facets; i++) {
-		stl->v_indices[i].vertex[0] = -1;
-		stl->v_indices[i].vertex[1] = -1;
-		stl->v_indices[i].vertex[2] = -1;
-	}
 
 
 
-	for (i = 0; i < stl->stats.number_of_facets; i++) {
-		first_facet = i;
-		for (j = 0; j < 3; j++) {
-			
-			//***********增加*********
-			int v_face_malloced = 4;
-			//************************
+    for (i = 0; i < stl->stats.number_of_facets; i++) {
+        first_facet = i;
+        for (j = 0; j < 3; j++) {
 
-			//排除已有索引点的点
-			if (stl->v_indices[i].vertex[j] != -1) {
-				continue;
-			}
+            //--------add--------
+            int v_face_malloced = 4;
+            //-------------------
 
-			//内存不够，重新分配内存
-			if (stl->stats.shared_vertices == stl->stats.shared_malloced) {
-				stl->stats.shared_malloced += 1024;
-				stl->v_shared = (stl_vertex*)realloc(stl->v_shared,
-					stl->stats.shared_malloced * sizeof(stl_vertex));
+            //排除已有索引点的点
+            if (stl->v_indices[i].vertex[j] != -1) {
+                continue;
+            }
 
-				if (stl->v_shared == NULL) perror("stl_generate_shared_vertices");
+            //内存不够，重新分配内存
+            if (stl->stats.shared_vertices == stl->stats.shared_malloced) {
+                stl->stats.shared_malloced += 1024;
+                stl->v_shared = (stl_vertex*)realloc(stl->v_shared,
+                    stl->stats.shared_malloced * sizeof(stl_vertex));
+                if (stl->v_shared == NULL) perror("stl_generate_shared_vertices");
 
-			}
+                //-----------add-------------
+                stl->v_shared_faces = (v_face_struct*)realloc(stl->v_shared_faces,
+                    stl->stats.shared_malloced * sizeof(v_face_struct));
+                if (stl->v_shared_faces == NULL)perror("stl_generate_shared_vertices");
+                //--------------------------
+            }
 
-			stl->v_shared[stl->stats.shared_vertices] =
-				stl->facet_start[i].vertex[j];
+            stl->v_shared[stl->stats.shared_vertices] =
+                stl->facet_start[i].vertex[j];
 
-			direction = 0;
-			reversed = 0;
-			facet_num = i;
-			vnot = (j + 2) % 3;
+            direction = 0;
+            reversed = 0;
+            facet_num = i;
+            vnot = (j + 2) % 3;
 
-			//**********************************增加**************************************
-			num = 0;
-			v_face_struct v_shared_face;
-			v_shared_face.num = 0;
-			v_shared_face.v_shared_face = (int*)calloc(v_face_malloced, sizeof(int));
-			//****************************************************************************
+            //-----------add-----------
+            num = 0;
+            v_face_struct v_face = { 0,(int*)calloc(v_face_malloced, sizeof(int)) };
+            //-------------------------
 
-			for (;;) {
-				
-				//******************************************增加*****************************************
-				if (num == v_face_malloced){
-					v_face_malloced += 4;
-					v_shared_face.v_shared_face = (int*)realloc(v_shared_face.v_shared_face, v_face_malloced*sizeof(int));
-				}
-				//***************************************************************************************
+            for (;;) {
 
-				if (vnot > 2) {
-					if (direction == 0) {
-						pivot_vertex = (vnot + 2) % 3;
-						next_edge = pivot_vertex;
-						direction = 1;
-					}
-					else {
-						pivot_vertex = (vnot + 1) % 3;
-						next_edge = vnot % 3;
-						direction = 0;
-					}
-				}
-				else {
-					if (direction == 0) {
-						pivot_vertex = (vnot + 1) % 3;
-						next_edge = vnot;
-					}
-					else {
-						pivot_vertex = (vnot + 2) % 3;
-						next_edge = pivot_vertex;
-					}
-				}
-				//将当前共享点放入面中
-				stl->v_indices[facet_num].vertex[pivot_vertex] =
-					stl->stats.shared_vertices;
-				
-				//******************增加*****************
-				v_shared_face.v_shared_face[num] = facet_num;
-				//***************************************
+                //--------add----------------
+                if (num == v_face_malloced) {
+                    v_face_malloced += 4;
+                    int* temp = v_face.v_shared_face;
+                    v_face.v_shared_face = (int*)realloc(v_face.v_shared_face, v_face_malloced * sizeof(int));
+                    if (v_face.v_shared_face == NULL)
+                        perror("stl_generate_shared_vertices");//错误处理
+                }
+                //------------------------
 
-				//通过附近面，将当前点放入面的点索引中
-				next_facet = stl->neighbors_start[facet_num].neighbor[next_edge];
-				if (next_facet == -1) {
-					if (reversed) {
-						break;
-					}
-					else {
-						direction = 1;
-						vnot = (j + 1) % 3;
-						reversed = 1;
-						facet_num = first_facet;
-					}
-				}
-				else if (next_facet != first_facet) {
-					vnot = stl->neighbors_start[facet_num].
-						which_vertex_not[next_edge];
-					facet_num = next_facet;
-				}
-				else {
-					break;
-				}
-				num++;
-			}
-			
-			//************************增加*************************
-			v_shared_face.num = num + 1;
-			v_shared_faces[stl->stats.shared_vertices] = v_shared_face;
-			//*****************************************************
+                if (vnot > 2) {
+                    if (direction == 0) {
+                        pivot_vertex = (vnot + 2) % 3;
+                        next_edge = pivot_vertex;
+                        direction = 1;
+                    }
+                    else {
+                        pivot_vertex = (vnot + 1) % 3;
+                        next_edge = vnot % 3;
+                        direction = 0;
+                    }
+                }
+                else {
+                    if (direction == 0) {
+                        pivot_vertex = (vnot + 1) % 3;
+                        next_edge = vnot;
+                    }
+                    else {
+                        pivot_vertex = (vnot + 2) % 3;
+                        next_edge = pivot_vertex;
+                    }
+                }
+                //将当前共享点放入面中
+                stl->v_indices[facet_num].vertex[pivot_vertex] =
+                    stl->stats.shared_vertices;
 
-			stl->stats.shared_vertices += 1;
-		}
-	}
+                //--------------add----------
+                v_face.v_shared_face[num] = facet_num;
+                //----------------------------
 
+                //通过附近面，将当前点放入面的点索引中
+                next_facet = stl->neighbors_start[facet_num].neighbor[next_edge];
+                if (next_facet == -1) {
+                    if (reversed) {
+                        break;
+                    }
+                    else {
+                        direction = 1;
+                        vnot = (j + 1) % 3;
+                        reversed = 1;
+                        facet_num = first_facet;
+                    }
+                }
+                else if (next_facet != first_facet) {
+                    vnot = stl->neighbors_start[facet_num].
+                        which_vertex_not[next_edge];
+                    facet_num = next_facet;
+                }
+                else {
+                    break;
+                }
+                num++;
+            }
+
+            //------------add--------
+            v_face.num = num + 1;
+            stl->v_shared_faces[stl->stats.shared_vertices] = v_face;
+            //-------------------------
+
+            stl->stats.shared_vertices += 1;
+        }
+    }
 }
 
 void
 stl_write_off(stl_file *stl, ADMESH_CHAR *file) {
   int i;
   FILE      *fp;
-  char      *error_msg;
+  //char      *error_msg;
 
   if (stl->error) return;
 
@@ -324,7 +237,7 @@ void
 stl_write_vrml(stl_file *stl, ADMESH_CHAR *file) {
   int i;
   FILE      *fp;
-  char      *error_msg;
+  //char      *error_msg;
 
   if (stl->error) return;
 

@@ -215,7 +215,7 @@ public:
 	TriangleMesh SaveSupport();
 	void ClearModelBuffer();
 	void ClearSupportBuffer();
-	std::vector<TriangleMesh> GetSupportModel();
+	TriangleMeshs GetSupportModel();
 	void UpdateConfine();
 	bool CheckConfine();
 

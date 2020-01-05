@@ -16,7 +16,6 @@
 #include "PreviewDialog.h"
 #include "SetupDialog.h"
 #include "IO.hpp"
-#include "tool.h"
 
 //ERROR:setting.h放在.cpp文件夹下会报错
 //#include "Setting.h"

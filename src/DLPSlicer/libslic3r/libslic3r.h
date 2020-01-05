@@ -136,6 +136,8 @@ parallelize(std::queue<T> queue, boost::function<void(T)> func,
     workers.join_all();
 }
 
+//bind左边只能是类/结构体/联合的方法
+//只能用成员属性返回值
 template <class T> void
 parallelize(T start, T end, boost::function<void(T)> func,
     int threads_count = boost::thread::hardware_concurrency())

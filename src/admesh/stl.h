@@ -60,8 +60,6 @@ extern "C" {
 // Comparing an edge by memcmp, 2x3x4 bytes = 24
 #define SIZEOF_EDGE_SORT       24
 
-#define M_PI  3.14159265358979323846
-
 typedef struct {
   float x;
   float y;
@@ -79,7 +77,7 @@ typedef char stl_extra[2];
 typedef struct {
   stl_normal normal;
   stl_vertex vertex[3];
-  stl_extra  extra;
+  stl_extra  extra;//第一位用来判断悬吊面与大倾角面
 } stl_facet;
 #define SIZEOF_STL_FACET       50
 
@@ -125,64 +123,61 @@ typedef struct {
   int   vertex[3];
 } v_indices_struct;
 
-//*******************************************
-//日期：2017
-//功能：存储包含同一顶点的面集合索引。
-//属性1：面的数量。
-//属性2：包含面的数组。
-//*******************************************
-typedef struct{
-	int num;
-	int *v_shared_face;
-} v_face_struct;
+//存储包含同一顶点的面集合索引
+//或用来表示一组同类型的三角面
+typedef struct {
+    int num;    //面的数量
+    int* v_shared_face; //包含面的数组
+}v_face_struct;
 
 typedef struct {
-  char          header[81];
-  stl_type      type;
-  int           number_of_facets;
-  stl_vertex    max;
-  stl_vertex    min;
-  stl_vertex    size;
-  float         bounding_diameter;
-  float         shortest_edge;
-  float         volume;
-  unsigned      number_of_blocks;
-  int           connected_edges;
-  int           connected_facets_1_edge;
-  int           connected_facets_2_edge;
-  int           connected_facets_3_edge;	//连接三条边的面
-  int           facets_w_1_bad_edge;
-  int           facets_w_2_bad_edge;
-  int           facets_w_3_bad_edge;
-  int           original_num_facets;
-  int           edges_fixed;
-  int           degenerate_facets;
-  int           facets_removed;
-  int           facets_added;
-  int           facets_reversed;
-  int           backwards_edges;
-  int           normals_fixed;
-  int           number_of_parts;
-  int           malloced;
-  int           freed;
-  int           facets_malloced;
-  int           collisions;
-  int           shared_vertices;
-  int           shared_malloced;
+    char          header[81];
+    stl_type      type;
+    int           number_of_facets;
+    stl_vertex    max;
+    stl_vertex    min;
+    stl_vertex    size;
+    float         bounding_diameter;
+    float         shortest_edge;
+    float         volume;
+    unsigned      number_of_blocks;
+    int           connected_edges;
+    int           connected_facets_1_edge;
+    int           connected_facets_2_edge;
+    int           connected_facets_3_edge;	//连接三条边的面
+    int           facets_w_1_bad_edge;
+    int           facets_w_2_bad_edge;
+    int           facets_w_3_bad_edge;
+    int           original_num_facets;
+    int           edges_fixed;
+    int           degenerate_facets;
+    int           facets_removed;
+    int           facets_added;
+    int           facets_reversed;
+    int           backwards_edges;
+    int           normals_fixed;
+    int           number_of_parts;
+    int           malloced;
+    int           freed;
+    int           facets_malloced;
+    int           collisions;
+    int           shared_vertices;
+    int           shared_malloced;
 } stl_stats;
 
 typedef struct {
-  FILE          *fp;
-  stl_facet     *facet_start;
-  stl_edge      *edge_start;
-  stl_hash_edge **heads;
-  stl_hash_edge *tail;
-  int           M;
-  stl_neighbors *neighbors_start;
-  v_indices_struct *v_indices;	//三角面的三个顶点索引
-  stl_vertex    *v_shared;	//顶点的数组
-  stl_stats     stats;
-  char          error;
+    FILE* fp;
+    stl_facet* facet_start;
+    stl_edge* edge_start;
+    stl_hash_edge** heads;
+    stl_hash_edge* tail;
+    int           M;
+    stl_neighbors* neighbors_start;
+    v_indices_struct* v_indices;	//三角面的三个顶点索引
+    stl_vertex* v_shared;	//顶点的数组
+    v_face_struct* v_shared_faces;    //存储点环绕面的数据,add
+    stl_stats     stats;
+    char          error;
 } stl_file;
 
 
@@ -223,15 +218,11 @@ extern void stl_mirror_xz(stl_file *stl);
 extern void stl_transform(stl_file *stl, float *trafo3x4);
 extern void stl_open_merge(stl_file *stl, ADMESH_CHAR *file);
 extern void stl_invalidate_shared_vertices(stl_file *stl);
-extern void stl_generate_shared_vertices(stl_file *stl);
 
-//****************************************************
-//日期：2017
 //功能：得到共享点和点与周围环绕面的数据关系。
 //参数1：stl模型文件。
 //参数2：要返回的点与周围环绕面的数据关系。
-//****************************************************
-extern void stl_generate_shared_vertices_faces(stl_file *stl, v_face_struct *v_shared_faces);
+extern void stl_generate_shared_vertices_faces(stl_file *stl);
 
 extern void stl_write_obj(stl_file *stl, const ADMESH_CHAR *file);
 extern void stl_write_off(stl_file *stl, ADMESH_CHAR *file);

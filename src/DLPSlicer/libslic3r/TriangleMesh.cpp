@@ -2,6 +2,7 @@
 #include "TriangleMesh.hpp"
 #include "ClipperUtils.hpp"
 #include "Geometry.hpp"
+
 #include <cmath>
 #include <deque>
 #include <queue>
@@ -15,7 +16,6 @@
 #include <stdexcept>
 #include <boost/config.hpp>
 #include <boost/nowide/convert.hpp>
-#include "tool.h"
 #include "qdebug.h"
 
 #ifdef SLIC3R_DEBUG
@@ -95,6 +95,10 @@ TriangleMesh::TriangleMesh(const TriangleMesh &other)
         this->stl.v_shared = (stl_vertex*)calloc(other.stl.stats.shared_vertices, sizeof(stl_vertex));
         std::copy(other.stl.v_shared, other.stl.v_shared + other.stl.stats.shared_vertices, this->stl.v_shared);
     }
+    if (other.stl.v_shared_faces != NULL) {
+        this->stl.v_shared_faces = (v_face_struct*)calloc(other.stl.stats.shared_vertices, sizeof(v_face_struct));
+        std::copy(other.stl.v_shared_faces, other.stl.v_shared_faces + other.stl.stats.shared_vertices, this->stl.v_shared_faces);
+    }
 }
 
 TriangleMesh& TriangleMesh::operator= (TriangleMesh other)
@@ -112,13 +116,6 @@ TriangleMesh::swap(TriangleMesh &other)
 
 TriangleMesh::~TriangleMesh() {
     stl_close(&this->stl);
-
-	if (!this->v_shared_faces.empty())
-	{
-		auto v = this->v_shared_faces.begin();
-		delete (*v).v_shared_face;
-		this->v_shared_faces.erase(v);
-	}
 }
 
 void
@@ -258,7 +255,7 @@ TriangleMesh::facets_count() const
 
 void
 TriangleMesh::WriteOBJFile(const std::string &output_file) {
-    stl_generate_shared_vertices(&stl);
+    stl_generate_shared_vertices_faces(&stl);
     
     #ifdef BOOST_WINDOWS
     stl_write_obj(&stl, boost::nowide::widen(output_file).c_str());
@@ -567,33 +564,7 @@ void
 TriangleMesh::require_shared_vertices()
 {
     if (!this->repaired) this->repair();
-    if (this->stl.v_shared == NULL) stl_generate_shared_vertices(&(this->stl));
-}
-
-//得到共享点和点与周围环绕面的数据关系
-void TriangleMesh::require_shared_vertices_faces()
-{
-	if (!this->repaired) this->repair();
-	if (this->stl.v_shared == NULL)
-	{
-		//分配内存
-		v_face_struct* _v_shared_faces = new v_face_struct[this->stl.stats.number_of_facets];
-
-		//重定义的，在原来生成共享面点关系的基础上增加了点面关系。
-		stl_generate_shared_vertices_faces(&(this->stl), _v_shared_faces);
-
-		if (!this->v_shared_faces.empty())
-		{
-			auto v = this->v_shared_faces.begin();
-			delete (*v).v_shared_face;
-			this->v_shared_faces.erase(v);
-		}
-
-		for (int i = 0; i < this->stl.stats.number_of_facets; ++i)
-			this->v_shared_faces.push_back(_v_shared_faces[i]);
-
-		delete[] _v_shared_faces;
-	}
+    if (this->stl.v_shared == NULL) stl_generate_shared_vertices_faces(&(this->stl));
 }
 
 //标记特征面
@@ -612,7 +583,7 @@ void TriangleMesh::extract_feature_face(int angle)
 	for (int i = 0; i < this->stl.stats.number_of_facets; i++) {
 		stl_facet* face = &this->stl.facet_start[i];
 		//得到法向量的角度值
-		double a = 180 / PI*vector_angle_3D(Vectorf3(0, 0, -1), Vectorf3(face->normal.x, face->normal.y, face->normal.z));
+		double a = 180 / PI*vector_angle_3(Vectorf3(0, 0, -1), Vectorf3(face->normal.x, face->normal.y, face->normal.z));
 		//a==1,三角面片为0度，为悬吊面，将标记值设为90
 		if (a == 0) {
 			this->stl.facet_start[i].extra[0] = 90;
@@ -831,997 +802,6 @@ TriangleMesh::make_sphere(double rho, double fa) {
     TriangleMesh mesh(vertices, facets);
     return mesh;
 }
-
-
-/*-------------------------------------------------------生成特特征支撑-----------------------------------------------------------*/
-
-std::vector<stl_vertex> TriangleMesh::feature_point(QProgressBar* progress)
-{
-	std::vector<stl_vertex> feature_point;
-
-	//得到局部最低点
-	std::vector<int> nadir;//存储的是最低点的id
-	nadir = cliff_point();
-	progress->setValue(25);
-
-	
-	//将特征点加入特征面的点中
-	for (std::vector<int>::iterator p = nadir.begin(); p != nadir.end(); ++p) {
-		stl_vertex v = stl.v_shared[*p];
-		feature_point.push_back(v);
-	}
-
-	return feature_point;
-}
-
-std::vector<stl_vertex> TriangleMesh::feature_point_face(float space, QProgressBar* progress)
-{
-	//生成陡峭面
-	std::vector<v_face_struct*> feature_faces_45 = generate_feature_faces_45();
-
-	//生成悬吊面
-	std::vector<v_face_struct*> feature_faces_90 = generate_feature_faces_90();
-	progress->setValue(30);
-
-	//特征面生成点
-	std::vector<stl_vertex> feature_faces_point;//存储的是特征面的区域需要支撑点的值
-	feature_face_to_point(feature_faces_45, space, feature_faces_point, 45);
-
-	feature_face_to_point(feature_faces_90, space, feature_faces_point, 90);
-
-	//释放特征面的内存
-	if (!feature_faces_45.empty())
-	{
-		auto f = feature_faces_45.begin();
-		free((*f)->v_shared_face);
-		delete *f;
-		feature_faces_45.erase(f);
-	}
-	feature_faces_45.clear();
-
-	if (!feature_faces_90.empty())
-	{
-		auto f = feature_faces_90.begin();
-		free((*f)->v_shared_face);
-		delete *f;
-		feature_faces_90.erase(f);
-	}
-	feature_faces_90.clear();
-
-	progress->setValue(35);
-
-	return feature_faces_point;
-}
-
-std::vector<int> TriangleMesh::cliff_point()//得到悬挂点
-{
-	int aaa = 0;
-	std::vector<int> nadir;//局部最低点
-	//依次判断每个共享点
-	for (int i = 0; i < this->stl.stats.shared_vertices; ++i) {
-		//得到包围当前点的环绕面
-		v_face_struct v_face = this->v_shared_faces[i];
-		//根据id得到点的值
-		const stl_vertex v = this->stl.v_shared[i];
-
-		//1.排除接近平面的点
-		if (v.z < 0.05)
-			continue;
-
-		//2.排除悬吊面上的点
-		for (int k = 0; k < v_face.num; ++k) {
-			//取出一个环绕面标记值
-			if (this->stl.facet_start[v_face.v_shared_face[k]].extra[0] == 90) {
-				goto Next;
-			}
-		}
-
-		//3.筛选凸包点
-		for (int k = 0; k < v_face.num; ++k) {
-			//取出一个环绕面的点id
-			int* p = this->stl.v_indices[v_face.v_shared_face[k]].vertex;
-			for (int j = 0; j < 3; ++j) {
-				int temp = p[j];
-				//根据id得到点的值
-				stl_vertex v2 = this->stl.v_shared[temp];
-				//根据高度值的比较，判断筛选凸包。
-				if (v2.z < v.z)
-					goto Next;
-			}
-		}
-
-		//4.悬挂点向下延伸相交的三角面的个数，奇数不是，偶数是
-		int num = 0;
-		float bb = 0;
-		stl_facet ff;
-		for (int j = 0; j < this->stl.stats.number_of_facets; ++j) {
-			stl_facet f = this->stl.facet_start[j];
-			Pointf3 bb1;
-
-			//排除包含该点的三角面片
-			if ((f.vertex[0].x == v.x&&f.vertex[0].y == v.y&&f.vertex[0].z == v.z) ||
-				(f.vertex[1].x == v.x&&f.vertex[1].y == v.y&&f.vertex[1].z == v.z) ||
-				(f.vertex[2].x == v.x&&f.vertex[2].y == v.y&&f.vertex[2].z == v.z))
-				continue;
-		
-			//三角面片在其上方
-			if (f.vertex[0].z >= v.z&&f.vertex[1].z >= v.z&&f.vertex[2].z >= v.z)
-				continue;
-		
-			//测试点在其包围盒中
-			if ((v.x > f.vertex[0].x&&v.x > f.vertex[1].x&&v.x > f.vertex[2].x) ||
-				(v.x < f.vertex[0].x&&v.x < f.vertex[1].x&&v.x < f.vertex[2].x) ||
-				(v.y > f.vertex[0].y&&v.y > f.vertex[1].y&&v.y > f.vertex[2].y) ||
-				(v.y < f.vertex[0].y&&v.y < f.vertex[1].y&&v.y < f.vertex[2].y) ||
-				(v.z < f.vertex[0].z&&v.z < f.vertex[1].z&&v.z < f.vertex[2].z))
-				continue;
-
-			//在平面上判断点向下的延长线是否与三角面片相交
-			//对相交次数计数
-			if (PointinTriangle1(Pointf3(f.vertex[0].x, f.vertex[0].y, 0), Pointf3(f.vertex[1].x, f.vertex[1].y, 0), 
-				Pointf3(f.vertex[2].x, f.vertex[2].y, 0), Pointf3(v.x,v.y,0)))
-				++num;
-
-			//if (line_to_triangle_point(f, Vectorf3(0, 0, -1), Pointf3(v.x, v.y, v.z), bb1)) {
-			//	if (PointinTriangle1(Pointf3(f.vertex[0].x, f.vertex[0].y, 0), Pointf3(f.vertex[1].x, f.vertex[1].y, 0),
-			//		Pointf3(f.vertex[2].x, f.vertex[2].y, 0), Pointf3(v.x, v.y, 0))) {
-			//		if (bb1.z > bb) {
-			//			ff = f;
-			//			bb = bb1.z;
-			//		}
-			//		++num;
-			//	}
-			//}
-
-		}
-		//次数为奇数跳出
-		if (num % 2 != 0)
-			continue;
-
-		//5.寻找需要受力支撑的点（凸包点）
-		double min = find_convex_hull(i);
-
-		//凸包点高度判断（精度值为0.05）
-		if (min < 0.05) 
-			continue;
-
-		int count = 0;
-		for (int k = 0; k < v_face.num; ++k) {
-			stl_facet* face = &this->stl.facet_start[v_face.v_shared_face[k]];
-			//得到法向量的角度值
-			double a = 180 / PI*vector_angle_3D(Vectorf3(0, 0, -1), Vectorf3(face->normal.x, face->normal.y, face->normal.z));
-			if (a < 90)
-				++count;
-		
-			//取出一个环绕面标记值
-		}
-
-		if (count <= 2)
-			goto Next;
-
-		//if (aa > 0) {
-		//	int cc1 = 0;//count
-		//	int cc2 = 0;
-		//	for (int k = 0; k < v_face.num; ++k) 
-		//	{
-		//		stl_facet* f1 = &this->stl.facet_start[v_face.v_shared_face[k]];
-		//		for (int j = k + 1; j < v_face.num; ++j) 
-		//		{
-		//			stl_facet* f2 = &this->stl.facet_start[v_face.v_shared_face[j]];
-		//			for (int f = 0; f < 3; ++f) 
-		//			{
-		//				if (!(f1->vertex[f].x == v.x&&f1->vertex[f].y == v.y&&f1->vertex[f].z == v.z))
-		//				{
-		//					for (int z = 0; z < 3; ++z)
-		//					{
-		//						if (!(f2->vertex[z].x == v.x&&f2->vertex[z].y == v.y&&f2->vertex[z].z == v.z))
-		//						{
-		//							if (f1->vertex[f].x == f2->vertex[z].x&&f1->vertex[f].y == f2->vertex[z].y&&f1->vertex[f].z == f2->vertex[z].z) 
-		//							{
-		//								//两个面共边
-		//								++cc1;
-		//								//向下的边
-		//								if ((f1->normal.z + f2->normal.z) < 0) 
-		//								{
-		//									++cc2;
-		//								}
-		//							}
-		//						}
-		//					}
-		//				}
-		//			}
-		//		}
-		//	}
-		//	//qDebug() << cc1 << "   " << cc2;
-		//	if (cc2 * 2 < cc1)
-		//		continue;
-		//}
-
-		if (min == 10)
-			++aaa;
-		
-		nadir.push_back(i);
-		Next:;//用goto时注意不要声明变量时初始化变量？？？
-	}
-	qDebug() << "min==10 :   " << aaa;
-	qDebug() << "nadir:  " << nadir.size();
-	return nadir;
-}
-
-//
-//           \                         /                                      
-//            \                      /                                            
-//       ______\___________________/______              
-//        |     \  /\            /      |                                             
-//       _|______\/  \         /        |                                           
-//        |           \      /        大凸包点的高度                                             
-//    小凸包点高度     \   /            |                                          
-//                      \/______________|_                                                   
-//                                                                            
-//两种判断方式：
-//1.在有限层数下，有环绕点超过局部最低点，则判断该点的凸包高度是否超过精度值。
-//2.在有限层数下，局部最低点为最低点时，默认该点需要支撑。
-//（主要是解决在宏观上看着需要支撑的点，在微观上有小的起伏凸包，造成漏判的情况。）
-//
-double TriangleMesh::find_convex_hull(int point)//寻找凸包点
-{
-	//初始化最小的包
-	std::vector<int> ps;//储存多余的点
-	std::vector<int> ps_1;//储存同一层级种子点
-	std::vector<double> ps_d;//储存同一层级拐点的Z轴的坐标值
-	stl_vertex source = this->stl.v_shared[point];//当前点的值
-	int num = 0;//记录环绕层的层数
-	double min = 0;
-	bool once = false, done = false;
-
-	ps.push_back(point);//将当前点存入多余点中
-	v_face_struct v_face1 = this->v_shared_faces[point];
-	for (int i = 0; i<v_face1.num; ++i){
-		int* pp = this->stl.v_indices[v_face1.v_shared_face[i]].vertex;
-		for (int j = 0; j<3; ++j){
-			int temp = pp[j];
-			ps.push_back(temp);//将第一层的环绕点存入多余点中
-			ps_1.push_back(temp);//将第一层的环绕点存入种子点中
-		}
-	}
-	ps = delete_repetition(ps);//存储多余点，并删除重复点
-	ps_1 = delete_repetition(ps_1);//存储当前层的种子点，并删除重复点
-
-	//不断地在下一层环绕点中筛选拐点
-	while (1) {
-		++num;
-		std::vector<int> ps2;
-		for (std::vector<int>::iterator _p1 = ps_1.begin(); _p1 != ps_1.end(); ++_p1) {
-			//-----------------得到当前环绕点的下一层的环绕点-------------------
-			v_face_struct v_face2 = this->v_shared_faces[*_p1];
-			std::vector<int> ps1;
-			for (int i = 0; i < v_face2.num; ++i) {
-				int* pp = this->stl.v_indices[v_face2.v_shared_face[i]].vertex;
-				for (int j = 0; j < 3; ++j) {
-					int temp = pp[j];
-					ps1.push_back(temp);
-				}
-			}
-			ps1 = delete_repetition(ps1);//删除重复点
-			ps1 = delete_twig(ps1, ps);//删除多余点
-			//------------------------------------------------------------------
-
-			//判断当前点是否为拐点
-			stl_vertex v1 = this->stl.v_shared[*_p1];
-			for (std::vector<int>::iterator _p2 = ps1.begin(); _p2 != ps1.end(); ++_p2) {
-				ps2.push_back(*_p2);
-				stl_vertex v2 = this->stl.v_shared[*_p2];
-
-				//有环绕点小于局部最低点
-				if (v2.z <= source.z)
-					done = true;
-
-				//存入拐点的值
-				if ((v1.z - v2.z)>0.025 && !once) {
-					ps_d.push_back(v1.z);
-				}
-			}
-		}
-
-		ps2 = delete_repetition(ps2);
-		//存储下一层环绕点
-		for (std::vector<int>::iterator p = ps2.begin(); p != ps2.end(); ++p) {
-			ps.push_back(*p);
-		}
-
-		if (ps_d.size() > 0 && !once) {
-			//找到最低的拐点（最多只会寻找一次）
-			double temp = -1;
-			for (std::vector<double>::iterator _p3 = ps_d.begin(); _p3 != ps_d.end(); ++_p3) {
-				if (temp > 0) {
-					if (*_p3 < temp)
-						temp = *_p3;
-				}
-				else
-					temp = *_p3;
-			}
-			min = temp - source.z;
-			once = true;
-		}
-		//第一层有拐点后，不会继续到下一层环绕点
-		//else {
-		//	//开始下一层环绕点
-		//	ps_1.clear();
-		//	ps_1 = ps2;
-		//	//ps2.clear();
-		//}
-
-		//第一种判断方法
-		if (done)
-			return min;
-
-		//第二种判断方法（有限层数为6）
-		if (num > 12)
-			return 10;
-
-		ps_1 = ps2;
-	}
-}
-
-std::vector<v_face_struct*> TriangleMesh::generate_feature_faces_45()//生成特征面
-{
-	std::vector<v_face_struct*> feature_faces_45;
-	//陡峭面
-	feature_faces_45 = gather_feature_faces(45);
-
-	//排除特征面（还需细化！）
-	if (!feature_faces_45.empty()) {
-		for (std::vector<v_face_struct*>::iterator _faces = feature_faces_45.begin(); _faces != feature_faces_45.end(); ++_faces) {
-			v_face_struct* faces = *_faces;
-			float minx, miny, maxx, maxy;
-			float rect = 0.0, eare = 0.0;//rect包围矩形的面积，eare特征面区域的总面积
-			face_to_2D_projection(faces, minx, miny, maxx, maxy);//特征面到二维投影
-			rect = (maxx - minx)*(maxy - miny);
-
-			for (int i = 0; i<faces->num; ++i)
-				eare += triangle_area(this->stl.facet_start[faces->v_shared_face[i]]);
-
-			//qDebug() << "rect:  " << rect << "eare:  " << eare << "num:  " << faces->num;
-
-			if (eare < 5) {
-				faces->num = 0;
-			}
-		}
-	}
-	return feature_faces_45;
-}
-
-std::vector<v_face_struct*> TriangleMesh::generate_feature_faces_90()
-{
-	std::vector<v_face_struct*> feature_faces_90;
-	//悬吊面
-	feature_faces_90 = gather_feature_faces(90);
-
-	if (!feature_faces_90.empty()) {
-		for (std::vector<v_face_struct*>::iterator _faces = feature_faces_90.begin(); _faces != feature_faces_90.end(); ++_faces) {
-			v_face_struct* faces = *_faces;
-			float minx, miny, maxx, maxy;
-			float rect = 0.0, eare = 0.0;//rect包围矩形的面积，eare特征面区域的总面积
-			face_to_2D_projection(faces, minx, miny, maxx, maxy);//特征面到二维投影
-			rect = (maxx - minx)*(maxy - miny);
-	
-			for (int i = 0; i<faces->num; ++i)
-				eare += triangle_area(this->stl.facet_start[faces->v_shared_face[i]]);
-
-			if (eare < 1) {
-				faces->num = 0;
-			}
-			
-		}
-	}
-	return feature_faces_90;
-}
-
-std::vector<v_face_struct*> TriangleMesh::gather_feature_faces(char extra)
-{
-	std::vector<v_face_struct*> feature_faces;
-	//悬吊面
-	for (int i = 0; i < this->stl.stats.number_of_facets; ++i) {
-		stl_facet* f1 = &this->stl.facet_start[i];
-		//根据标记，提取特征面
-		if (f1->extra[1] != 1) {//判断是否已判断
-			if (f1->extra[0] == extra || f1->extra[0] == extra - 1) {
-				std::vector<int>* faces = new std::vector<int>;
-				faces->push_back(i);
-				seed_face(i, faces,extra);//种子面发散
-				*faces = delete_repetition(*faces);
-				if (faces->size() == 0) {
-					continue;
-				}
-				else {
-					//----------------------特征面区域存入特征面集合----------------------------
-					v_face_struct* faces1 = new v_face_struct;//需要手动delete回收
-					faces1->num = faces->size();
-					faces1->v_shared_face = (int*)malloc(sizeof(int)*faces1->num);
-					for (std::vector<int>::iterator f = faces->begin(); f != faces->end(); ++f) {
-						int len = std::distance(faces->begin(), f);
-						faces1->v_shared_face[len] = *f;
-					}
-					feature_faces.push_back(faces1);
-					//--------------------------------------------------------------------------
-				}
-				delete faces;
-			}
-			else
-				continue;
-		}
-		else
-			continue;
-	}
-	return feature_faces;
-}
-
-void TriangleMesh::seed_face(int f, std::vector<int>* faces, char extra)//种子面发散
-{
-	//控制递归的次数，减少堆栈内存的使用。 递归的次数会在10000这个值上下浮动
-	if (faces->size() > 10000)
-		return;
-
-	v_indices_struct* v_f = &this->stl.v_indices[f];//得到面片的三个点
-	int* ps = v_f->vertex;
-	for (int i = 0; i < 3; ++i) {
-		//查找与当前面的共边面
-		int a = ps[i];
-		int b = ps[(i + 1) % 3];
-		int f1 = find_common_edge_face(f, a, b);
-		if (f1 < 0)
-			continue;
-		stl_facet* f2 = &this->stl.facet_start[f1];
-
-		//判断共边面是否为特征面，是，则存入面集合再继续以共边面为种子面发散
-		if (f2->extra[1] != 1) {
-			if (f2->extra[0] == extra || f2->extra[0] == extra - 1) {
-				faces->push_back(f1);
-				f2->extra[1] = 1;//设置为已判断
-				seed_face(f1, faces, extra);
-			}
-		}
-		else
-			continue;
-	}
-}
-
-void TriangleMesh::feature_face_to_point(std::vector<v_face_struct*>& feature_faces_45, float space, std::vector<stl_vertex>& feature_faces_point, char extra)//特征面生成特征点
-{
-	if (extra == 90)
-	{
-		for (std::vector<v_face_struct*>::iterator _faces = feature_faces_45.begin(); _faces != feature_faces_45.end(); ++_faces) {
-			if ((*_faces)->num > 0) {
-				//筛选出所有多边形的边
-				std::vector<stl_edge> edges;
-				stl_facet face;
-				stl_edge edge;
-				int f;
-				for (int i = 0; i < (*_faces)->num; ++i) {
-					f = (*_faces)->v_shared_face[i];
-					face = this->stl.facet_start[f];
-					for (int j = 0; j < 3; ++j) {
-						int a = j % 3;
-						int b = (j + 1) % 3;
-						edge.p1 = face.vertex[a];
-						edge.p2 = face.vertex[b];
-						edge.facet_number1 = f;
-						edge.facet_number2 = -1;
-
-						bool ret = false;
-						for (auto e = edges.begin(); e != edges.end(); ++e) {
-							if (equal_edge(edge, *e)) {
-								if ((*e).facet_number1 == -1) {
-									(*e).facet_number1 = f;
-									ret = true;
-									break;
-								}
-								if ((*e).facet_number2 == -1) {
-									(*e).facet_number2 = f;
-									ret = true;
-									break;
-								}
-								qDebug() << "three edges equal!!!";
-							}
-						}
-						if (!ret)
-							edges.push_back(edge);
-					}
-				}
-
-				//筛选洞与边界的边
-				std::vector<stl_edge> edges1;
-				for (auto e = edges.begin(); e != edges.end(); ++e) {
-					size_t count = 0;
-					if ((*e).facet_number1 == -1)
-						++count;
-					if ((*e).facet_number2 == -1)
-						++count;
-					if (count == 1)
-						edges1.push_back(*e);
-				}
-				//qDebug() << "edges1:   " << edges1.size()<<"edges:   "<<edges.size();
-
-				if (extra == 90)
-				{
-					bool ret = true;
-					Polygons polygons;
-					std::vector<std::vector<stl_vertex>> polygons_v;//用来检测contours是否悬吊的数据
-					while (ret) {
-						std::list<stl_vertex> vertexs;
-						for (auto e1 = edges1.begin(); e1 != edges1.end(); ++e1) {
-							if ((*e1).facet_number1 != -1 || (*e1).facet_number2 != -1) {
-								vertexs.push_back((*e1).p1);
-								vertexs.push_back((*e1).p2);
-								(*e1).facet_number1 = -1;
-								(*e1).facet_number2 = -1;
-								look_for_polygon(edges1, vertexs);
-								break;
-							}
-
-							//退出
-							if (e1 == edges1.end() - 1)
-								ret = false;
-						}
-
-						//检查是否闭合，生成polygon
-						//qDebug() << "vertex's size:   " << vertexs.size();
-						if (vertexs.size() != 0) {
-							if (vertexs.size() > 3) {
-								if (equal_vertex(vertexs.back(), vertexs.front())) {
-									Points ps;
-									std::vector<stl_vertex> polygon_v;
-									for (auto v = vertexs.begin(); v != vertexs.end(); ++v) {
-										ps.push_back(Point::new_scale((*v).x, (*v).y));
-										polygon_v.push_back(*v);
-									}
-									polygons.push_back(Polygon(ps));
-									polygons_v.push_back(polygon_v);
-								}
-								else
-									qDebug() << "polygon don't close!!!";
-							}
-							else
-								qDebug() << "vertex's size <3 !!!";
-						}
-					}
-
-					size_t dis = 0;
-					if (polygons.size() > 1) {
-						for (auto p = polygons.begin(); p != polygons.end(); ++p) {
-							for (auto p1 = polygons.begin(); p1 != polygons.end(); ++p1) {
-								if (p != p1) {
-									if ((*p).contains((*p1).points.front())) {
-										dis = std::distance(polygons.begin(), p);
-										break;
-									}
-								}
-							}
-						}
-					}
-
-					Polygon contous = *(polygons.begin() + dis);
-					Polygons polygons1, polygons2;
-					polygons1.push_back(contous);
-					polygons2.push_back(contous);
-
-					std::vector<stl_vertex> polygon_v = *(polygons_v.begin() + dis);
-
-					//判断contous是否悬吊
-					size_t cools = 0;
-					for (auto v = polygon_v.begin(); v != polygon_v.end(); ++v) {
-						for (int i = 0; i < this->stl.stats.shared_vertices; ++i) {
-							if (equal_vertex(this->stl.v_shared[i], *v)) {
-								//得到包围当前点的环绕面
-								v_face_struct v_face = this->v_shared_faces[i];
-								bool cool = true;
-
-								//3.筛选凸包点
-								for (int k = 0; k < v_face.num; ++k) {
-									bool ret2 = true;
-									for (int i = 0; i < (*_faces)->num; ++i) {
-										if ((*_faces)->v_shared_face[i] == v_face.v_shared_face[k])
-											ret2 = false;
-									}
-
-									if (ret2)
-									{
-										//取出一个环绕面的点id
-										int* p = this->stl.v_indices[v_face.v_shared_face[k]].vertex;
-										for (int j = 0; j < 3; ++j) {
-											//根据高度值的比较，判断筛选凸包。
-											if (this->stl.v_shared[p[j]].z < (*v).z)
-												cool = false;
-										}
-									}
-								}
-
-								if (cool)
-									++cools;
-							}
-						}
-					}
-
-					float ratio;
-					if (cools > polygon_v.size() / 2)
-						ratio = 0.5;
-					else
-						ratio = space / 2 + 1;
-					//qDebug() << ratio << "  " << cools << "   " << polygon_v.size();
-
-
-					//向圆心偏移
-					bool ret1 = true;
-					size_t aaa = 0;
-
-					Pointfs points;
-					//在路径上插入支撑点
-					while (ret1) {
-						if (aaa == 0) {
-							polygons1 = offset(polygons1, -scale_(1 * ratio));
-							++aaa;
-						}
-						else {
-							polygons1 = offset(polygons1, -scale_(space));
-							++aaa;
-						}
-
-						if (!polygons1.empty()) {
-							contous = *polygons1.begin();
-							Pointf beginP(Pointf(unscale(contous.points.front().x), unscale(contous.points.front().y)));
-							Pointf endP;
-							points.push_back(beginP);
-
-							float space1 = space;
-							contous.points.push_back(contous.points.front());
-							for (auto c = contous.points.begin() + 1; c != contous.points.end(); ++c) {
-								endP.x = unscale((*c).x);
-								endP.y = unscale((*c).y);
-								bool ret = true;
-								while (ret) {
-									float lenght = distance_point(beginP, endP);
-									if (lenght > space1) {
-										beginP = interpolation_point(beginP, endP, space1);
-										points.push_back(beginP);
-										space1 = 5;
-									}
-									else {
-										beginP = endP;
-										space1 = space1 - lenght;
-										ret = false;
-									}
-								}
-							}
-						}
-						else
-						{
-							Point p = contous.centroid();
-							points.push_back(Pointf(unscale(p.x), unscale(p.y)));
-							ret1 = false;
-						}
-
-						//删除接近的点
-						Pointfs points1;
-						int maxxx = 10000;
-						for (auto p1 = points.begin(); p1 != points.end(); ++p1) {
-							for (auto p2 = points.begin(); p2 != points.end(); ++p2){
-								if (p1 != p2 ) {
-									if ((*p2).x != maxxx) {
-										if (distance_point(*p1, *p2) < space / 2) {
-											(*p1).x = maxxx;
-											break;
-										}
-									}
-								}
-							}
-						}
-						
-						for (auto p1 = points.begin(); p1 != points.end(); ++p1) {
-							if ((*p1).x != maxxx) {
-								points1.push_back(*p1);
-							}
-						}
-
-						Pointf3 c;
-						stl_vertex c1;
-						size_t count = 0;
-						//判断采样点是否在特征面区域上
-						for (auto _p = points1.begin(); _p != points1.end(); ++_p) {
-							Pointf p = *_p;
-							for (int i = 0; i < (*_faces)->num; ++i) {
-								int num = (*_faces)->v_shared_face[i];
-								stl_facet f = this->stl.facet_start[num];
-
-								if ((p.x > f.vertex[0].x&&p.x > f.vertex[1].x&&p.x > f.vertex[2].x) ||
-									(p.x < f.vertex[0].x&&p.x < f.vertex[1].x&&p.x < f.vertex[2].x) ||
-									(p.y > f.vertex[0].y&&p.y > f.vertex[1].y&&p.y > f.vertex[2].y) ||
-									(p.y < f.vertex[0].y&&p.y < f.vertex[1].y&&p.y < f.vertex[2].y))
-									continue;
-								else
-								{
-									//xoy平面上的采样点向上延伸求交
-									Pointf3 A1(f.vertex[0].x, f.vertex[0].y, 0);
-									Pointf3 A2(f.vertex[1].x, f.vertex[1].y, 0);
-									Pointf3 A3(f.vertex[2].x, f.vertex[2].y, 0);
-									Pointf3 P(p.x, p.y, 0);
-									if (PointinTriangle1(A1, A2, A3, P)) {
-										c = CalPlaneLineIntersectPoint(Vectorf3(f.normal.x, f.normal.y, f.normal.z), Pointf3(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z), Vectorf3(0, 0, 1), P);
-										c1.x = c.x; c1.y = c.y; c1.z = c.z;
-										feature_faces_point.push_back(c1);//存储采样点
-										++count;
-									}
-									else
-										continue;
-								}
-							}
-						}
-
-						if (count == 0 && aaa == 1)
-						{
-							if (ratio > 0.1) {
-								ratio *= 0.8;
-								--aaa;
-							}
-							else
-								ratio = 0.0;
-							polygons1 = polygons2;
-						}
-						points.clear();
-					}
-				}
-			}
-		}
-	}
-	else if (extra == 45)
-	{
-		Pointf3 c;
-		stl_vertex c1;
-		if (!feature_faces_45.empty()) {
-			for (std::vector<v_face_struct*>::iterator _faces = feature_faces_45.begin(); _faces != feature_faces_45.end(); ++_faces) {
-				if ((*_faces)->num > 0) {
-					v_face_struct* faces = *_faces;
-					float minx, miny, maxx, maxy;
-					face_to_2D_projection(faces, minx, miny, maxx, maxy);//特征面到二维投影
-		
-					std::vector<stl_vertex> points;//存储采样点
-					balance_sampling_point(points, space, minx, miny, maxx, maxy);//提取均匀采样点
-		
-					//判断采样点是否在特征面区域上
-					for (std::vector<stl_vertex>::iterator _p = points.begin(); _p != points.end(); ++_p) {
-						stl_vertex p = *_p;
-						for (int i = 0; i < faces->num; ++i) {
-							int num = faces->v_shared_face[i];
-							stl_facet f = this->stl.facet_start[num];
-		
-							if ((p.x > f.vertex[0].x&&p.x > f.vertex[1].x&&p.x > f.vertex[2].x) ||
-								(p.x < f.vertex[0].x&&p.x < f.vertex[1].x&&p.x < f.vertex[2].x) ||
-								(p.y > f.vertex[0].y&&p.y > f.vertex[1].y&&p.y > f.vertex[2].y) ||
-								(p.y < f.vertex[0].y&&p.y < f.vertex[1].y&&p.y < f.vertex[2].y))
-								continue;
-							else
-							{
-								//xoy平面上的采样点向上延伸求交
-								Pointf3 A1(f.vertex[0].x, f.vertex[0].y, 0);
-								Pointf3 A2(f.vertex[1].x, f.vertex[1].y, 0);
-								Pointf3 A3(f.vertex[2].x, f.vertex[2].y, 0);
-								Pointf3 P(p.x, p.y, 0);
-								if (PointinTriangle1(A1, A2, A3, P)) {
-									c = CalPlaneLineIntersectPoint(Vectorf3(f.normal.x, f.normal.y, f.normal.z), Pointf3(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z), Vectorf3(0, 0, 1), P);
-									c1.x = c.x; c1.y = c.y; c1.z = c.z;
-									feature_faces_point.push_back(c1);//存储采样点
-								}
-								else
-									continue;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-void TriangleMesh::look_for_polygon(std::vector<stl_edge>& edges, std::list<stl_vertex>& vertexs)
-{
-	if (vertexs.size() >= 2) {
-		for (auto e = edges.begin(); e != edges.end(); ++e) {
-			if ((*e).facet_number1 != -1 || (*e).facet_number2 != -1) {
-				if (equal_vertex(vertexs.front(), (*e).p1)) {
-					vertexs.push_front((*e).p2);
-					(*e).facet_number1 = -1;
-					(*e).facet_number2 = -1;
-					look_for_polygon(edges, vertexs);
-					break;
-				}
-				if (equal_vertex(vertexs.front(), (*e).p2)) {
-					vertexs.push_front((*e).p1);
-					(*e).facet_number1 = -1;
-					(*e).facet_number2 = -1;
-					look_for_polygon(edges, vertexs);
-					break;
-				}
-				if (equal_vertex(vertexs.back(), (*e).p1)) {
-					vertexs.push_back((*e).p2);
-					(*e).facet_number1 = -1;
-					(*e).facet_number2 = -1;
-					look_for_polygon(edges, vertexs);
-					break;
-				}
-				if (equal_vertex(vertexs.back(), (*e).p2)) {
-					vertexs.push_back((*e).p1);
-					(*e).facet_number1 = -1;
-					(*e).facet_number2 = -1;
-					look_for_polygon(edges, vertexs);
-					break;
-				}
-			}
-		}
-	}
-	else
-		qDebug() << "vertexs's size is least!!!";
-}
-
-std::vector<Linef3> TriangleMesh::skeleton_line(std::vector<stl_vertex> feature_faces_point)//生成骨架线
-{
-	std::vector<Linef3> support_skeleton_line;
-	for (auto v = feature_faces_point.begin(); v != feature_faces_point.end(); ++v) {
-		Pointf3 p((*v).x, (*v).y, (*v).z);
-		support_skeleton_line.push_back(Linef3(point_model_intersection_Z(p), Pointf3(p.x, p.y, p.z + 0.2)));
-	}
-	return support_skeleton_line;
-}
-
-//点按Z轴负方向延伸求交
-Pointf3 TriangleMesh::point_model_intersection_Z(Pointf3 p)
-{
-	std::vector<float> ps;
-	stl_facet f;
-	float bottom;
-	Pointf3 c;
-	for (int j = 0; j < this->stl.stats.number_of_facets; ++j) {
-		f = this->stl.facet_start[j];
-
-		//测试点在其包围盒中
-		if ((p.x > f.vertex[0].x&&p.x > f.vertex[1].x&&p.x > f.vertex[2].x) ||
-			(p.x < f.vertex[0].x&&p.x < f.vertex[1].x&&p.x < f.vertex[2].x) ||
-			(p.y > f.vertex[0].y&&p.y > f.vertex[1].y&&p.y > f.vertex[2].y) ||
-			(p.y < f.vertex[0].y&&p.y < f.vertex[1].y&&p.y < f.vertex[2].y) ||
-			(p.z < f.vertex[0].z&&p.z < f.vertex[1].z&&p.z < f.vertex[2].z))
-			continue;
-
-		//排除包含起点的三角面片---计算错误排除了其他三角面
-		//Pointf3 A1(f.vertex[0].x, f.vertex[0].y, f.vertex[0].z);
-		//Pointf3 A2(f.vertex[1].x, f.vertex[1].y, f.vertex[1].z);
-		//Pointf3 A3(f.vertex[2].x, f.vertex[2].y, f.vertex[2].z);
-		//if (PointinTriangle1(A1, A2, A3, Pointf3(p.x, p.y, p.z))) {
-		//	continue;
-		//}
-
-		if (line_to_triangle_point(f, Vectorf3(0, 0, -1), p, c)) {
-			//qDebug() << c.z;
-			if (p.z - c.z > 0.001)
-				ps.push_back(c.z);
-		}
-	}
-
-	if (ps.size() >= 1) {
-		bottom = *(ps.begin());
-		for (auto v2 = ps.begin() + 1; v2 != ps.end(); ++v2) {
-			if (bottom < *v2)
-				bottom = *v2;
-		}
-		return Pointf3(p.x, p.y, bottom);
-	}
-	else {
-		return Pointf3(p.x, p.y, 0);
-	}
-}
-
-void TriangleMesh::face_to_2D_projection(v_face_struct* faces, float &minx, float &miny, float &maxx, float &maxy)//特征面到二维投影
-{
-	for (int i = 0; i<faces->num; ++i) {
-		int num = faces->v_shared_face[i];
-		stl_facet f = this->stl.facet_start[num];
-
-		if (i == 0) {
-			minx = f.vertex[0].x;
-			miny = f.vertex[0].y;
-			maxx = f.vertex[0].x;
-			maxy = f.vertex[0].y;
-		}
-
-		for (int j = 0; j<3; ++j) {
-			minx = f.vertex[j].x<minx ? f.vertex[j].x : minx;
-			miny = f.vertex[j].y<miny ? f.vertex[j].y : miny;
-			maxx = f.vertex[j].x>maxx ? f.vertex[j].x : maxx;
-			maxy = f.vertex[j].y>maxy ? f.vertex[j].y : maxy;
-		}
-	}
-}
-
-void TriangleMesh::balance_sampling_point(std::vector<stl_vertex>& points, float space, float minx, float miny, float maxx, float maxy)//提取均匀采样点
-{
-	std::vector<float> line_x, line_y;
-	float midline_x = (maxx - minx) / 2 + minx;
-	float midline_y = (maxy - miny) / 2 + miny;
-	int num_x = (maxx - midline_x) / space;
-	int num_y = (maxy - midline_y) / space;
-
-	line_x.push_back(midline_x);
-	line_y.push_back(midline_y);
-	for (int i = 0; i<num_x; ++i) {
-		line_x.push_back(midline_x + space*(i + 1));
-		line_x.push_back(midline_x - space*(i + 1));
-	}
-	for (int j = 0; j<num_y; ++j) {
-		line_y.push_back(midline_y + space*(j + 1));
-		line_y.push_back(midline_y - space*(j + 1));
-	}
-
-	for (std::vector<float>::iterator x = line_x.begin(); x != line_x.end(); ++x) {
-		for (std::vector<float>::iterator y = line_y.begin(); y != line_y.end(); ++y) {
-			stl_vertex p = { *x, *y, 0 };
-			points.push_back(p);
-		}
-	}
-}
-
-int TriangleMesh::find_common_edge_face(int face, int a, int b)//查找以ab为边另一个三角面片
-{
-	v_face_struct v_face1 = this->v_shared_faces[a];
-	v_face_struct v_face2 = this->v_shared_faces[b];
-	int* fs1 = v_face1.v_shared_face;
-	int* fs2 = v_face2.v_shared_face;
-	for (int i = 0; i<v_face1.num; ++i) {
-		int f1 = fs1[i];
-		if (f1 == face)
-			continue;
-		for (int j = 0; j<v_face2.num; ++j) {
-			int f2 = fs2[j];
-			if (f1 == f2)
-				return f1;
-		}
-	}
-	return -1;
-}
-
-
-//删除重复点
-std::vector<int> TriangleMesh::delete_repetition(std::vector<int> ps)
-{
-	//删除其中的重复点
-	std::vector<int> ps1;
-	for (std::vector<int>::iterator _p = ps.begin(); _p != ps.end(); ++_p) {
-		if (*_p != -1) {
-			ps1.push_back(*_p);
-			for (std::vector<int>::iterator _p1 = _p + 1; _p1 != ps.end(); ++_p1) {
-				if ((*_p) == (*_p1))
-					*_p1 = -1;
-			}
-		}
-	}
-	return ps1;
-}
-
-//删除多余的部分
-std::vector<int> TriangleMesh::delete_twig(std::vector<int> &bole, std::vector<int> &twig)
-{
-	std::vector<int> ps;
-	for (std::vector<int>::iterator _p = bole.begin(); _p != bole.end(); ++_p) {
-		bool ret = true;
-		for (std::vector<int>::iterator _p1 = twig.begin(); _p1 != twig.end(); ++_p1) {
-			if (*_p == *_p1&&ret)
-				ret = false;
-		}
-		if (ret)
-			ps.push_back(*_p);
-	}
-	return ps;
-}
-
-/*-------------------------------------------------------------------------------------------------------------------------------*/
-
-
 
 template <Axis A>
 void
@@ -2555,3 +1535,752 @@ template class TriangleMeshSlicer<Y>;
 template class TriangleMeshSlicer<Z>;
 
 }
+
+//--------------------------生成特特征支撑----------------------------
+
+stl_vertexs TriangleMesh::feature_point(QProgressBar* progress)
+{
+    stl_vertexs feature_points;
+
+    //得到局部最低点
+    unsigned short num = 0;
+    int* nadir = cliff_point(num);
+
+    progress->setValue(25);
+
+    for (int i = 0; i < num; ++i)
+        feature_points.emplace_back(stl.v_shared[nadir[i]]);
+
+    return feature_points;
+}
+
+stl_vertexs TriangleMesh::feature_point_face(float space, QProgressBar* progress)
+{
+    //生成陡峭面，参数化
+    std::vector<v_face_struct> feature_faces_45 = generate_feature_faces(45, 5);
+    std::vector<v_face_struct> feature_faces_90 = generate_feature_faces(90, 1);
+
+    progress->setValue(30);
+
+    //特征面生成点
+    stl_vertexs feature_faces_point;//存储的是特征面的区域需要支撑点的值
+    feature_face_to_point(feature_faces_45, space, feature_faces_point, 45);
+    feature_face_to_point(feature_faces_90, space, feature_faces_point, 90);
+
+    //释放特征面的内存
+    while (!feature_faces_45.empty())
+    {
+        delete[] feature_faces_45.begin()->v_shared_face;
+        feature_faces_45.erase(feature_faces_45.begin());
+    }
+
+    while (!feature_faces_90.empty())
+    {
+        delete[] feature_faces_90.begin()->v_shared_face;
+        feature_faces_90.erase(feature_faces_90.begin());
+    }
+
+    progress->setValue(35);
+
+    return feature_faces_point;
+}
+
+int* TriangleMesh::cliff_point(unsigned short& num)//得到悬挂点
+{
+    int* nadir = new int[this->stl.stats.shared_vertices / 2];//局部最低点
+    //依次判断每个共享点
+    for (int i = 0; i < this->stl.stats.shared_vertices; ++i) {
+        //得到包围当前点的环绕面
+        v_face_struct v_face = this->stl.v_shared_faces[i];
+        //根据id得到点的值
+        stl_vertex v = this->stl.v_shared[i];
+        unsigned short ret = 0;
+
+        //1.排除接近平面的点
+        if (v.z < 0.05)//TODO:参数化
+            continue;
+
+        //2.排除悬吊面上的点
+        for (int j = 0; j < v_face.num; ++j) {
+            //取出一个环绕面标记值
+            if (this->stl.facet_start[v_face.v_shared_face[j]].extra[0] == 90) {
+                ++ret;
+                break;
+            }
+        }
+        if (ret != 0) continue;
+
+        //3.筛选凸包点
+        for (int j = 0; j < v_face.num; ++j) {
+            for (int k = 0; k < 3; ++k) {
+                //取出一个环绕面的点id
+                //根据id得到点的值
+                //根据高度值的比较，判断筛选凸包。
+                if (this->stl.v_shared[this->stl.v_indices[v_face.v_shared_face[j]].vertex[k]].z < v.z) {
+                    ++ret;
+                    break;
+                }
+            }
+        }
+        if (ret != 0) continue;
+
+        //4.悬挂点向下延伸相交的三角面的个数，奇数不是，偶数是
+        for (int j = 0; j < this->stl.stats.number_of_facets; ++j) {
+            stl_facet f = this->stl.facet_start[j];
+
+            //4.1排除包含该点的三角面片	
+            //4.2三角面片在其上方		
+            //4.3测试点在其包围盒中
+            if ((f.vertex[0] == v || f.vertex[1] == v || f.vertex[2] == v) ||
+                (f.vertex[0].z >= v.z && f.vertex[1].z >= v.z && f.vertex[2].z >= v.z) ||
+                (v.x > f.vertex[0].x&& v.x > f.vertex[1].x&& v.x > f.vertex[2].x) ||
+                (v.x < f.vertex[0].x && v.x < f.vertex[1].x && v.x < f.vertex[2].x) ||
+                (v.y > f.vertex[0].y&& v.y > f.vertex[1].y&& v.y > f.vertex[2].y) ||
+                (v.y < f.vertex[0].y && v.y < f.vertex[1].y && v.y < f.vertex[2].y) ||
+                (v.z < f.vertex[0].z && v.z < f.vertex[1].z && v.z < f.vertex[2].z))
+                continue;
+
+            //4.4在平面上判断点向下的延长线是否与三角面片相交
+            //对相交次数计数
+            if (PointInTriangle2(f, Ver2Pf3(v)))
+                ++ret;
+        }
+        //次数为奇数跳出
+        if (ret % 2 != 0)continue;
+
+        //5.寻找需要受力支撑的点（凸包点）
+        //凸包点高度判断（精度值为0.05）TODO:参数化
+        if (find_convex_hull(i) < 0.05)continue;
+
+        //6.忘了
+        ret = 0;
+        for (int j = 0; j < v_face.num; ++j) {
+            //得到法向量的角度值
+            if (180 / PI * vector_angle_3(Vectorf3(0, 0, -1), Nor2Vt3(this->stl.facet_start[v_face.v_shared_face[j]].normal)) < 90)
+                ++ret;
+        }
+        if (ret <= 2) continue;
+
+        nadir[num] = i;
+        ++num;
+    }
+    return nadir;
+}
+
+//删除重复点
+inline void IntsDelRepetition(std::vector<int>& ps)
+{
+    int count = ps.size();
+    for (int i = 0; i < count; ++i) {
+        for (int j = i + 1; j < count; ++j) {
+            if (*(ps.begin() + i) == *(ps.begin() + j)) {
+                ps.erase(ps.begin() + i);
+                --count;
+                --i;
+                break;
+            }
+        }
+    }
+}
+
+//删除多余的部分,bole-twig
+inline void IntsDelTwig(std::vector<int>& bole, const std::vector<int>& twig)
+{
+    int count = bole.size();
+    for (int i = 0; i < count; ++i) {
+        for each (const int& j in twig) {
+            if (*(bole.begin() + i) == j) {
+                bole.erase(bole.begin() + i);
+                --count;
+                --i;
+                break;
+            }
+        }
+    }
+}
+
+//
+//           \                         /                                      
+//            \                      /                                            
+//       ______\___________________/______              
+//        |     \  /\            /      |                                             
+//       _|______\/  \         /        |                                           
+//        |           \      /        大凸包点的高度                                             
+//    小凸包点高度     \   /            |                                          
+//                      \/______________|_                                                   
+//                                                                            
+//两种判断方式：
+//1.在有限层数下，有环绕点超过局部最低点，则判断该点的凸包高度是否超过精度值。
+//2.在有限层数下，局部最低点为最低点时，默认该点需要支撑。
+//（主要是解决在宏观上看着需要支撑的点，在微观上有小的起伏凸包，造成漏判的情况。）
+double TriangleMesh::find_convex_hull(int point)//寻找凸包点
+{
+    //初始化最小的包
+    std::vector<int> ps;//储存多余的点
+    std::vector<int> cur_ps;//储存同一层级种子点
+    std::vector<double> cur_z_ps;//储存同一层级拐点的Z轴的坐标值
+    bool once = false, done = false;
+
+    ps.emplace_back(point);//将当前点存入多余点中
+    for (int i = 0; i < this->stl.v_shared_faces[point].num; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            int temp = this->stl.v_indices[this->stl.v_shared_faces[point].v_shared_face[i]].vertex[j];
+            ps.emplace_back(temp);//将第一层的环绕点存入多余点中
+            cur_ps.emplace_back(temp);//将第一层的环绕点存入种子点中
+        }
+    }
+    IntsDelRepetition(ps);//存储多余点，并删除重复点
+    IntsDelRepetition(cur_ps);//存储当前层的种子点，并删除重复点
+
+    int layer = 0;//记录环绕层的层数
+    double min = 0;
+    //不断地在下一层环绕点中筛选拐点
+    while (1) {
+        ++layer;
+        std::vector<int> ps2;
+        for each (const int& p1 in cur_ps) {
+            //-----------------得到当前环绕点的下一层的环绕点-------------------
+            std::vector<int> ps1;
+            for (int i = 0; i < this->stl.v_shared_faces[p1].num; ++i) {
+                for (int j = 0; j < 3; ++j)
+                    ps1.emplace_back(this->stl.v_indices[this->stl.v_shared_faces[p1].v_shared_face[i]].vertex[j]);
+            }
+            IntsDelRepetition(ps1);//删除重复点
+            IntsDelTwig(ps1, ps);//删除多余点
+            //------------------------------------------------------------------
+
+            //判断当前点是否为拐点
+            for each (const int& p2 in ps1) {
+                ps2.emplace_back(p2);
+
+                //有环绕点小于局部最低点
+                if (this->stl.v_shared[p2].z <= this->stl.v_shared[point].z)
+                    done = true;
+
+                //存入拐点的值TODO:参数化
+                if ((this->stl.v_shared[p1].z - this->stl.v_shared[p2].z) > 0.025 && !once)
+                    cur_z_ps.emplace_back(this->stl.v_shared[p1].z);
+            }
+        }
+
+        IntsDelRepetition(ps2);
+        //存储下一层环绕点
+        ps.insert(ps.end(), ps2.begin(), ps2.end());
+
+        if (cur_z_ps.size() > 0 && !once) {
+            //找到最低的拐点（最多只会寻找一次）
+            double t_min = -1;
+            for each (const double& p3 in cur_z_ps) {
+                if (t_min == -1) {
+                    t_min = p3;
+                    continue;
+                }
+                if (p3 < t_min)
+                    t_min = p3;
+            }
+            min = t_min - this->stl.v_shared[point].z;
+            once = true;
+        }
+        //第一层有拐点后，不会继续到下一层环绕点
+        //第一种判断方法
+        if (done) return min;
+
+        //第二种判断方法（有限层数为12）,10为大于凸包高度
+        if (layer > 12) return 10;
+
+        cur_ps = ps2;
+    }
+}
+
+std::vector<v_face_struct> TriangleMesh::generate_feature_faces(char extra, float min_area)
+{
+    std::vector<v_face_struct> feature_faces;
+    //悬吊面
+    feature_faces = gather_feature_faces(extra);
+
+    for (auto faces = feature_faces.begin(); faces != feature_faces.end(); ++faces) {
+        float area = 0.0;//rect包围矩形的面积，eare特征面区域的总面积
+
+        for (int i = 0; i < faces->num; ++i)
+            area += TriArea(this->stl.facet_start[faces->v_shared_face[i]]);
+
+        if (area < min_area) {
+            feature_faces.erase(faces);
+            --faces;
+        }
+
+    }
+    return feature_faces;
+}
+
+std::vector<v_face_struct> TriangleMesh::gather_feature_faces(char extra)
+{
+    std::vector<v_face_struct> feature_faces;
+    //悬吊面
+    for (int i = 0; i < this->stl.stats.number_of_facets; ++i) {
+        //根据标记，提取特征面
+        if (this->stl.facet_start[i].extra[1] == 1) //判断是否已判断
+            continue;
+
+        if (this->stl.facet_start[i].extra[0] != extra
+            && this->stl.facet_start[i].extra[0] != extra - 1)
+            continue;
+
+        std::vector<int> faces;
+        faces.emplace_back(i);
+        seed_face(i, faces, extra);//种子面发散
+        IntsDelRepetition(faces);
+        if (faces.empty())
+            continue;
+
+        //----特征面区域存入特征面集合---
+        v_face_struct faces1;
+        faces1.num = faces.size();
+        faces1.v_shared_face = new int[faces1.num];
+
+        for (int i = 0; i < faces1.num; ++i)
+            faces1.v_shared_face[i] = *(faces.begin() + i);
+
+        feature_faces.emplace_back(faces1);
+    }
+    return feature_faces;
+}
+
+void TriangleMesh::seed_face(int f, std::vector<int>& faces, char extra)//种子面发散
+{
+    //控制递归的次数，减少堆栈内存的使用。 递归的次数会在10000这个值上下浮动
+    if (faces.size() > 10000)
+        return;
+
+    for (int i = 0; i < 3; ++i) {
+        //查找与当前面的共边面
+        int f1 = find_common_edge_face(f, this->stl.v_indices[f].vertex[i], this->stl.v_indices[f].vertex[(i + 1) % 3]);
+        if (f1 < 0)
+            continue;
+
+        //判断共边面是否为特征面，是，则存入面集合再继续以共边面为种子面发散
+        if (this->stl.facet_start[f1].extra[1] == 1)
+            continue;
+
+        if (this->stl.facet_start[f1].extra[0] == extra
+            || this->stl.facet_start[f1].extra[0] == extra - 1)
+        {
+            faces.emplace_back(f1);
+            this->stl.facet_start[f1].extra[1] = 1;//设置为已判断
+            seed_face(f1, faces, extra);
+        }
+    }
+}
+
+inline void look_for_polygon(std::vector<stl_edge>& edges, std::list<stl_vertex>& vertexs)
+{
+    if (vertexs.size() < 2)
+        return;
+
+    for (auto e = edges.begin(); e != edges.end(); ++e) {
+        if (e->facet_number1 == -1 && e->facet_number2 == -1)
+            continue;
+        if (equal_vertex(vertexs.front(), e->p1)) {
+            vertexs.push_front(e->p2);
+            e->facet_number1 = -1;
+            e->facet_number2 = -1;
+            look_for_polygon(edges, vertexs);
+            break;
+        }
+        else if (equal_vertex(vertexs.front(), e->p2)) {
+            vertexs.push_front((*e).p1);
+            e->facet_number1 = -1;
+            e->facet_number2 = -1;
+            look_for_polygon(edges, vertexs);
+            break;
+        }
+
+        if (equal_vertex(vertexs.back(), e->p1)) {
+            vertexs.push_back(e->p2);
+            e->facet_number1 = -1;
+            e->facet_number2 = -1;
+            look_for_polygon(edges, vertexs);
+            break;
+        }
+        else if (equal_vertex(vertexs.back(), e->p2)) {
+            vertexs.push_back((*e).p1);
+            e->facet_number1 = -1;
+            e->facet_number2 = -1;
+            look_for_polygon(edges, vertexs);
+            break;
+        }
+    }
+}
+
+inline stl_vertexs balance_sampling_point(float space, const BoundingBoxf& box)//提取均匀采样点
+{
+    stl_vertexs points;
+    std::vector<float> line_x, line_y;
+    float midline_x = (box.max.x - box.min.x) / 2 + box.min.x;
+    float midline_y = (box.max.y - box.min.y) / 2 + box.min.y;
+    int num_x = (box.max.x - midline_x) / space;
+    int num_y = (box.max.y - midline_y) / space;
+
+    line_x.emplace_back(midline_x);
+    line_y.emplace_back(midline_y);
+    for (int i = 0; i < num_x; ++i) {
+        line_x.emplace_back(midline_x + space * (i + 1));
+        line_x.emplace_back(midline_x - space * (i + 1));
+    }
+    for (int j = 0; j < num_y; ++j) {
+        line_y.emplace_back(midline_y + space * (j + 1));
+        line_y.emplace_back(midline_y - space * (j + 1));
+    }
+
+    for each (const float& x in line_x) {
+        for each (const float& y in line_y)
+            points.emplace_back(stl_vertex{ x,y,0 });
+    }
+    return points;
+}
+
+BoundingBoxf TriangleMesh::face_to_2D_projection(const v_face_struct& faces)//特征面到二维投影
+{
+    BoundingBoxf box;
+    for (int i = 0; i < faces.num; ++i) {
+        stl_facet f = this->stl.facet_start[faces.v_shared_face[i]];
+
+        if (i == 0) {
+            box.min.x = f.vertex[0].x;
+            box.min.y = f.vertex[0].y;
+            box.max.x = f.vertex[0].x;
+            box.max.y = f.vertex[0].y;
+        }
+
+        for (int j = 0; j < 3; ++j) {
+            box.min.x = f.vertex[j].x < box.min.x ? f.vertex[j].x : box.min.x;
+            box.min.y = f.vertex[j].y < box.min.y ? f.vertex[j].y : box.min.y;
+            box.max.x = f.vertex[j].x > box.max.x ? f.vertex[j].x : box.max.x;
+            box.max.y = f.vertex[j].y > box.max.y ? f.vertex[j].y : box.max.y;
+        }
+    }
+    return box;
+}
+
+void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_faces, float space, stl_vertexs& feature_faces_point, char extra)//特征面生成特征点
+{
+    if (extra == 90)
+    {
+        for each (const v_face_struct & faces in feature_faces)
+        {
+            if (faces.num <= 0)
+                continue;
+
+            //1.筛选出所有多边形的边
+            std::vector<stl_edge> edges;
+            for (int i = 0; i < faces.num; ++i) {
+                int f = faces.v_shared_face[i];
+                for (int j = 0; j < 3; ++j) {
+                    stl_edge edge;
+                    edge.p1 = this->stl.facet_start[f].vertex[j % 3];
+                    edge.p2 = this->stl.facet_start[f].vertex[(j + 1) % 3];
+                    edge.facet_number1 = f;
+                    edge.facet_number2 = -1;
+
+                    bool ret = false;
+                    //for each (stl_edge & e in edges)
+                    for (auto e = edges.begin(); e != edges.end(); ++e)
+                    {
+                        if (!equal_edge(edge, *e))
+                            continue;
+                        if (e->facet_number1 == -1) {
+                            e->facet_number1 = f;
+                            ret = true;
+                            break;
+                        }
+                        if (e->facet_number2 == -1) {
+                            e->facet_number2 = f;
+                            ret = true;
+                            break;
+                        }
+                    }
+                    if (!ret)
+                        edges.push_back(edge);
+                }
+            }
+
+            //2.筛选洞与边界的边
+            std::vector<stl_edge> edges1;
+            for each (const stl_edge & e in edges) {
+                if (e.facet_number1 == -1 || e.facet_number2 == -1)
+                    edges1.emplace_back(e);
+            }
+
+            //3.不知道
+            bool ret = true;
+            Polygons polygons;
+            std::vector<stl_vertexs> polygons_v;//用来检测contours是否悬吊的数据
+            while (ret) {
+                std::list<stl_vertex> vertexs;
+                for (auto e1 = edges1.begin(); e1 != edges1.end(); ++e1) {
+                    if (e1->facet_number1 != -1 || e1->facet_number2 != -1) {
+                        vertexs.emplace_back(e1->p1);
+                        vertexs.emplace_back(e1->p2);
+                        e1->facet_number1 = -1;
+                        e1->facet_number2 = -1;
+                        look_for_polygon(edges1, vertexs);
+                        break;
+                    }
+                    //退出
+                    if (e1 == edges1.end() - 1)
+                        ret = false;
+                }
+
+                //检查是否闭合，生成polygon
+                if (vertexs.size() < 3)
+                    continue;
+
+                if (equal_vertex(vertexs.back(), vertexs.front())) {
+                    Points ps;
+                    stl_vertexs polygon_v;
+                    for each (const stl_vertex & v in vertexs) {
+                        ps.emplace_back(Point::new_scale(v.x, v.y));
+                        polygon_v.emplace_back(v);
+                    }
+                    polygons.emplace_back(Polygon(ps));
+                    polygons_v.emplace_back(polygon_v);
+                }
+            }
+
+            size_t dis = 0;
+            for (auto p = polygons.begin(); p != polygons.end(); ++p) {
+                for (auto p1 = polygons.begin(); p1 != polygons.end(); ++p1) {
+                    if (p == p1)
+                        continue;
+
+                    if (p->contains(p1->points.front())) {
+                        dis = std::distance(polygons.begin(), p);
+                        break;
+                    }
+                }
+            }
+
+            Polygon contous = *(polygons.begin() + dis);
+            Polygons polygons1, polygons2;
+            polygons1.emplace_back(contous);
+            polygons2.emplace_back(contous);
+
+            stl_vertexs polygon_v = *(polygons_v.begin() + dis);
+
+            //4.判断contous是否悬吊
+            size_t cools = 0;
+            for each (const stl_vertex & v in polygon_v) {
+                for (int i = 0; i < this->stl.stats.shared_vertices; ++i) {
+                    if (equal_vertex(this->stl.v_shared[i], v)) {
+                        //得到包围当前点的环绕面
+                        v_face_struct v_face = this->stl.v_shared_faces[i];
+                        bool cool = true;
+
+                        //3.筛选凸包点
+                        for (int k = 0; k < v_face.num; ++k) {
+                            bool ret2 = true;
+                            for (int i = 0; i < faces.num; ++i) {
+                                if (faces.v_shared_face[i] == v_face.v_shared_face[k]) {
+                                    ret2 = false;
+                                    break;
+                                }
+                            }
+                            if (!ret2) continue;
+
+                            //取出一个环绕面的点id
+                            for (int j = 0; j < 3; ++j) {
+                                //根据高度值的比较，判断筛选凸包。
+                                if (this->stl.v_shared[this->stl.v_indices[v_face.v_shared_face[k]].vertex[j]].z < v.z) {
+                                    cool = false;
+                                    break;
+                                }
+                            }
+                            if (!cool)break;
+                        }
+
+                        if (cool)
+                            ++cools;
+                    }
+                }
+            }
+
+            float ratio;
+            if (cools > polygon_v.size() / 2)ratio = 0.5;
+            else ratio = space / 2 + 1;
+
+            //向圆心偏移
+            bool ret1 = true;
+            size_t aaa = 0;
+            Pointfs points;
+            //在路径上插入支撑点
+            while (ret1) {
+                if (aaa == 0)polygons1 = offset(polygons1, -scale_(ratio));
+                else polygons1 = offset(polygons1, -scale_(space));
+                ++aaa;
+
+                if (!polygons1.empty()) {
+                    contous = *polygons1.begin();
+                    Pointf beginP(Pointf(unscale(contous.points.front().x), unscale(contous.points.front().y)));
+                    Pointf endP;
+                    points.emplace_back(beginP);
+
+                    float space1 = space;
+                    contous.points.emplace_back(contous.points.front());
+                    for (auto c = contous.points.begin() + 1; c != contous.points.end(); ++c) {
+                        endP.x = unscale((*c).x);
+                        endP.y = unscale((*c).y);
+                        bool ret3 = true;
+                        while (ret3) {
+                            float lenght = DisPoint2(beginP, endP);
+                            if (lenght > space1) {
+                                beginP = InterpolationPoint(beginP, endP, space1);
+                                points.emplace_back(beginP);
+                                space1 = 5;
+                            }
+                            else {
+                                beginP = endP;
+                                space1 = space1 - lenght;
+                                ret3 = false;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    Point p = contous.centroid();
+                    points.emplace_back(Pointf(unscale(p.x), unscale(p.y)));
+                    ret1 = false;
+                }
+
+                //删除接近的点
+                for (auto p1 = points.begin(); p1 != points.end(); ) {
+                    bool ret4 = false;
+                    for (auto p2 = points.begin(); p2 != points.end(); ++p2) {
+                        if (p1 == p2)
+                            continue;
+                        if (DisPoint2(*p1, *p2) < space / 2) {
+                            points.erase(p1);
+                            ret4 = true;
+                            break;
+                        }
+                    }
+                    if (!ret4)
+                        ++p1;
+                }
+
+                size_t count = 0;
+                //判断采样点是否在特征面区域上
+                for each (const Pointf & p in points) {
+                    for (int i = 0; i < faces.num; ++i) {
+                        stl_facet f = this->stl.facet_start[faces.v_shared_face[i]];
+
+                        if ((p.x > f.vertex[0].x&& p.x > f.vertex[1].x&& p.x > f.vertex[2].x) ||
+                            (p.x < f.vertex[0].x && p.x < f.vertex[1].x && p.x < f.vertex[2].x) ||
+                            (p.y > f.vertex[0].y&& p.y > f.vertex[1].y&& p.y > f.vertex[2].y) ||
+                            (p.y < f.vertex[0].y && p.y < f.vertex[1].y && p.y < f.vertex[2].y))
+                            continue;
+                        else
+                        {
+                            //xoy平面上的采样点向上延伸求交
+                            Pointf3 _p(p.x, p.y, 0);
+                            if (!PointInTriangle2(f, _p))
+                                continue;
+                            feature_faces_point.emplace_back(Pf32Ver(CalPlaneLineIntersectPoint(Nor2Vt3(f.normal), Ver2Pf3(f.vertex[0]), Vectorf3(0, 0, 1), _p)));//存储采样点
+                            ++count;
+                        }
+                    }
+                }
+
+                if (count == 0 && aaa == 1) {
+                    if (ratio > 0.1) {
+                        ratio *= 0.8;
+                        --aaa;
+                    }
+                    else
+                        ratio = 0.0;
+                    polygons1 = polygons2;
+                }
+            }
+        }
+    }
+    else if (extra == 45)
+    {
+        for each (const v_face_struct & faces in feature_faces) {
+            if (faces.num <= 0)
+                continue;
+
+            stl_vertexs points = balance_sampling_point(space, face_to_2D_projection(faces));//提取均匀采样点
+            //判断采样点是否在特征面区域上
+            for each (const stl_vertex & p in points) {
+                for (int i = 0; i < faces.num; ++i) {
+                    stl_facet f = this->stl.facet_start[faces.v_shared_face[i]];
+
+                    if ((p.x > f.vertex[0].x&& p.x > f.vertex[1].x&& p.x > f.vertex[2].x) ||
+                        (p.x < f.vertex[0].x && p.x < f.vertex[1].x && p.x < f.vertex[2].x) ||
+                        (p.y > f.vertex[0].y&& p.y > f.vertex[1].y&& p.y > f.vertex[2].y) ||
+                        (p.y < f.vertex[0].y && p.y < f.vertex[1].y && p.y < f.vertex[2].y))
+                        continue;
+                    else
+                    {
+                        //xoy平面上的采样点向上延伸求交
+                        Pointf3 _p(p.x, p.y, 0);
+                        if (!PointInTriangle2(f, _p))
+                            continue;
+                        feature_faces_point.emplace_back(Pf32Ver(CalPlaneLineIntersectPoint(Nor2Vt3(f.normal), Ver2Pf3(f.vertex[0]), Vectorf3(0, 0, 1), _p)));//存储采样点
+                    }
+                }
+            }
+        }
+    }
+}
+
+//点按Z轴负方向延伸求交
+Pointf3 TriangleMesh::point_model_intersection_Z(Pointf3 p)
+{
+    std::vector<float> ps;
+    stl_facet f;
+    float bottom;
+    Pointf3 c;
+    for (int j = 0; j < this->stl.stats.number_of_facets; ++j) {
+        f = this->stl.facet_start[j];
+
+        //测试点在其包围盒中
+        if ((p.x > f.vertex[0].x&& p.x > f.vertex[1].x&& p.x > f.vertex[2].x) ||
+            (p.x < f.vertex[0].x && p.x < f.vertex[1].x && p.x < f.vertex[2].x) ||
+            (p.y > f.vertex[0].y&& p.y > f.vertex[1].y&& p.y > f.vertex[2].y) ||
+            (p.y < f.vertex[0].y && p.y < f.vertex[1].y && p.y < f.vertex[2].y) ||
+            (p.z < f.vertex[0].z && p.z < f.vertex[1].z && p.z < f.vertex[2].z))
+            continue;
+
+        if (Ray2TrianglePoint(f, Vectorf3(0, 0, -1), p, c)) {
+            if (p.z - c.z > 0.001)//参数化
+                ps.emplace_back(c.z);
+        }
+    }
+
+    if (ps.empty())
+        return Pointf3(p.x, p.y, 0);
+
+    bottom = *(ps.begin());
+    for (auto v2 = ps.begin() + 1; v2 != ps.end(); ++v2) {
+        if (bottom < *v2)
+            bottom = *v2;
+    }
+    return Pointf3(p.x, p.y, bottom);
+}
+
+int TriangleMesh::find_common_edge_face(int face, int a, int b)//查找以ab为边另一个三角面片
+{
+    for (int i = 0; i < this->stl.v_shared_faces[a].num; ++i) {
+        int f = this->stl.v_shared_faces[a].v_shared_face[i];
+        if (f == face)
+            continue;
+        for (int j = 0; j < this->stl.v_shared_faces[b].num; ++j) {
+            if (f == this->stl.v_shared_faces[b].v_shared_face[j])
+                return f;
+        }
+    }
+    return -1;
+}
+
+/*-------------------------------------------------------------------------------------------------------------------------------*/

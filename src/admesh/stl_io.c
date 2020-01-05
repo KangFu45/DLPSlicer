@@ -127,7 +127,7 @@ void
 stl_write_ascii(stl_file *stl, const ADMESH_CHAR *file, const char *label) {
   int       i;
   FILE      *fp;
-  char      *error_msg;
+  //char      *error_msg;
 
   if (stl->error) return;
 
@@ -168,7 +168,7 @@ void
 stl_print_neighbors(stl_file *stl, ADMESH_CHAR *file) {
   int i;
   FILE *fp;
-  char *error_msg;
+  //char *error_msg;
 
   if (stl->error) return;
 
@@ -197,7 +197,7 @@ void
 stl_write_binary(stl_file *stl, const ADMESH_CHAR *file, const char *label) {
   FILE      *fp;
   int       i;
-  char      *error_msg;
+  //char      *error_msg;
 
   if (stl->error) return;
 
@@ -210,7 +210,7 @@ stl_write_binary(stl_file *stl, const ADMESH_CHAR *file, const char *label) {
   }
 
   fprintf(fp, "%s", label);
-  for(i = strlen(label); i < LABEL_SIZE; i++) putc(0, fp);
+  for(i = (int)strlen(label); i < LABEL_SIZE; i++) putc(0, fp);
 
   fseek(fp, LABEL_SIZE, SEEK_SET);
   fwrite(&stl->stats.number_of_facets, 4, 1, fp);
@@ -267,7 +267,7 @@ stl_write_quad_object(stl_file *stl, ADMESH_CHAR *file) {
   FILE      *fp;
   int       i;
   int       j;
-  char      *error_msg;
+  //char      *error_msg;
   stl_vertex connect_color;
   stl_vertex uncon_1_color;
   stl_vertex uncon_2_color;
@@ -335,7 +335,7 @@ void
 stl_write_dxf(stl_file *stl, ADMESH_CHAR *file, char *label) {
   int       i;
   FILE      *fp;
-  char      *error_msg;
+  //char      *error_msg;
 
   if (stl->error) return;
 

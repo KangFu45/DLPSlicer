@@ -1,7 +1,6 @@
 ﻿#include "glwidget.h"
 #include "qevent.h"
 #include <vector>
-#include "tool.h"
 
 #include <qdir.h>
 #include <qfileinfo.h>
@@ -11,6 +10,10 @@
 extern Setting e_setting;
 static int TranInvalidID = -10;
 static int SelInvalidID = -1;
+
+//功能：bmp的头文件。
+static char head[54] = {0x42,0x4d,0x66,0x75,0x00,0x00,0x00,0x00,0x00,0x00,0x36,0x00,0x00,0x00,0x28,0x00,0x00
+,0x00,0x64,0x00,0x00,0x00,0x64,0x00,0x00,0x00,0x01,0x00,0x18,0x00,0x00,0x00,0x00,0x00,0x30,0x75};
 
 GlWidget::GlWidget(Model* _model, DLPrint* _dlprint)
 	: translationID(TranInvalidID)
@@ -659,8 +662,8 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 
 			Vectorf v1(event->pos().x() - p.x, event->pos().y() - p.y);
 			Vectorf v2(xLastPos - p.x, yLastPos - p.y);
-			double angle1 = vector_angle_2D(v1, Vectorf(1, 0)) / PI * 180;
-			double angle2 = vector_angle_2D(Vectorf(1, 0), v2) / PI * 180;
+			double angle1 = vector_angle_2(v1, Vectorf(1, 0)) / PI * 180;
+			double angle2 = vector_angle_2(Vectorf(1, 0), v2) / PI * 180;
 
 			if (v1.y < 0)
 				angle1 = 360 - angle1;
@@ -741,8 +744,8 @@ void GlWidget::ReadDepth()
 				stl_normalize_vector(v);
 
 				Pointf3 a;
-				if (line_to_triangle_point(f, Vectorf3(v[0], v[1], v[2]), Pointf3(eye.x(), eye.y(), eye.z()), a)) {
-					float temp = distance_point_3(a, Pointf3(eye.x(), eye.y(), eye.z()));
+				if (Ray2TrianglePoint(f, Vectorf3(v[0], v[1], v[2]), Pointf3(eye.x(), eye.y(), eye.z()), a)) {
+					float temp = DisPoint3(a, Pointf3(eye.x(), eye.y(), eye.z()));
 					if (dis >= 0) {
 						if (temp < dis) {
 							m_supEditControl->m_curPoint->new_origin = a;
@@ -757,7 +760,7 @@ void GlWidget::ReadDepth()
 					}
 				}
 			}
-			if (normal_angle(face.normal) < 0)
+			if (aormal_xy_angle(face.normal) < 0)
 				m_supEditControl->m_curPoint->new_origin = Pointf3{ 0,0,0 };
 		}
 		else
@@ -1192,7 +1195,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 		stl_normalize_vector(m);
 
 		//与z轴正方向所成的角度,在y轴方向上旋转
-		double z_angle = vector_angle_3D(Vectorf3(m[0], m[1], m[2]), Vectorf3(0, 0, 1));
+		double z_angle = vector_angle_3(Vectorf3(m[0], m[1], m[2]), Vectorf3(0, 0, 1));
 
 		//与x轴正方向所成的角度，在z轴方向上旋转
 		double x_angle = atan2(m[1], m[0]) - atan2(0, -1);
@@ -1253,7 +1256,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 		stl_normalize_vector(m);
 
 		//与z轴正方向所成的角度,在y轴方向上旋转
-		double z_angle = vector_angle_3D(Vectorf3(m[0], m[1], m[2]), Vectorf3(0, 0, 1));
+		double z_angle = vector_angle_3(Vectorf3(m[0], m[1], m[2]), Vectorf3(0, 0, 1));
 
 		//与x轴正方向所成的角度，在z轴方向上旋转
 		double x_angle = atan2(m[1], m[0]) - atan2(0, -1);
@@ -1403,7 +1406,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 			stl_normalize_vector(m);
 
 			//与z轴正方向所成的角度,在y轴方向上旋转
-			double z_angle = vector_angle_3D(Vectorf3(m[0], m[1], m[2]), Vectorf3(0, 0, 1));
+			double z_angle = vector_angle_3(Vectorf3(m[0], m[1], m[2]), Vectorf3(0, 0, 1));
 
 			//与x轴正方向所成的角度，在z轴方向上旋转
 			double x_angle = atan2(m[1], m[0]) - atan2(0, -1);
@@ -1513,9 +1516,9 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 	update();
 }
 
-std::vector<TriangleMesh> GlWidget::GetSupportModel()
+TriangleMeshs GlWidget::GetSupportModel()
 {
-	std::vector<TriangleMesh> support_meshs;
+	TriangleMeshs support_meshs;
 	stl_facet face;
 	for (auto s = treeSupportBuffers.begin(); s != treeSupportBuffers.end(); ++s) {
 		TriangleMesh mesh;
@@ -1639,7 +1642,7 @@ void GlWidget::SupportEditChange(QProgressBar* progress)
 		if (p != nullptr) {
 			//有支撑点,将支撑点传入m_supportEditPoints并初始化渲染
 			Pointf3 temp(0, 0, 0);
-			std::vector<stl_vertex> ps = p->support_point;
+			stl_vertexs ps = p->support_point;
 			ps.insert(ps.end(), p->support_point_face.begin(), p->support_point_face.end());
 			for each (const stl_vertex & i in ps)
 				m_supEditControl->AddSupportPoint(i);
@@ -2294,7 +2297,7 @@ void GlWidget::slot_dlprinterChange(QString name)
 void GlWidget::UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress)
 {
 	//从支撑编辑里得到，只有支撑点
-	new_sup->generate_tree_support(FindModel(selectID), TreeSupport::Paras{ m_dlprint->m_config->leaf_num
+	new_sup->GenTreeSupport(FindModel(selectID), TreeSupport::Paras{ m_dlprint->m_config->leaf_num
 		,m_dlprint->m_config->threads ,m_dlprint->m_config->support_top_height }, progress);
 
 	m_dlprint->InsertSupport(selectID, new_sup);

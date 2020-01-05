@@ -10,7 +10,6 @@
 #include <qbuffer.h>
 #include <qdebug.h>
 
-#include "tool.h"
 #include "Setting.h"
 extern Setting e_setting;
 
@@ -402,7 +401,7 @@ namespace Slic3r {
 
 	TreeSupport* DLPrint::GenSupport(size_t id, TriangleMesh* mesh, QProgressBar* progress)
 	{
-		mesh->require_shared_vertices_faces();
+		mesh->require_shared_vertices();
 		mesh->extract_feature_face(m_config->angle);
 
 		progress->setValue(20);
@@ -410,7 +409,7 @@ namespace Slic3r {
 		TreeSupport* s = new TreeSupport;
 		s->support_point = mesh->feature_point(progress);
 		s->support_point_face = mesh->feature_point_face(m_config->space, progress);
-		s->generate_tree_support(*mesh, TreeSupport::Paras{ m_config->leaf_num ,m_config->threads ,m_config->support_top_height }, progress);
+		s->GenTreeSupport(*mesh, TreeSupport::Paras{ m_config->leaf_num ,m_config->threads ,m_config->support_top_height }, progress);
 		return s;
 	}
 
@@ -772,7 +771,7 @@ namespace Slic3r {
 						continue;
 					else {
 						//得到射线与平面的交点
-						if (line_to_triangle_point(f, xz_45, (*p), a))
+						if (Ray2TrianglePoint(f, xz_45, (*p), a))
 							pf3s.push_back(a);
 					}
 				}
@@ -802,7 +801,7 @@ namespace Slic3r {
 						continue;
 					else {
 						//得到射线与平面的交点
-						if (line_to_triangle_point(f, xz_135, (*p), a))
+						if (Ray2TrianglePoint(f, xz_135, (*p), a))
 							pf3s.push_back(a);
 					}
 				}
@@ -831,7 +830,7 @@ namespace Slic3r {
 						continue;
 					else {
 						//得到射线与平面的交点
-						if (line_to_triangle_point(f, yz_45, (*p), a))
+						if (Ray2TrianglePoint(f, yz_45, (*p), a))
 							pf3s.push_back(a);
 					}
 				}
@@ -860,7 +859,7 @@ namespace Slic3r {
 						continue;
 					else {
 						//得到射线与平面的交点
-						if (line_to_triangle_point(f, yz_135, (*p), a))
+						if (Ray2TrianglePoint(f, yz_135, (*p), a))
 							pf3s.push_back(a);
 					}
 				}
