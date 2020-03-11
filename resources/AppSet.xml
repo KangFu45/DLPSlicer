@@ -1,12 +1,30 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<config>
-  <App Name="DLPSlicer" Version="1.6.1v"/>
-  <Path>
-    <UserFile path="C:/Users/Administrator/AppData/Local/DLPSlicer"/>
-  </Path>
-  <Machine>
-    <Number1 name="S250" length="250" width="140" height="300" />
-    <Number2 name="S288" length="288" width="162" height="300" />
-    <Number3 name="S100" length="100" width="100" height="100" />
-  </Machine>
-</config>
+<?xml version="1.0" encoding="utf-8"?>
+<Config>
+  
+  
+  
+<App>
+    
+    
+  <Name>DLPSlicer</Name><Version>1.6.1v</Version></App><UserFile>
+    
+  <Path>C:\Users\ADMINI~1.DAD\AppData\Local\Temp/DLPSlicer</Path></UserFile><Machines>
+    
+    
+    
+  <Machine id="1">
+      
+      
+      
+      
+    <Name>S250</Name><Height>300</Height><Length>250</Length><Width>140</Width></Machine><Machine id="2">
+      
+      
+      
+      
+    <Name>S288</Name><Height>300</Height><Length>288</Length><Width>162</Width></Machine><Machine id="3">
+      
+      
+      
+      
+    <Name>S100</Name><Height>100</Height><Length>100</Length><Width>100</Width></Machine></Machines></Config>

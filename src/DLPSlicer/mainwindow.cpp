@@ -11,7 +11,7 @@
 #include <qfiledialog.h>
 #include <qstandardpaths.h>
 
-#include <quazip/JlCompress.h>
+//#include <quazip/JlCompress.h>
 
 #include "PreviewDialog.h"
 #include "SetupDialog.h"
@@ -682,7 +682,7 @@ void MainWindow::slot_slice()
 			m_centerTopWidget->P(20);
 			m_dlprint->Slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
 			m_centerTopWidget->P(99);
-			JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
+			//JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
 			m_centerTopWidget->P(100);
 
 			//清空切片文件夹
@@ -722,7 +722,7 @@ void MainWindow::ShowPreviewWidget(QString zipPath)
 	}
 
 	if (ExtractZipPath(zipPath)) {
-		JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
+		//JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
 
 		PreviewDialog previewDialog;
 		if (previewDialog.readIni(e_setting.ZipTempPath.c_str()))
@@ -741,7 +741,8 @@ bool MainWindow::ExtractZipPath(QString zipPath)
 	bool bmpBool = false;
 	bool pngBool = false;
 	bool iniBool = false;
-	QStringList list = JlCompress::getFileList(zipPath);
+	//QStringList list = JlCompress::getFileList(zipPath);
+	QStringList list;
 	for (auto l = list.begin(); l != list.end(); ++l) {
 		if ((*l).right(4).compare(".bmp") && (*l).right(4).compare(".png") && (*l).right(4).compare(".ini"))
 			return false;

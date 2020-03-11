@@ -1,5 +1,8 @@
 #pragma once
-#include "XmlConfig/XmlConfig.h"
+#include <string>
+#include <vector>
+
+using namespace std;
 
 class Setting
 {
@@ -7,7 +10,7 @@ public:
 	Setting() {};
 	Setting(string _appPath);
 	~Setting();
-
+	
 	string appPath;
 	string resourcePath;
 	string xmlFile;
@@ -30,7 +33,7 @@ public:
 		unsigned short height;
 		float factor;
 	};
-	typedef std::vector<Printer> Printers;
+	typedef vector<Printer> Printers;
 	//设定第一个机器为选中的机器
 	Printers m_printers;
 	bool setSelMachine(string name) {
@@ -52,8 +55,6 @@ public:
 	}
 
 private:
-	XmlConfig* m_XmlConfig;
-
 	bool NamseNoRepetition(string name) {
 		for each (Printer per in m_printers) {
 			if (per.name == name)
