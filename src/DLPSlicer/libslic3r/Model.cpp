@@ -616,7 +616,7 @@ void Model::model_lift(double distance) {
 	}
 }
 
-void Model::delete_model(size_t id) {
+void Model::delete_modelInstance(size_t id) {
 	size_t a = id / InstanceNum;
 	size_t i = id % InstanceNum;//模型对象实例的id
 	ModelObject* o = find_object(id);

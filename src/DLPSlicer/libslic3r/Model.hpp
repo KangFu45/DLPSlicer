@@ -234,7 +234,7 @@ public:
 
 	void model_lift(double distance);
 
-	void delete_model(size_t id);
+	void delete_modelInstance(size_t id);
 
 	void wirteStlBinary(const std::string& outFile, TriangleMesh& supportMesh);
 

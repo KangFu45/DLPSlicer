@@ -2,6 +2,27 @@
 
 namespace Slic3r {
 
+	TreeSupport::TreeSupport(const TreeSupport* ts) {
+		this->support_point = ts->support_point;
+		this->support_point_face = ts->support_point_face;
+		this->tree_support_bole = ts->tree_support_bole;
+		this->tree_support_bottom = ts->tree_support_bottom;
+		this->tree_support_branch = ts->tree_support_branch;
+		this->tree_support_leaf = ts->tree_support_leaf;
+		this->tree_support_node = ts->tree_support_node;
+	}
+
+	void TreeSupport::translate_(double x, double y, double z)
+	{
+		translate(this->support_point, x, y, z);
+		translate(this->support_point_face, x, y, z);
+		translate(this->tree_support_bole, x, y, z);
+		translate(this->tree_support_bottom, x, y, z);
+		translate(this->tree_support_branch, x, y, z);
+		translate(this->tree_support_leaf, x, y, z);
+		translate(this->tree_support_node, x, y, z);
+	}
+
 	//功能：在模型上找到包含指定点的三角面
 	//参数1：基础模型
 	//参数2：指定点

@@ -76,6 +76,7 @@ class Linef3
     explicit Linef3(Pointf3 _a, Pointf3 _b): a(_a), b(_b) {};
     Pointf3 intersect_plane(double z) const;
     void scale(double factor);
+    void translate(double x, double y,double z);
 };
 
 }

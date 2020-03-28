@@ -310,7 +310,7 @@ CenterTopWidget::~CenterTopWidget()
 {
 	delete m_printerLabel;
 	delete m_printerCombo;
-
+	
 	delete m_openBtn;
 	delete m_supportBtn;
 	delete m_supportEditBtn;
@@ -319,22 +319,22 @@ CenterTopWidget::~CenterTopWidget()
 	delete m_offsetBtn;
 	delete m_rotateBtn;
 	delete m_scaleBtn;
-
+	
 	delete m_progressLabel;
 	delete m_progressBar;
 	delete m_progressWidget;
-
+	
 	delete x_offset_spin;
 	delete y_offset_spin;
 	delete z_offset_spin;
 	//delete ZPosZeroBtn;
 	delete m_offsetWidget;
-
+	
 	delete x_rotate_spin;
 	delete y_rotate_spin;
 	delete z_rotate_spin;
 	delete m_rotateWidget;
-
+	
 	delete x_scale_spin;
 	delete y_scale_spin;
 	delete z_scale_spin;

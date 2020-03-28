@@ -37,7 +37,7 @@ private:
 	Model* m_model = { new Model };
 	DLPrint* m_dlprint;
 	GlWidget* m_glwidget;	//三维视图部件
-	Config* m_config;
+	Config* m_config = { new Config };
 
 	void SetOffsetValue(ModelInstance* instance);
 	void SetRotateValue(ModelInstance* instance);

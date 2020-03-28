@@ -33,5 +33,6 @@
         <file>images/supportEdit_b.png</file>
         <file>images/supportEdit_w.png</file>
         <file>images/offset_b.PNG</file>
+        <file>images/printer.ico</file>
     </qresource>
 </RCC>

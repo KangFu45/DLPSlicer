@@ -236,4 +236,10 @@ Linef3::scale(double factor)
     this->b.scale(factor);
 }
 
+void Linef3::translate(double x, double y,double z)
+{
+    this->a.translate(x, y, z);
+    this->b.translate(x, y, z);
+}
+
 }

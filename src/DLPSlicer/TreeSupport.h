@@ -9,6 +9,27 @@
 
 namespace Slic3r {
 
+	inline void translate(stl_vertexs& vts, double x, double y, double z)
+	{
+		for (auto vt = vts.begin(); vt != vts.end(); ++vt) {
+			vt->x += x;
+			vt->y += y;
+			vt->z += z;
+		}
+	}
+
+	inline void translate(linef3s& lfs, double x, double y, double z)
+	{
+		for (auto lf = lfs.begin(); lf != lfs.end(); ++lf)
+			lf->translate(x, y, z);
+	}
+
+	inline void translate(Pointf3s& pfs, double x, double y, double z)
+	{
+		for (auto& pf = pfs.begin(); pf != pfs.end(); ++pf)
+			pf->translate(x, y, z);
+	}
+
 	struct TreeNode {
 		size_t num;		//当前节点上面的树枝树
 		Pointf3 p;		//节点的坐标位置
@@ -19,6 +40,7 @@ namespace Slic3r {
 	{
 	public:
 		TreeSupport() {};
+		TreeSupport(const TreeSupport* ts);
 		~TreeSupport() {};
 
 		stl_vertexs support_point;		//待支撑悬吊点集
@@ -41,6 +63,18 @@ namespace Slic3r {
 		//参数2：支撑参数
 		//参数3：进度条
 		void GenTreeSupport(TriangleMesh& mesh, const Paras& paras, QProgressBar* progress);
+
+		void translate_(double x, double y,double z);
+
+		inline void operator=(const TreeSupport* ts) {
+			this->support_point = ts->support_point;
+			this->support_point_face = ts->support_point_face;
+			this->tree_support_bole = ts->tree_support_bole;
+			this->tree_support_bottom = ts->tree_support_bottom;
+			this->tree_support_branch = ts->tree_support_branch;
+			this->tree_support_leaf = ts->tree_support_leaf;
+			this->tree_support_node = ts->tree_support_node;
+		}
 
 	private:
 		//功能：生成支撑横梁。
@@ -67,6 +101,5 @@ namespace Slic3r {
 		//参数3：支撑参数
 		void ModelInterSupport(TriangleMesh mesh, const Pointf3& p, const Paras& paras);
 	};
-
 }
 

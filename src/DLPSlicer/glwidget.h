@@ -221,13 +221,14 @@ public:
 
 	void OffsetValueChange(double x, double y, double z, bool back = false);
 	void ScaleValueChange(double x, double y, double z, bool back = false);
-	void rotateValueChange(double angle, int x, int y, int z, bool back = false);
+	void RotateValueChange(double angle, int x, int y, int z, bool back = false);
 
 	bool DelSelectSupport();
 	void GenSelInstanceSupport(QProgressBar* progress);
 	void SupportEditChange(QProgressBar* progress = nullptr);
 	void AddNewSupportPoint() { m_supEditControl->AddNewSupportPoint(); };
 	void AddModelInstance(size_t id);
+	void InitTreeSupportID(size_t id, QProgressBar* progress);
 
 private:
 	void DrawModel();
@@ -251,7 +252,6 @@ private:
 	void InitConfine();
 	void BindConfine();
 	void UpdateTreeSupport(TreeSupport* new_sup, QProgressBar* progress);
-	void InitTreeSupportID(size_t id, QProgressBar* progress);
 
 protected:
 	void resizeGL(int w, int h) override;

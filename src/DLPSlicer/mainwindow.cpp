@@ -47,7 +47,6 @@ MainWindow::MainWindow(QWidget* parent)
 {
 	InitDlprinter();
 
-	m_config = new Config;
 	SetupDialog setup(m_config);
 	setup.slot_writeConfig();
 
@@ -66,13 +65,17 @@ MainWindow::MainWindow(QWidget* parent)
 
 	setAcceptDrops(true);
 	setWindowTitle("DLPSlicer");
+	setWindowIcon(QIcon(":/icon/images/printer.ico"));
 	setAttribute(Qt::WA_QuitOnClose, true);//设置主窗口关闭即程序退出
 	resize(1200, 700);
 }
 
 MainWindow::~MainWindow()
 {
-	//delete m_centerTopWidget.get();
+	delete m_centerTopWidget.release();
+	delete m_config;
+	delete m_model;
+	delete m_dlprint;
 	//delete m_glwidget;
 }
 
@@ -80,11 +83,9 @@ QString MainWindow::ReadStlTxt()
 {
 	QFile dir(e_setting.ModelFile.c_str());
 	if (dir.exists()) {
-		QSettings* readini = new QSettings(e_setting.ModelFile.c_str(), QSettings::IniFormat);
+		QSettings readini(e_setting.ModelFile.c_str(), QSettings::IniFormat);
 		//读取打印设置
-		QString path = readini->value("/modelPath/path").toString();
-		delete readini;
-		return path;
+		return readini.value("/modelPath/path").toString();
 	}
 	else
 		return "";
@@ -355,7 +356,7 @@ void MainWindow::slot_xRotateValueChange(double angle)
 
 	if (fabs(x) > 0.01) {
 		m_glwidget->DelSelectSupport();
-		m_glwidget->rotateValueChange(x, 1, 0, 0);
+		m_glwidget->RotateValueChange(x, 1, 0, 0);
 	}
 }
 
@@ -375,7 +376,7 @@ void MainWindow::slot_yRotateValueChange(double angle)
 
 	if (fabs(y) > 0.01) {
 		m_glwidget->DelSelectSupport();
-		m_glwidget->rotateValueChange(y, 0, 1, 0);
+		m_glwidget->RotateValueChange(y, 0, 1, 0);
 	}
 }
 
@@ -395,7 +396,7 @@ void MainWindow::slot_zRotateValueChange(double angle)
 
 	if (fabs(z) > 0.01) {
 		m_glwidget->DelSelectSupport();
-		m_glwidget->rotateValueChange(z, 0, 0, 1);
+		m_glwidget->RotateValueChange(z, 0, 0, 1);
 	}
 }
 
@@ -685,10 +686,8 @@ void MainWindow::slot_autoArrange()
 
 	m_glwidget->ClearSupportBuffer();
 
-	/*
 	for (ModelObjectPtrs::const_iterator o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
 	    for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-			if ((*i)->exist) {
 				size_t id = m_model->find_id(*i);
 				
 				//将所有实例在xy方向上重新排列
@@ -696,52 +695,36 @@ void MainWindow::slot_autoArrange()
 				positions.pop_back();
 				double x = p.x - (*i)->offset.x;
 				double y = p.y - (*i)->offset.y;
-				glwidget->offsetValueChange(id, x, y, 0);
-				TreeSupport* s1 = NULL;
-				if (m_dlprint->chilck_tree_support(id, s1)) {
-					s1->support_offset(x, y);
-					glwidget->InitTreeSupportID(id, s1, NULL);
+
+				(*i)->offset.x += x;
+				(*i)->offset.y += y;
+				(*i)->update_attribute();
+
+				TreeSupport* ts1 = m_dlprint->GetTreeSupport(id);
+				if (ts1!=nullptr) {
+					TreeSupport* ts2 = new TreeSupport(ts1);
+					ts2->translate_(x, y, 0);
+					m_dlprint->InsertSupport(id, ts2);
+					m_glwidget->InitTreeSupportID(id, nullptr);
 				}
 			}
-	    }
 	    (*o)->invalidate_bounding_box();
 	}
-	*/
 }
 
 void MainWindow::Duplicate(size_t num, bool arrange)
 {
-	int distance = 0;
-
-	/*
-	TreeSupport* s1 = NULL;
-	//返回选中支撑
-	bool ret = m_dlprint->chilck_tree_support(glwidget->selectID, s1);
+	//返回选中模型支撑
+	TreeSupport* ts1 = m_dlprint->GetTreeSupport(m_model->find_id(m_glwidget->m_selInstance));
 
 	for (int i = 0; i < num; ++i) {
-		ModelInstance* s = m_model->addInstance(glwidget->selectID);
+		ModelInstance* s = m_model->addInstance(m_model->find_id(m_glwidget->m_selInstance));
 		size_t id = m_model->find_id(s);
-		addModelBuffer(id);
-		if (ret) {
-			TreeSupport* ss = new TreeSupport();
-			ss->support_point = s1->support_point;
-			ss->support_point_face = s1->support_point_face;
-			ss->tree_support_bole = s1->tree_support_bole;
-			ss->tree_support_bottom = s1->tree_support_bottom;
-			ss->tree_support_branch = s1->tree_support_branch;
-			ss->tree_support_leaf = s1->tree_support_leaf;
-			ss->tree_support_node = s1->tree_support_node;
-			addSupports(id, ss, NULL);
-		}
-
-		//if (!arrange) {
-		//	distance = distance + 5;
-		//	s->offset.x += distance;
-		//	s->offset.y += distance;
-		//}
+		m_glwidget->AddModelInstance(id);
+		if (ts1 != nullptr)
+			m_dlprint->InsertSupport(id, new TreeSupport(ts1));
 	}
-	autoArrange();
-	*/
+	slot_autoArrange();
 }
 
 

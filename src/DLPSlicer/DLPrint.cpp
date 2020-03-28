@@ -21,6 +21,14 @@ namespace Slic3r {
 	{
 	}
 
+	DLPrint::~DLPrint()
+	{
+		while (!treeSupports.empty()) {
+			delete treeSupports.begin()->second;
+			treeSupports.erase(treeSupports.begin());
+		}
+	}
+
 	void DLPrint::Slice(const TriangleMeshs& supMeshs, QProgressBar* progress)
 	{
 		BoundingBoxf3 box;
@@ -535,8 +543,7 @@ namespace Slic3r {
 
 		//»­µ×°å
 		if (m_config->raft_layers > num) {
-			ExPolygons exp = r_layers[num].slices.expolygons;
-			for (ExPolygons::iterator exps = exp.begin(); exps != exp.end(); ++exps) {
+			for (ExPolygons::iterator exps = r_layers[num].slices.expolygons.begin(); exps != r_layers[num].slices.expolygons.end(); ++exps) {
 				painterPath.addPolygon(poly2Qpoly((*exps).contour));
 				for (Polygons::iterator ps = (*exps).holes.begin(); ps != (*exps).holes.end(); ++ps)
 					painterPath.addPolygon(poly2Qpoly(*ps));

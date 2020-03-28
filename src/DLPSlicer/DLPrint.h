@@ -23,7 +23,7 @@ namespace Slic3r {
 	{
 	public:
 		DLPrint(Model* _model, Config* config);			//¹¹Ôìº¯Êý
-		~DLPrint() {};
+		~DLPrint();
 
 	private:
 		class Layer {

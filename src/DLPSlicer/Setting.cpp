@@ -36,10 +36,10 @@ Setting::Setting(string _appPath)
 	if (this->UserPath.empty() || !exists(filesystem::path(this->UserPath))) {
 		//未发现用户目录
 		filesystem::path _path = filesystem::temp_directory_path().append("/" + appName).string();
-		if (!exists(_path)) {
-			if (!create_directory(_path))//在用户临时文件夹下创建软件目录
-				;///TODO:软件配置文件夹创建失败，报错退出
-		}
+		//if (!exists(_path)) {
+		//	if (!create_directory(_path))//在用户临时文件夹下创建软件目录
+		//		;///TODO:软件配置文件夹创建失败，报错退出
+		//}
 		this->UserPath = _path.string();
 		pt.put("Config.UserFile.Path", UserPath);
 		write_xml(this->xmlFile, pt);//覆盖原xml文件

@@ -39,9 +39,6 @@ GlWidget::GlWidget(Model* _model, DLPrint* _dlprint)
 
 GlWidget::~GlWidget()
 {
-	delete m_dlprint;
-	delete m_model;
-	delete m_selInstance;
 	if (m_supEditControl != nullptr)
 		delete m_supEditControl;
 	delete m_program;
@@ -672,21 +669,21 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 
 			if (translationID == rotateMesh_Z.id) {
 				if (_verticalAngle > 0)
-					rotateValueChange(angle2 - angle1, 0, 0, 1, true);
+					RotateValueChange(angle2 - angle1, 0, 0, 1, true);
 				else
-					rotateValueChange(angle1 - angle2, 0, 0, 1, true);
+					RotateValueChange(angle1 - angle2, 0, 0, 1, true);
 			}
 			else if (translationID == rotateMesh_X.id) {
 				if ((_horizonAngle >= 0 && _horizonAngle < 180) || (_horizonAngle <= -180 && _horizonAngle > -360))
-					rotateValueChange(angle1 - angle2, 0, 1, 0, true);
+					RotateValueChange(angle1 - angle2, 0, 1, 0, true);
 				else
-					rotateValueChange(angle2 - angle1, 0, 1, 0, true);
+					RotateValueChange(angle2 - angle1, 0, 1, 0, true);
 			}
 			else if (translationID == rotateMesh_Y.id) {
 				if ((_horizonAngle >= 90 && _horizonAngle < 270) || (_horizonAngle <= -90 && _horizonAngle > -270))
-					rotateValueChange(angle1 - angle2, 1, 0, 0, true);
+					RotateValueChange(angle1 - angle2, 1, 0, 0, true);
 				else
-					rotateValueChange(angle2 - angle1, 1, 0, 0, true);
+					RotateValueChange(angle2 - angle1, 1, 0, 0, true);
 			}
 		}
 
@@ -1178,7 +1175,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 	sb->id = id;
 	//树干 76->80
 	for (auto i = s->tree_support_bole.begin(); i != s->tree_support_bole.end(); ++i) {
-		if (progress != NULL) {
+		if (progress != nullptr) {
 			size_t id = std::distance(s->tree_support_bole.begin(), i);
 			int unit = (id + 1) / (s->tree_support_bole.size() / (80 - 76) + 1);
 			if (progress->value() < 76 + unit)
@@ -1240,7 +1237,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 	//树叶
 	for (auto i = s->tree_support_leaf.begin(); i != s->tree_support_leaf.end(); ++i) {
 		//81-85
-		if (progress != NULL) {
+		if (progress != nullptr) {
 			size_t id = std::distance(s->tree_support_leaf.begin(), i);
 			int unit = (id + 1) / (s->tree_support_leaf.size() / (85 - 81) + 1);
 			if (progress->value() < 81 + unit)
@@ -1302,7 +1299,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 	//树枝
 	for (auto i = s->tree_support_branch.begin(); i != s->tree_support_branch.end(); ++i) {
 		//86-90
-		if (progress != NULL) {
+		if (progress != nullptr) {
 			size_t id = std::distance(s->tree_support_branch.begin(), i);
 			int unit = (id + 1) / (s->tree_support_branch.size() / (86 - 90) + 1);
 			if (progress->value() < 86 + unit)
@@ -1356,7 +1353,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 	//树根
 	for (auto i = s->tree_support_bottom.begin(); i != s->tree_support_bottom.end(); ++i) {
 		//91-95
-		if (progress != NULL) {
+		if (progress != nullptr) {
 			size_t id = std::distance(s->tree_support_bottom.begin(), i);
 			int unit = (id + 1) / (s->tree_support_bottom.size() / (95 - 91) + 1);
 			if (progress->value() < 91 + unit)
@@ -1452,7 +1449,7 @@ void GlWidget::InitTreeSupportID(size_t id, QProgressBar* progress)
 
 	//加强节点
 	for (auto p = s->tree_support_node.begin(); p != s->tree_support_node.end(); ++p) {
-		if (progress != NULL) {
+		if (progress != nullptr) {
 			size_t id = std::distance(s->tree_support_node.begin(), p);
 			int unit = (id + 1) / (s->tree_support_node.size() / (100 - 95) + 1);
 			if (progress->value() < 95 + unit)
@@ -2211,7 +2208,7 @@ void GlWidget::ScaleValueChange(double x, double y, double z, bool back)
 }
 
 //传入旋转的角度的数值
-void GlWidget::rotateValueChange(double angle, int x, int y, int z, bool back)
+void GlWidget::RotateValueChange(double angle, int x, int y, int z, bool back)
 {
 	QMatrix4x4 m;
 	m.rotate(angle, x, y, z);
@@ -2245,6 +2242,7 @@ void GlWidget::slot_delSelectIntance()
 
 	DelSelectSupport();
 	DelModelBuffer(selectID);
+	m_model->delete_modelInstance(selectID);
 	UpdateConfine();
 
 	m_selInstance = nullptr;
