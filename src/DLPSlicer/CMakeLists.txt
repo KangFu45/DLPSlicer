@@ -32,7 +32,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libslic3r)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../Clipper)
-#link_directories(DLPSlicer ${PROJECT_SOURCE_DIR}/lib-64/lib/quazip)
+link_directories(DLPSlicer ${PROJECT_SOURCE_DIR}/lib-64/lib/quazip)
 link_directories(DLPSlicer ${PROJECT_SOURCE_DIR}/lib-64/lib/glut)
 add_definitions("/bigobj")
 
@@ -41,8 +41,8 @@ add_executable(DLPSlicer ${Slic3rLib_SRC_FILES} ${Slic3rLib_HEAD_FILES} ${QRC_FI
 target_link_libraries(DLPSlicer admesh clipper poly2tri polypartition)
 target_link_libraries(DLPSlicer glu32.lib opengl32.lib)
 #链接第三方库
-#target_link_libraries(DLPSlicer optimized quazip.lib)
-#target_link_libraries(DLPSlicer debug quazipd.lib)
+target_link_libraries(DLPSlicer optimized quazip.lib)
+target_link_libraries(DLPSlicer debug quazipd.lib)
 
 # 在CMake中使用Qt最快捷的方式，一句代码搞定
 qt5_use_modules(DLPSlicer ${QT})

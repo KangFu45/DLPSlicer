@@ -32,7 +32,7 @@ void Config::writeConfig()
 	writeini.setValue("/support_config/modelLift", model_lift);
 
 	writeini.setValue("/hollow_out_config/hollowOutBox", hollow_out);
-	//writeini.setValue("/hollow_out_config/fillPattern", fill_pattern_combo->currentIndex());
+	writeini.setValue("/hollow_out_config/fillPattern", fill_pattern);
 	writeini.setValue("/hollow_out_config/wallThickness", wall_thickness);
 	writeini.setValue("/hollow_out_config/fillDensity", fill_density);
 
@@ -378,11 +378,10 @@ void SetupDialog::slot_writeConfig()
 	m_config->model_lift = model_lift_spin->value();
 
 	m_config->hollow_out = int(hollow_out_box->isChecked());
-	//if (setupDialog.fill_pattern_combo->currentIndex() == 0)
-	//	config->fill_pattern.value = ipHoneycomb;
-	//else if (setupDialog.fill_pattern_combo->currentIndex() == 1)
-	//	config->fill_pattern.value = ip3DSupport;
-	//fill_pattern_combo->currentIndex();
+	if (fill_pattern_combo->currentIndex() == 0)
+		m_config->fill_pattern = Config::ipHoneycomb;
+	else if (fill_pattern_combo->currentIndex() == 1)
+		m_config->fill_pattern = Config::ip3DSupport;
 	m_config->wall_thickness = wall_thickness_spin->value();
 	m_config->fill_density = density_spin->value();
 
@@ -462,7 +461,7 @@ void SetupDialog::readConfig()
 
 		model_lift_spin->setValue(readini.value("/support_config/modelLift").toDouble());
 
-		hollow_out_box->setChecked(readini.value("/hollow_out_config/hollowOutBox").toInt());
+		hollow_out_box->setChecked(readini.value("/hollow_out_config/hollowOutBox").toBool());
 
 		fill_pattern_combo->setCurrentIndex(readini.value("/hollow_out_config/fillPattern").toInt());
 

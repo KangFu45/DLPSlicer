@@ -40,8 +40,9 @@ namespace Slic3r {
 		};
 		typedef std::vector<Layer> Layers;
 
-		std::vector<Layers*> layerPtrs;						//每个实例对象单独切片分层
+		std::vector<Layers> layerss;						//每个实例对象单独切片分层
 		double* m_areas = nullptr;							//每层的面积，用作求模型的体积
+		Layers t_layers;//临时层
 		Layers r_layers;									//底板层
 		std::map <size_t, linef3s*> inside_supports;		//每个模型对象各自的内部支撑
 
@@ -75,7 +76,7 @@ namespace Slic3r {
 		void SavePng(const BoundingBoxf3& box,size_t layerNum);
 		void SaveOnePng(size_t num, const std::string& path);
 
-		void InfillLayer(size_t i, ExPolygons pattern, Layers t_layers);
+		void InfillLayer(size_t i, ExPolygons pattern);
 		void RadiatePoint(const BoundingBoxf3& bb, Pointf3s& ps,float space,int xyz);
 		void RadiateInter(const TriangleMesh* mesh, const Pointf3s& ps, linef3s& lines, int xyz);
 

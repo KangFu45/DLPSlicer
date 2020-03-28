@@ -12,7 +12,13 @@ struct Config
 {
 	float	fill_angle;
 	float	fill_density;
-	//ConfigOptionEnum<InfillPattern> fill_pattern;
+
+	enum InfillPattern
+	{
+		ipHoneycomb = 0,
+		ip3DSupport
+	}fill_pattern;
+
 	float	layer_height;
 	int		raft_layers;
 	int		raft_offset;

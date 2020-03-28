@@ -172,23 +172,23 @@ offset(const Polylines &polylines, const float delta,
     return ClipperPaths_to_Slic3rMultiPoints<Polygons>(output);
 }
 
-Surfaces
-offset(const Surface &surface, const float delta,
-    double scale, ClipperLib::JoinType joinType, double miterLimit)
-{
-    // perform offset
-    ExPolygons expp = offset_ex(surface.expolygon, delta, scale, joinType, miterLimit);
-    
-    // clone the input surface for each expolygon we got
-    Surfaces retval;
-    retval.reserve(expp.size());
-    for (ExPolygons::iterator it = expp.begin(); it != expp.end(); ++it) {
-        Surface s = surface;  // clone
-        s.expolygon = *it;
-        retval.push_back(s);
-    }
-    return retval;
-}
+//Surfaces
+//offset(const Surface &surface, const float delta,
+//    double scale, ClipperLib::JoinType joinType, double miterLimit)
+//{
+//    // perform offset
+//    ExPolygons expp = offset_ex(surface.expolygon, delta, scale, joinType, miterLimit);
+//    
+//    // clone the input surface for each expolygon we got
+//    Surfaces retval;
+//    retval.reserve(expp.size());
+//    for (ExPolygons::iterator it = expp.begin(); it != expp.end(); ++it) {
+//        Surface s = surface;  // clone
+//        s.expolygon = *it;
+//        retval.push_back(s);
+//    }
+//    return retval;
+//}
 
 ExPolygons
 offset_ex(const Polygons &polygons, const float delta,

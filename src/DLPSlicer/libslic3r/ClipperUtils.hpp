@@ -6,7 +6,7 @@
 #include "clipper.hpp"
 #include "ExPolygon.hpp"
 #include "Polygon.hpp"
-#include "Surface.hpp"
+//#include "Surface.hpp"
 
 // import these wherever we're included
 using ClipperLib::jtMiter;
@@ -55,9 +55,9 @@ ClipperLib::Paths _offset(const Slic3r::Polylines &polylines, const float delta,
 Slic3r::Polygons offset(const Slic3r::Polylines &polylines, const float delta,
     double scale = CLIPPER_OFFSET_SCALE, ClipperLib::JoinType joinType = ClipperLib::jtSquare, 
     double miterLimit = 3);
-Slic3r::Surfaces offset(const Slic3r::Surface &surface, const float delta,
-    double scale = CLIPPER_OFFSET_SCALE, ClipperLib::JoinType joinType = ClipperLib::jtSquare, 
-    double miterLimit = 3);
+//Slic3r::Surfaces offset(const Slic3r::Surface &surface, const float delta,
+//    double scale = CLIPPER_OFFSET_SCALE, ClipperLib::JoinType joinType = ClipperLib::jtSquare, 
+//    double miterLimit = 3);
 
 Slic3r::ExPolygons offset_ex(const Slic3r::Polygons &polygons, const float delta,
     double scale = CLIPPER_OFFSET_SCALE, ClipperLib::JoinType joinType = ClipperLib::jtMiter, 
@@ -205,11 +205,11 @@ union_ex(const Slic3r::ExPolygons &subject, bool safety_offset_ = false)
     return _clipper_ex(ClipperLib::ctUnion, to_polygons(subject), Slic3r::Polygons(), safety_offset_);
 }
 
-inline Slic3r::ExPolygons
-union_ex(const Slic3r::Surfaces &subject, bool safety_offset_ = false)
-{
-    return _clipper_ex(ClipperLib::ctUnion, to_polygons(subject), Slic3r::Polygons(), safety_offset_);
-}
+//inline Slic3r::ExPolygons
+//union_ex(const Slic3r::Surfaces &subject, bool safety_offset_ = false)
+//{
+//    return _clipper_ex(ClipperLib::ctUnion, to_polygons(subject), Slic3r::Polygons(), safety_offset_);
+//}
 
 
 ClipperLib::PolyTree union_pt(const Slic3r::Polygons &subject, bool safety_offset_ = false);

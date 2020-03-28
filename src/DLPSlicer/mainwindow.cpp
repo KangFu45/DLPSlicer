@@ -10,11 +10,12 @@
 #include <qtimer.h>
 #include <qfiledialog.h>
 #include <qstandardpaths.h>
+#include <qdir.h>
+#include <qfileinfo.h>
 
-//#include <quazip/JlCompress.h>
+#include <quazip/JlCompress.h>
 
 #include "PreviewDialog.h"
-#include "SetupDialog.h"
 #include "IO.hpp"
 
 //ERROR:setting.h放在.cpp文件夹下会报错
@@ -22,103 +23,23 @@
 
 extern Setting e_setting;
 
-AboutDialog::AboutDialog()
+inline bool clearDir(QString path)
 {
-	icoBtn = new QPushButton(QIcon(":/icon/images/SM.png"), "");
-	icoBtn->setFixedSize(60, 70);
-	icoBtn->setIconSize(QSize(60, 70));
-	icoBtn->setStyleSheet("background-color: rgba(225,225,225,0);");
+	if (path.isEmpty())
+		return false;
 
-	QFont font("ZYSong18030", 10);
-	nameLabel = new QLabel("S-Maker_DLP1.6.7  64bit");
-	nameLabel->setFont(font);
+	QDir dir(path);
+	if (!dir.exists())
+		return true;
 
-	QString str(QStringLiteral("速美科技版权所有"));
-	str.append("\n@2017-2018");
-	copyrightLabel = new QLabel(str);
-
-	versionLabel = new QLabel(QStringLiteral("版本更新:"));
-
-	textEdit = new QPlainTextEdit();
-	textEdit->setReadOnly(true);
-	textEdit->setPlainText(QStringLiteral(
-		"版本--1.6.7\n"
-		"1.增加机型选择功能。\n"
-		"2.增加Dental_DLP机型。\n"
-		"版本--1.6.6\n"
-		"1.提高手动支撑效率。\n"
-		"2.拖动功能的优化。\n"
-		"3.增加obj文件格式。\n"
-		"4.更新图标。\n"
-		"版本--1.6.5\n"
-		"1.内存优化。\n"
-		"2.删除支撑改为左键单击。\n"
-		"3.添加底板补偿参数。\n"
-		"4.针对悬吊面按形状均匀支撑。\n"
-		"5.修复复杂模型支撑容易穿过的bug。\n"
-		"6.支撑底端与模型接触成角度。\n"
-		"7.其他修改。\n"
-		"版本--1.6.4\n"
-		"1.优化进度条显示。\n"
-		"2.增加模型拖拽功能。\n"
-		"3.优化自动支撑。\n"
-		"4.增加蜂窝填充。\n"
-		"5.其他修改。\n"
-		"版本--1.6.3\n"
-		"1.添加“撤销重做”功能。\n"
-		"2.支撑头与模型成角度。\n"
-		"3.模型转换操作实时显示。\n"
-		"4.增加透视投影与正交投影。\n"
-		"5.排除支撑直接穿过模型的bug。\n"
-		"6.支撑树枝部分加强。\n"
-		"7.其他修改。\n"
-		"版本--1.6.2\n"
-		"1.树状支撑。\n"
-		"2.可单独添加支撑。\n"
-		"3.改变支撑编辑的方式。\n"
-		"版本--1.6.1\n"
-		"1.添加自动排列功能。\n"
-		"2.添加模型复制功能。\n"
-		"3.添加坐标轴信息。\n"
-		"4.修复支撑渲染效果不真实的bug。\n"
-		"5.优化手动添加支撑。\n"
-		"6.排除添加支撑时悬吊面对悬吊点的影响。\n"
-		"7.优化切片时出现断层的影响。\n"
-		"8.调整界面的逻辑结构。\n"
-		"9.添加可直接对模型进行手动支撑的操作。\n"
-		"10.优化图形渲染时内存消耗。\n"
-		"版本--1.6.0\n"
-		"1.调整模型视图渲染效果。\n"
-		"2.渲染实体支撑。\n"
-		"3.支持模型平移，缩放，旋转三个方向的操作。\n"
-		"4.增加支撑编辑功能，实现手动支撑，删除支撑的操作。\n"
-		"5.多线程生成图片。\n"
-		"6.切片生成的文件为.sm的自定义的文件。\n"
-		"7.丰富设置选项。\n"
-		"8.增加浏览切片文件的功能。\n"
-		"9.视图内的模型支撑可另存为stl模型。\n"
-		"10.应用程序支持64bit。\n"
-		"11.调整内部支撑的结构。\n"
-		"12.界面重新调整。"));
-
-	layout = new QGridLayout();
-	layout->addWidget(icoBtn, 0, 0, 2, 2);
-	layout->addWidget(nameLabel, 0, 2, 1, 3);
-	layout->addWidget(copyrightLabel, 1, 2, 1, 3);
-	layout->addWidget(versionLabel, 2, 0, 1, 2);
-	layout->addWidget(textEdit, 3, 0, 8, 5);
-	setLayout(layout);
-	setFixedSize(400, 300);
-}
-
-AboutDialog::~AboutDialog()
-{
-	delete icoBtn;
-	delete nameLabel;
-	delete copyrightLabel;
-	delete versionLabel;
-	delete textEdit;
-	delete layout;
+	dir.setFilter(QDir::AllEntries | QDir::NoDotAndDotDot); //设置过滤  
+	foreach(QFileInfo file, dir.entryInfoList()) { //遍历文件信息  
+		if (file.isFile()) // 是文件，删除  
+			file.dir().remove(file.fileName());
+		else if (file.isDir()) // 递归删除  
+			clearDir(file.absoluteFilePath());
+	}
+	return dir.rmpath(dir.absolutePath()); // 删除文件夹  
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -353,13 +274,6 @@ void MainWindow::InitAction()
 	QAction* orthogonalityAct = new QAction(QStringLiteral("正交投影"), this);
 	viewMenu->addAction(orthogonalityAct);
 	connect(orthogonalityAct, SIGNAL(triggered()), this, SLOT(slot_setOrthogonality()));
-
-	//“帮助”主菜单
-	QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("帮助(H)"));
-
-	QAction* messageAct = new QAction(QStringLiteral("版本信息"), this);
-	helpMenu->addAction(messageAct);
-	connect(messageAct, SIGNAL(triggered()), this, SLOT(slot_showAboutDialog()));
 }
 
 void MainWindow::slot_ZPosZero()
@@ -682,7 +596,7 @@ void MainWindow::slot_slice()
 			m_centerTopWidget->P(20);
 			m_dlprint->Slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
 			m_centerTopWidget->P(99);
-			//JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
+			JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
 			m_centerTopWidget->P(100);
 
 			//清空切片文件夹
@@ -722,7 +636,7 @@ void MainWindow::ShowPreviewWidget(QString zipPath)
 	}
 
 	if (ExtractZipPath(zipPath)) {
-		//JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
+		JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
 
 		PreviewDialog previewDialog;
 		if (previewDialog.readIni(e_setting.ZipTempPath.c_str()))
@@ -741,8 +655,7 @@ bool MainWindow::ExtractZipPath(QString zipPath)
 	bool bmpBool = false;
 	bool pngBool = false;
 	bool iniBool = false;
-	//QStringList list = JlCompress::getFileList(zipPath);
-	QStringList list;
+	QStringList list = JlCompress::getFileList(zipPath);
 	for (auto l = list.begin(); l != list.end(); ++l) {
 		if ((*l).right(4).compare(".bmp") && (*l).right(4).compare(".png") && (*l).right(4).compare(".ini"))
 			return false;
@@ -754,12 +667,6 @@ bool MainWindow::ExtractZipPath(QString zipPath)
 			iniBool = true;
 	}
 	return bmpBool && pngBool && iniBool;
-}
-
-void MainWindow::slot_showAboutDialog()
-{
-	AboutDialog aboutDialog;
-	aboutDialog.exec();
 }
 
 void MainWindow::slot_autoArrange()
@@ -898,19 +805,16 @@ void MainWindow::slot_showScaleWidget()
 
 void MainWindow::GenAllInsideSupport()
 {
-	//m_dlprint->delete_all_inside_support();
-	//if (m_config->hollow_out && m_config->fill_pattern == ip3DSupport) {
-	//	for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
-	//		size_t a = std::distance(m_model->objects.begin(), o);
-	//		for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-	//			size_t b = std::distance((*o)->instances.begin(), i);
-	//			size_t id = a * InstanceNum + b;
-	//			TriangleMesh mesh((*o)->volumes[0]->mesh);
-	//			(*i)->transform_mesh(&mesh);
-	//			m_dlprint->generate_inside_support(id, &mesh);
-	//		}
-	//	}
-	//}
+	m_dlprint->DelAllInsideSup();
+	if (m_config->hollow_out && m_config->fill_pattern == Config::ip3DSupport) {
+		for (auto o = m_model->objects.begin(); o != m_model->objects.end(); ++o) {
+			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+				TriangleMesh mesh((*o)->volumes[0]->mesh);
+				(*i)->transform_mesh(&mesh);
+				m_dlprint->GenInsideSupport(std::distance(m_model->objects.begin(), o) * InstanceNum + std::distance((*o)->instances.begin(), i), &mesh);
+			}
+		}
+	}
 }
 
 void MainWindow::slot_offsetChange()

@@ -55,19 +55,15 @@ namespace Slic3r {
 			for (size_t i = 0; i < ls.size(); ++i)
 				slice_z.emplace_back(ls[i].slice_z);
 
-			while (!layerPtrs.empty()) {
-				auto l = layerPtrs.begin();
-				delete* l;
-				layerPtrs.erase(l);
-			}
+			this->t_layers.clear();
 
 			int aaa = 0;
-			Layers* t_layers = new Layers;
 			for (auto o = this->model->objects.begin(); o != this->model->objects.end(); ++o) {
 				for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+					this->t_layers.clear();
 
 					for (auto a = ls.begin(); a != ls.end(); ++a)
-						t_layers->emplace_back(*a);
+						this->t_layers.emplace_back(*a);
 
 					//切片
 					std::vector<ExPolygons> slices;
@@ -76,7 +72,7 @@ namespace Slic3r {
 
 					TriangleMeshSlicer<Z>(&mesh).slice(slice_z, &slices, m_config->threads);//切片函数
 					for (size_t i = 0; i < slices.size(); ++i)
-						t_layers->at(i).slices.expolygons = slices[i];
+						this->t_layers.at(i).slices.expolygons = slices[i];
 
 					//切片进度条范围21->98
 					if (progress != nullptr) {
@@ -119,48 +115,47 @@ namespace Slic3r {
 						if (areas > 50) {
 							ExPolygons pattern;
 
-							//if (m_config->fill_pattern.value == ipHoneycomb) {
-							//	//计算填充密度
-							//	double space = (1 - double(config.fill_density / 100)) * 20;
-							//	space = 1 >= space ? 1 : space;
-							//
-							//	//壁厚
-							//	double wall = double(config.fill_density / 100) * 2;
-							//	wall = wall <= 0.1 ? 0.1 : wall;
-							//
-							//	BoundingBox box;
-							//	box.merge(Point::new_scale(bb.min.x, bb.min.y));
-							//	box.merge(Point::new_scale(bb.max.x, bb.max.y));
-							//	pattern.push_back(generate_honeycomb_pattern(box, wall, space));
-							//}
+							if (m_config->fill_pattern == Config::ipHoneycomb) {
+								//计算填充密度
+								double space = (1 - double(m_config->fill_density / 100)) * 20;
+								space = 1 >= space ? 1 : space;
 
+								//壁厚
+								double wall = double(m_config->fill_density / 100) * 2;
+								wall = wall <= 0.1 ? 0.1 : wall;
+
+								BoundingBox box;
+								box.merge(Point::new_scale((*i)->box.min.x, (*i)->box.min.y));
+								box.merge(Point::new_scale((*i)->box.max.x, (*i)->box.max.y));
+								pattern.emplace_back(GenHoneycombPattern(box, wall, space));
+							}
 							parallelize<size_t>(
 								0,
-								t_layers->size() - 1,
-								boost::bind(&DLPrint::InfillLayer, this, _1, pattern, *t_layers),
+								this->t_layers.size() - 1,
+								boost::bind(&DLPrint::InfillLayer, this, _1, pattern),
 								m_config->threads
 								);
 						}
 					}
-					layerPtrs.emplace_back(t_layers);
+					layerss.emplace_back(t_layers);
 				}
 			}
 
 			//切支撑
-			{
+			if(!supMeshs.empty()){
 				TriangleMesh SMesh;
 				for (auto s = supMeshs.begin(); s != supMeshs.end(); ++s)
 					SMesh.merge(*s);
 
-				Layers* t_layers1 = new Layers;
+				Layers t_layers1;
 				for (auto a = ls.begin(); a != ls.end(); ++a)
-					t_layers1->emplace_back(*a);
+					t_layers1.emplace_back(*a);
 
 				std::vector<ExPolygons> slices;
 				TriangleMeshSlicer<Z>(&SMesh).slice(slice_z, &slices, m_config->threads);//切片函数
 				for (size_t i = 0; i < slices.size(); ++i)
-					t_layers1->at(i).slices.expolygons = slices[i];
-				layerPtrs.emplace_back(t_layers1);
+					t_layers1.at(i).slices.expolygons = slices[i];
+				layerss.emplace_back(t_layers1);
 			}
 		}
 
@@ -192,8 +187,8 @@ namespace Slic3r {
 			}
 
 			// prepend total raft height to all sliced layers
-			for (auto l = layerPtrs.begin(); l != layerPtrs.end(); ++l)
-				for (auto l1 = (*l)->begin(); l1 != (*l)->end(); ++l1)
+			for (auto l = layerss.begin(); l != layerss.end(); ++l)
+				for (auto l1 = l->begin(); l1 != l->end(); ++l1)
 					(*l1).print_z += lh * this->m_config->raft_layers;
 
 			for (auto i = this->inside_supports.begin(); i != this->inside_supports.end(); ++i) {
@@ -209,20 +204,20 @@ namespace Slic3r {
 		this->SavePng(box, layerNum);
 	}
 
-	void DLPrint::InfillLayer(size_t i, ExPolygons pattern, Layers t_layers)
+	void DLPrint::InfillLayer(size_t i, ExPolygons pattern)
 	{
-		Layer& layer = t_layers[i];
+		Layer& layer = this->t_layers[i];//在多线程下运行，传入的参数都进行拷贝操作
 
 		// const float shell_thickness = this->config.get_abs_value("perimeter_extrusion_width", this->config.layer_height.value);
 		const float shell_thickness = m_config->wall_thickness;
 		// In order to detect what regions of this layer need to be solid,
 		// perform an intersection with layers within the requested shell thickness.
 		Polygons internal = layer.slices;
-		for (size_t j = 0; j < t_layers.size(); ++j) {
-			const Layer& other = t_layers[j];
+		for (size_t j = 0; j < this->t_layers.size(); ++j) {
+			const Layer& other = this->t_layers[j];
 			if (std::abs(other.print_z - layer.print_z) > shell_thickness) continue;
 
-			if (j == 0 || j == t_layers.size() - 1) {
+			if (j == 0 || j == this->t_layers.size() - 1) {
 				internal.clear();
 				break;
 			}
@@ -242,28 +237,58 @@ namespace Slic3r {
 		layer.solid_infill << diff_ex(infill, internal, true);
 
 		// Generate internal infill
-		//if (m_config->fill_pattern.value == ipHoneycomb)
-		//{
-		//	//std::unique_ptr<Fill> fill(_fill->clone());
-		//	//fill->layer_id = i;
-		//	//fill->z = layer.print_z;
-		//
-		//	//ExtrusionPath templ(erInternalInfill);
-		//	//templ.width = fill->spacing();
-		//	const ExPolygons internal_ex = intersection_ex(infill, internal);//需要内部填充的区域
-		//
-		//	layer.solid_infill << union_ex(intersection_ex(internal_ex, pattern));
-		//	//for (ExPolygons::const_iterator it = internal_ex.begin(); it != internal_ex.end(); ++it) {
-		//	//	Polylines polylines = fill->fill_surface(Surface(stInternal, *it));
-		//	//	layer.infill.append(polylines, templ);
-		//	//}
-		//}
-		//
-		//// Generate perimeter(s).
-		//layer.perimeters << diff_ex(
-		//	layer.slices,
-		//	offset(layer.slices, -scale_(shell_thickness))
-		//);
+		if (m_config->fill_pattern == Config::ipHoneycomb)
+		{
+			//std::unique_ptr<Fill> fill(_fill->clone());
+			//fill->layer_id = i;
+			//fill->z = layer.print_z;
+
+			//ExtrusionPath templ(erInternalInfill);
+			//templ.width = fill->spacing();
+			const ExPolygons internal_ex = intersection_ex(infill, internal);//需要内部填充的区域
+
+			layer.solid_infill << union_ex(intersection_ex(internal_ex, pattern));
+			//for (ExPolygons::const_iterator it = internal_ex.begin(); it != internal_ex.end(); ++it) {
+			//	Polylines polylines = fill->fill_surface(Surface(stInternal, *it));
+			//	layer.infill.append(polylines, templ);
+			//}
+		}
+		else if (!inside_supports.empty() && m_config->fill_pattern == Config::ip3DSupport) {
+			ExPolygons contour = layer.slices.expolygons;
+			ExPolygons ss1;
+			Pointfs circle = CirclePoints(15);
+			float now = m_config->layer_height * i;
+
+			for (auto i = inside_supports.begin(); i != inside_supports.end(); ++i) {
+				for (auto l3 = (*i).second->begin(); l3 != (*i).second->end(); ++l3) {
+					if (now > (*l3).a.z&& now < (*l3).b.z) {
+						ExPolygon s1;
+						//求横梁与当前面的交点
+						Vectorf3 planeVector(0, 0, 1);
+						Pointf3 planePoint(0, 0, now);
+						Vectorf3 lineVector((*l3).b.x - (*l3).a.x, (*l3).b.y - (*l3).a.y, (*l3).b.z - (*l3).a.z);
+						Pointf3 point = CalPlaneLineIntersectPoint(planeVector, planePoint, lineVector, (*l3).a);
+						//将模型支撑在不同实例上画出
+
+						for (std::vector<Pointf>::iterator p = circle.begin(); p != circle.end() - 1; ++p) {
+							Pointf _p = *p;
+							_p.scale(m_config->support_radius);
+							_p.translate(point.x, point.y);
+							s1.contour.points.emplace_back(Point(scale_(_p.x), scale_(_p.y)));
+						}
+						ss1.push_back(s1);
+					}
+				}
+			}
+			ss1 = union_ex(ss1);
+			layer.solid_infill = diff_ex(layer.solid_infill, ss1) + intersection_ex(ss1, contour);//(a-b)+(a*b)
+		}
+
+		// Generate perimeter(s).
+		layer.perimeters << diff_ex(
+			layer.slices,
+			offset(layer.slices, -scale_(shell_thickness))
+		);
 	}
 
 	inline void GenHoneycomb(const BoundingBoxf& box, Pointfs& ps, double radius, Pointf p, double angle, bool again)
@@ -507,7 +532,6 @@ namespace Slic3r {
 		painterPath.setFillRule(Qt::WindingFill);
 
 		float raft = m_config->layer_height * m_config->raft_layers;//底板高度
-		float now = m_config->layer_height * num;
 
 		//画底板
 		if (m_config->raft_layers > num) {
@@ -520,10 +544,8 @@ namespace Slic3r {
 		}
 		else {
 			ExPolygons t_expoly;
-			ExPolygons contour;
-			for (auto l = layerPtrs.begin(); l != layerPtrs.end(); ++l) {
-				Layers* t_layers = *l;
-				Layer _l = *(t_layers->begin() + num - m_config->raft_layers);
+			for (auto l = layerss.begin(); l != layerss.end(); ++l) {
+				Layer _l = *(l->begin() + num - m_config->raft_layers);
 
 				ExPolygons exp;
 				if (_l.solid) {
@@ -537,54 +559,11 @@ namespace Slic3r {
 					exp = union_ex(exp);
 
 				}
-				for (ExPolygons::iterator exps = exp.begin(); exps != exp.end(); ++exps) {
-					//存储外部轮廓多边形
-					ExPolygon t;
-					t.contour = (*exps).contour;
-					contour.emplace_back(t);
+				for (ExPolygons::iterator exps = exp.begin(); exps != exp.end(); ++exps)
 					t_expoly.emplace_back(*exps);
-				}
 			}
 
-			//画内部支撑
-				//if (m_config->hollow_out && !inside_supports.empty()&&m_config->fill_pattern.value==ip3DSupport) {
-				//	ExPolygons ss1;
-				//	for (auto i = inside_supports.begin(); i != inside_supports.end(); ++i) {
-				//		std::vector<Linef3>* inside = (*i).second;
-				//
-				//		for (auto l3 = inside->begin(); l3 != inside->end(); ++l3) {
-				//
-				//			if (now > (*l3).a.z&&now < (*l3).b.z) {
-				//				ExPolygon s1;
-				//				//求横梁与当前面的交点
-				//				Vectorf3 planeVector(0, 0, 1);
-				//				Pointf3 planePoint(0, 0, now);
-				//				Vectorf3 lineVector((*l3).b.x - (*l3).a.x, (*l3).b.y - (*l3).a.y, (*l3).b.z - (*l3).a.z);
-				//				Pointf3 point = CalPlaneLineIntersectPoint(planeVector, planePoint, lineVector, (*l3).a);
-				//				//将模型支撑在不同实例上画出
-				//
-				//				for (std::vector<Pointf>::iterator p = circle.begin(); p != circle.end() - 1; ++p) {
-				//					Pointf _p = *p;
-				//					_p.scale(m_config->support_radius);
-				//					_p.translate(point.x, point.y);
-				//					s1.contour.points.push_back(Point(scale_(_p.x), scale_(_p.y)));
-				//				}
-				//				ss1.push_back(s1);
-				//
-				//			}
-				//		}
-				//
-				//	}
-				//	ss1 = union_ex(ss1);
-				//	//去除多余线段
-				//	contour = intersection_ex(ss1, contour);//a*b求交
-				//	temp = diff_ex(temp, ss1);//a-b
-				//	temp = temp + contour;
-				//}
-
-			t_expoly = union_ex(t_expoly);
-
-			Polygons poly = to_polygons(t_expoly);
+			Polygons poly = to_polygons(union_ex(t_expoly));
 			double area = 0;
 			for (Polygons::iterator ps = poly.begin(); ps != poly.end(); ++ps) {
 				//求面积

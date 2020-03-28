@@ -14,8 +14,6 @@
 #include <qgridlayout.h>
 #include <qpixmapcache.h>
 #include <qplaintextedit.h>
-#include <qdir.h>
-#include <qfileinfo.h>
 
 #include <iostream>
 #include <fstream>
@@ -24,45 +22,7 @@
 #include "CenterTopWidget.h"
 #include "Setting.h"
 #include "Model.hpp"
-
-class AboutDialog : public QDialog
-{
-public:
-	AboutDialog();
-	~AboutDialog();
-
-private:
-	QPushButton*  icoBtn;
-	QLabel*  nameLabel;
-	QLabel*  copyrightLabel;
-	QLabel* versionLabel;
-	QPlainTextEdit* textEdit;
-	QGridLayout* layout;
-};
-
-inline bool clearDir(QString path)
-{
-	if (path.isEmpty()) {
-		return false;
-	}
-	QDir dir(path);
-	if (!dir.exists()) {
-		return true;
-	}
-	dir.setFilter(QDir::AllEntries | QDir::NoDotAndDotDot); //设置过滤  
-	QFileInfoList fileList = dir.entryInfoList(); // 获取所有的文件信息  
-	foreach(QFileInfo file, fileList) { //遍历文件信息  
-		if (file.isFile()) { // 是文件，删除  
-			file.dir().remove(file.fileName());
-		}
-		else if (file.isDir()) { // 递归删除  
-			clearDir(file.absoluteFilePath());
-		}
-	}
-	return dir.rmpath(dir.absolutePath()); // 删除文件夹  
-}
-
-class Config;
+#include "SetupDialog.h"
 
 class MainWindow : public QMainWindow
 {
@@ -139,7 +99,6 @@ private	slots:
 	void slot_supportEdit();
 	void slot_saveView();
 	void slot_slice();
-	void slot_showAboutDialog();
 	void slot_autoArrange();
 	void slot_duplicate();
 
