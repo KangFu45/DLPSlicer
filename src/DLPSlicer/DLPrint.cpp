@@ -6,14 +6,13 @@
 #include <qfile.h>
 #include <qtextstream.h>
 #include <qimage.h>
-#include <qpainter.h>
 #include <qbuffer.h>
 #include <qdebug.h>
 
 #include "Setting.h"
 extern Setting e_setting;
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 	DLPrint::DLPrint(Model* _model, Config* config)
 		:model(_model)
@@ -27,6 +26,9 @@ namespace Slic3r {
 			delete treeSupports.begin()->second;
 			treeSupports.erase(treeSupports.begin());
 		}
+
+		if (m_areas != nullptr)
+			delete m_areas;
 	}
 
 	void DLPrint::Slice(const TriangleMeshs& supMeshs, QProgressBar* progress)
@@ -56,6 +58,8 @@ namespace Slic3r {
 		while (ls.back().print_z + lh / 2 <= box.max.z)
 			ls.emplace_back(Layer(ls.back().print_z + lh / 2, ls.back().print_z + lh));
 
+		this->layerss.swap(std::vector<Layers>());
+
 		size_t layerNum = ls.size();
 		std::vector<float> slice_z;
 		//准备切片并得到切片层
@@ -63,12 +67,10 @@ namespace Slic3r {
 			for (size_t i = 0; i < ls.size(); ++i)
 				slice_z.emplace_back(ls[i].slice_z);
 
-			this->t_layers.clear();
-
 			int aaa = 0;
 			for (auto o = this->model->objects.begin(); o != this->model->objects.end(); ++o) {
 				for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-					this->t_layers.clear();
+					this->t_layers.swap(Layers());
 
 					for (auto a = ls.begin(); a != ls.end(); ++a)
 						this->t_layers.emplace_back(*a);
@@ -188,7 +190,7 @@ namespace Slic3r {
 			poly.points.emplace_back(Point(scale_(bb.max.x), scale_(bb.min.y)));
 			raft.emplace_back(ExPolygon(poly));
 
-			this->r_layers.clear();
+			this->r_layers.swap(Layers());
 			for (int i = this->m_config->raft_layers; i >= 1; --i) {
 				this->r_layers.insert(this->r_layers.begin(), Layer(0, lh * i));
 				this->r_layers.front().slices.expolygons = raft;
@@ -441,7 +443,9 @@ namespace Slic3r {
 
 		TreeSupport* s = new TreeSupport;
 		s->support_point = mesh->feature_point(progress);
+		qDebug() << "support point: " << s->support_point.size();
 		s->support_point_face = mesh->feature_point_face(m_config->space, progress);
+		qDebug() << "support point face: " << s->support_point_face.size();
 		s->GenTreeSupport(*mesh, TreeSupport::Paras{ m_config->leaf_num ,m_config->threads ,m_config->support_top_height }, progress);
 		return s;
 	}
@@ -459,8 +463,10 @@ namespace Slic3r {
 		return false;
 	}
 
-	void DLPrint::SavePng(const BoundingBoxf3& box, size_t layerNum)
+	void DLPrint::SaveSlice()
 	{
+		BoundingBoxf3 box = model->bounding_box();
+
 		QFile file(string(e_setting.ZipTempPath + "/buildscipt.ini").c_str());
 		if (file.open(QFile::WriteOnly | QFile::Truncate))
 		{
@@ -473,31 +479,25 @@ namespace Slic3r {
 			stream << "override illumination inttersity =" << m_config->over_inttersity << "\n";
 			stream << "first layer_illumination_time = " << m_config->overIlluTime << "\n";
 			stream << "first illumination inttersity = " << m_config->over_inttersity << "\n";
-			stream << "number of slices = " << layerNum + m_config->raft_layers << "\n";
+			stream << "number of slices = " << layer_qt_path.size() << "\n";
 			stream << "length = " << box.max.x - box.min.x << "\n";
 			stream << "width = " << box.max.y - box.min.y << "\n";
 			stream << "height = " << box.max.z + m_config->layer_height * m_config->raft_layers << "\n";
-
-			if (this->m_areas != nullptr)
-				delete this->m_areas;
-
-			this->m_areas = new double[layerNum + m_config->raft_layers];
+			double vol = 0;
+			for (int i = 0; i < layer_qt_path.size() + m_config->raft_layers; ++i)
+				vol += m_areas[i] * m_config->layer_height;
+		
+			stream << "model volume = " << vol / 1000 << "\n";
 
 			parallelize<size_t>(
 				0,
-				layerNum + m_config->raft_layers - 1,
-				boost::bind(&DLPrint::SaveOnePng, this, _1, e_setting.ZipTempPath),
+				layer_qt_path.size() - 1,
+				boost::bind(&DLPrint::SaveOneSlice, this, _1, e_setting.ZipTempPath.c_str()),
 				m_config->threads
 				);
-
-			double vol = 0;
-			for (int i = 0; i < layerNum + m_config->raft_layers; ++i)
-				vol += m_areas[i] * m_config->layer_height;
-
-			stream << "model volume = " << vol / 1000 << "\n";
-
+		
 			float aaa = 0;
-			for (int j = 0; j < layerNum + m_config->raft_layers; ++j) {
+			for (int j = 0; j < layer_qt_path.size() + m_config->raft_layers; ++j) {
 				if (j < m_config->raft_layers)
 					aaa = (box.max.x - box.min.x) * (box.max.y - box.min.y);
 				else
@@ -515,6 +515,23 @@ namespace Slic3r {
 		file.close();
 	}
 
+	void DLPrint::SavePng(const BoundingBoxf3& box, size_t layerNum)
+	{
+		layer_qt_path.swap(map<size_t, QPainterPath >());
+
+		if (this->m_areas != nullptr)
+			delete this->m_areas;
+
+		this->m_areas = new double[layerNum + m_config->raft_layers];
+
+		parallelize<size_t>(
+			0,
+			layerNum + m_config->raft_layers - 1,
+			boost::bind(&DLPrint::SaveOnePng, this, _1),
+			m_config->threads
+			);
+	}
+
 	inline QPolygonF poly2Qpoly(const Polygon& p)//将Polygon装换为QPolygonF
 	{
 		QVector<QPointF> pfs;
@@ -527,7 +544,7 @@ namespace Slic3r {
 		return QPolygonF(pfs);
 	}
 
-	void DLPrint::SaveOnePng(size_t num,const std::string& path)
+	void DLPrint::SaveOneSlice(size_t num, QString path)
 	{
 		QImage image(1920, 1080, QImage::Format_RGB32);
 		QPainter painter(&image);
@@ -535,11 +552,23 @@ namespace Slic3r {
 		painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 		painter.setBrush(QBrush(QColor(255, 255, 255)));
 		painter.setPen(QPen(Qt::Dense7Pattern, 1));
+		
+		painter.drawPath(layer_qt_path.find(num)->second);
+		
+		QFile file(path + QObject::tr("/slice%1.png").arg(num));
+		if (!file.open(QIODevice::ReadWrite))
+			return;
+		QByteArray ba;
+		QBuffer buffer(&ba);
+		buffer.open(QIODevice::WriteOnly);
+		image.save(&buffer, "PNG");
+		file.write(ba);
+	}
 
+	void DLPrint::SaveOnePng(size_t num)
+	{
 		QPainterPath painterPath;
 		painterPath.setFillRule(Qt::WindingFill);
-
-		float raft = m_config->layer_height * m_config->raft_layers;//底板高度
 
 		//画底板
 		if (m_config->raft_layers > num) {
@@ -580,16 +609,7 @@ namespace Slic3r {
 			this->m_areas[num] = area;
 		}
 
-		painter.drawPath(painterPath);
-
-		QFile file(path.c_str() + QObject::tr("/slice%1.png").arg(num));
-		if (!file.open(QIODevice::ReadWrite))
-			return;
-		QByteArray ba;
-		QBuffer buffer(&ba);
-		buffer.open(QIODevice::WriteOnly);
-		image.save(&buffer, "PNG");
-		file.write(ba);
+		layer_qt_path.insert(std::pair<size_t, QPainterPath>(num, painterPath));
 	}
 
 	void DLPrint::RadiatePoint(const BoundingBoxf3& bb, Pointf3s& ps, float space, int xyz)
@@ -887,8 +907,8 @@ namespace Slic3r {
 		while (!inside_supports.empty()) {
 			auto s = inside_supports.begin();
 			delete (*s).second;
-			inside_supports.erase(s);
 		}
+		inside_supports.swap(std::map <size_t, linef3s*>());
 	}
 
 	void DLPrint::DelAllSupport()
@@ -896,8 +916,8 @@ namespace Slic3r {
 		while (!treeSupports.empty()) {
 			auto s = treeSupports.begin();
 			delete (*s).second;
-			treeSupports.erase(s);
 		}
+		treeSupports.swap(std::map<int, TreeSupport*>());
 	}
 
 }

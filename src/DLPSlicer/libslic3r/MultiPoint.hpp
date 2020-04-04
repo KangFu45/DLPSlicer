@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_MultiPoint_hpp_
-#define slic3r_MultiPoint_hpp_
 
 #include "libslic3r.h"
 #include <algorithm>
@@ -8,7 +6,7 @@
 #include "Line.hpp"
 #include "Point.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class BoundingBox;
 
@@ -54,6 +52,4 @@ class MultiPoint
     ~MultiPoint() = default;
 };
 
-} // namespace Slic3r
-
-#endif
+} // namespace DLPSlicer

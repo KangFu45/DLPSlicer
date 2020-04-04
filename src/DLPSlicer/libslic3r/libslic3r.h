@@ -1,6 +1,4 @@
-
-#ifndef _libslic3r_h_
-#define _libslic3r_h_
+#pragma once
 
 // this needs to be included early for MSVC (listing it in Build.PL is not enough)
 #include <ostream>
@@ -23,21 +21,21 @@ void confess_at(const char *file, int line, const char *func, const char *pat, .
 // Which C++ version is supported?
 // For example, could optimized functions with move semantics be used?
 #if __cplusplus==201402L
-	#define SLIC3R_CPPVER 14
+	#define DLPSlicer_CPPVER 14
 	#define STDMOVE(WHAT) std::move(WHAT)
 #elif __cplusplus==201103L
-	#define SLIC3R_CPPVER 11
+	#define DLPSlicer_CPPVER 11
 	#define STDMOVE(WHAT) std::move(WHAT)
 #else
-	#define SLIC3R_CPPVER 0
+	#define DLPSlicer_CPPVER 0
 	#define STDMOVE(WHAT) (WHAT)
 #endif
 
 // dummy macro to mark strings for translation for gettext/poedit
 #define __TRANS(s) s
-namespace Slic3r {
+namespace DLPSlicer {
 
-const auto SLIC3R_VERSION = "1.3.0-dev";
+const auto DLPSlicer_VERSION = "1.3.0-dev";
 
 //功能：一个模型的实例数。
 const int InstanceNum = 1000;
@@ -147,8 +145,6 @@ parallelize(T start, T end, boost::function<void(T)> func,
     parallelize(queue, func, threads_count);
 }
 
-} // namespace Slic3r
+} // namespace DLPSlicer
 
-using namespace Slic3r;
-
-#endif
+using namespace DLPSlicer;

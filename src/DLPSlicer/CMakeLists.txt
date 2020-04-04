@@ -1,9 +1,9 @@
 #查找当前文件夹中的所有源代码文件，也可以通过Set命令将所有文件设置为一个变量
-FILE(GLOB SRC_FILES "./*.cpp")
+FILE(GLOB SRC_FILES "./*.cpp" "./*.rc")
 #同理，查找当前文件夹中所有的头文件
 FILE(GLOB HEAD_FILES "./*.h")
-FILE(GLOB Slic3rLib_SRC_FILES "libslic3r/*.cpp")
-FILE(GLOB Slic3rLib_HEAD_FILES "libslic3r/*.h" "libslic3r/*.hpp")
+FILE(GLOB DLPSlicerLib_SRC_FILES "libslic3r/*.cpp")
+FILE(GLOB DLPSlicerLib_HEAD_FILES "libslic3r/*.h" "libslic3r/*.hpp")
 
 #设置输出路径
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_CURRENT_BINARY_DIR}/../release)
@@ -36,7 +36,7 @@ link_directories(DLPSlicer ${PROJECT_SOURCE_DIR}/lib-64/lib/quazip)
 link_directories(DLPSlicer ${PROJECT_SOURCE_DIR}/lib-64/lib/glut)
 add_definitions("/bigobj")
 
-add_executable(DLPSlicer ${Slic3rLib_SRC_FILES} ${Slic3rLib_HEAD_FILES} ${QRC_FILES} ${SRC_FILES} ${HEAD_FILES})
+add_executable(DLPSlicer ${DLPSlicerLib_SRC_FILES} ${DLPSlicerLib_HEAD_FILES} ${QRC_FILES} ${SRC_FILES} ${HEAD_FILES})
 
 target_link_libraries(DLPSlicer admesh clipper poly2tri polypartition)
 target_link_libraries(DLPSlicer glu32.lib opengl32.lib)

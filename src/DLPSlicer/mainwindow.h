@@ -1,5 +1,4 @@
-#ifndef MAINWINDOW_H
-#define MAINWINDOW_H
+#pragma once
 
 #include <qmainwindow.h>
 #include <qmenu.h>
@@ -14,15 +13,16 @@
 #include <qgridlayout.h>
 #include <qpixmapcache.h>
 #include <qplaintextedit.h>
+#include <qtabwidget.h>
 
 #include <iostream>
 #include <fstream>
 
 #include "glwidget.h"
 #include "CenterTopWidget.h"
-#include "Setting.h"
 #include "Model.hpp"
 #include "SetupDialog.h"
+#include "PreviewWidget.h"
 
 class MainWindow : public QMainWindow
 {
@@ -34,10 +34,14 @@ public:
 
 private:
 	std::unique_ptr<CenterTopWidget> m_centerTopWidget;
+	std::unique_ptr<PreviewTopWidget> m_previewTopWidget;
+
 	Model* m_model = { new Model };
 	DLPrint* m_dlprint;
 	GlWidget* m_glwidget;	//三维视图部件
 	Config* m_config = { new Config };
+	PreviewWidget* m_previewWidget;
+	QTabWidget* m_tabWidget = {new QTabWidget};
 
 	void SetOffsetValue(ModelInstance* instance);
 	void SetRotateValue(ModelInstance* instance);
@@ -47,12 +51,14 @@ private:
 	void InitAction();
 	void InitDlprinter();
 
+	void LoadStl(QString name);
 	QString ReadStlTxt();
 	void StroyStlTxt(QString stl);
 	void ShowPreviewWidget(QString zipPath);
 	bool ExtractZipPath(QString zipPath);
 	void Duplicate(size_t num, bool arrange);
 	void GenAllInsideSupport();
+	void SetDLPrintDirty();
 
 public slots:
 	void slot_modelSelect();
@@ -94,18 +100,22 @@ private	slots:
 	void slot_behindView() { m_glwidget->ChangeView(m_glwidget->BEHIND); };
 
 	void slot_newJob();
+	void slot_delSelSupport();
 	void slot_generateSupport();
 	void slot_generateAllSupport();
 	void slot_supportEdit();
 	void slot_saveView();
 	void slot_slice();
+	void slot_saveSlice();
 	void slot_autoArrange();
 	void slot_duplicate();
 
+	void slot_glwidgetSizeChange();
+	void slot_previewSizeChange();
+	void slot_tabWidgetChange(int index);
+
 protected:
-	void resizeEvent(QResizeEvent* event);
 	void keyPressEvent(QKeyEvent* event);
 	void dragEnterEvent(QDragEnterEvent* event);
 	void dropEvent(QDropEvent* event);
 };
-#endif // MAINWINDOW_H

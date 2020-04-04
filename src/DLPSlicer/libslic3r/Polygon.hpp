@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_Polygon_hpp_
-#define slic3r_Polygon_hpp_
 
 #include "libslic3r.h"
 #include <vector>
@@ -8,7 +6,7 @@
 #include "Line.hpp"
 #include "MultiPoint.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class Polygon;
 class Polyline;
@@ -69,40 +67,40 @@ operator+=(Polygons &dst, const Polygons &src2) {
 #include <boost/polygon/polygon.hpp>
 namespace boost { namespace polygon {
     template <>
-    struct geometry_concept<Slic3r::Polygon>{ typedef polygon_concept type; };
+    struct geometry_concept<DLPSlicer::Polygon>{ typedef polygon_concept type; };
 
     template <>
-	struct polygon_traits<Slic3r::Polygon> {
+	struct polygon_traits<DLPSlicer::Polygon> {
         typedef coord_t coordinate_type;
         typedef Points::const_iterator iterator_type;
         typedef Point point_type;
 
         // Get the begin iterator
-		static inline iterator_type begin_points(const Slic3r::Polygon& t) {
+		static inline iterator_type begin_points(const DLPSlicer::Polygon& t) {
             return t.points.begin();
         }
 
         // Get the end iterator
-		static inline iterator_type end_points(const Slic3r::Polygon& t) {
+		static inline iterator_type end_points(const DLPSlicer::Polygon& t) {
             return t.points.end();
         }
 
         // Get the number of sides of the polygon
-		static inline std::size_t size(const Slic3r::Polygon& t) {
+		static inline std::size_t size(const DLPSlicer::Polygon& t) {
             return t.points.size();
         }
 
         // Get the winding direction of the polygon
-		static inline winding_direction winding(const Slic3r::Polygon& t) {
+		static inline winding_direction winding(const DLPSlicer::Polygon& t) {
             return unknown_winding;
         }
     };
 
     template <>
-	struct polygon_mutable_traits<Slic3r::Polygon> {
+	struct polygon_mutable_traits<DLPSlicer::Polygon> {
         // expects stl style iterators
         template <typename iT>
-		static inline Slic3r::Polygon& set_points(Slic3r::Polygon& polygon, iT input_begin, iT input_end) {
+		static inline DLPSlicer::Polygon& set_points(DLPSlicer::Polygon& polygon, iT input_begin, iT input_end) {
             polygon.points.clear();
             while (input_begin != input_end) {
                 polygon.points.push_back(Point());
@@ -147,5 +145,3 @@ namespace boost { namespace polygon {
     };
 } }
 // end Boost
-
-#endif

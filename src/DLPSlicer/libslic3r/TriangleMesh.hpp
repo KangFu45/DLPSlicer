@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_TriangleMesh_hpp_
-#define slic3r_TriangleMesh_hpp_
 
 #include "libslic3r.h"
 #include <admesh/stl.h>
@@ -14,7 +12,7 @@
 #include "qmatrix4x4.h"
 #include "qprogressbar.h"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 typedef std::vector<stl_vertex> stl_vertexs;
 
@@ -484,4 +482,3 @@ inline void stl_add_face(double x1, double y1, double z1
 
 }
 
-#endif

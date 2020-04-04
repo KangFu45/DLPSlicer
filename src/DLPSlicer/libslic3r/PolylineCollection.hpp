@@ -1,11 +1,9 @@
 #pragma once
-#ifndef slic3r_PolylineCollection_hpp_
-#define slic3r_PolylineCollection_hpp_
 
 #include "libslic3r.h"
 #include "Polyline.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class PolylineCollection
 {
@@ -13,7 +11,7 @@ class PolylineCollection
         const Polylines &src,
         Point start_near,
         bool no_reverse
-#if SLIC3R_CPPVER >= 11
+#if DLPSlicer_CPPVER >= 11
         , bool move_from_src
 #endif
     );
@@ -29,7 +27,7 @@ public:
     void append(const Polylines &polylines);
 
 	static Point     leftmost_point(const Polylines &polylines);
-#if SLIC3R_CPPVER >= 11
+#if DLPSlicer_CPPVER >= 11
 	static Polylines chained_path(Polylines &&src, bool no_reverse = false);
 	static Polylines chained_path_from(Polylines &&src, Point start_near, bool no_reverse = false);
 #endif
@@ -38,5 +36,3 @@ public:
 };
 
 }
-
-#endif

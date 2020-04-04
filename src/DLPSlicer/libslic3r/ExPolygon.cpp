@@ -11,7 +11,7 @@
 #include <cassert>
 #include <list>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 ExPolygon::operator Points() const
 {
@@ -189,7 +189,7 @@ void
 ExPolygon::medial_axis(double max_width, double min_width, ThickPolylines* polylines) const
 {
     // init helper object
-    Slic3r::Geometry::MedialAxis ma(max_width, min_width, this);
+    DLPSlicer::Geometry::MedialAxis ma(max_width, min_width, this);
     ma.lines = this->lines();
     
     // compute the Voronoi diagram and extract medial axis polylines

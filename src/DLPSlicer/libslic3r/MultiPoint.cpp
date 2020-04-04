@@ -2,7 +2,7 @@
 #include "MultiPoint.hpp"
 #include "BoundingBox.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 MultiPoint::operator Points() const
 {

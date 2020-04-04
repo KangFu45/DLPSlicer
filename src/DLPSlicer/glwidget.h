@@ -53,7 +53,7 @@ struct RectLimitBuffer : public BasicBuffer{
 //属性2：三角面片的数量
 //属性3：三角面片的数组
 //属性4：OpenGL缓冲区
-struct ModelBuffer : public BasicBuffer{
+struct ModelBuffer : public BasicBuffer {
 	int id;
 	Pointf3 origin = Pointf3(0.0, 0.0, 0.0);
 	Pointf3 new_origin = Pointf3(0.0, 0.0, 0.0);
@@ -87,7 +87,7 @@ struct ModelBuffer : public BasicBuffer{
 	}
 
 	~ModelBuffer() {
-		delete [] stl;
+		delete[] stl;
 		delete buffer;
 	}
 
@@ -176,7 +176,7 @@ private:
 	QVector3D center;								//世界坐标平移的矢量
 	int xLastPos, yLastPos;							//鼠标的坐标值
 
-	QPoint pos;										//保存屏幕坐标值
+	QPoint _pos;									//保存屏幕坐标值
 	bool _Depth{ false };							//判断是否获取深度值的开关
 
 	//圆环的半径为10mm,圆，圆锥，正方体为1mm单位
@@ -224,7 +224,9 @@ public:
 	void RotateValueChange(double angle, int x, int y, int z, bool back = false);
 
 	bool DelSelectSupport();
+	bool DelSupport(size_t id);
 	void GenSelInstanceSupport(QProgressBar* progress);
+	void GenInstanceSupport(size_t id, QProgressBar* progress);
 	void SupportEditChange(QProgressBar* progress = nullptr);
 	void AddNewSupportPoint() { m_supEditControl->AddNewSupportPoint(); };
 	void AddModelInstance(size_t id);
@@ -270,6 +272,7 @@ signals:
 	void sig_offsetChange();
 	void sig_scaleChange();
 	void sig_rotateChange();
+	void sig_sizeChange();
 
 public slots:
 	void slot_delSelectIntance();

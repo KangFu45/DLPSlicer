@@ -9,7 +9,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 //#include "tiny_obj_loader.h"
 
-namespace Slic3r { namespace IO {
+namespace DLPSlicer { namespace IO {
 
 bool
 STL::read(std::string input_file, TriangleMesh* mesh)

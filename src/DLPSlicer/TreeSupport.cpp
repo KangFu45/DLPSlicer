@@ -1,6 +1,6 @@
 #include "TreeSupport.h"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 	TreeSupport::TreeSupport(const TreeSupport* ts) {
 		this->support_point = ts->support_point;
@@ -152,6 +152,7 @@ namespace Slic3r {
 			paras.thread > 1 ? paras.thread : 1
 			);
 
+		progress->setValue(90);
 		GenSupportBeam(mesh);
 	}
 

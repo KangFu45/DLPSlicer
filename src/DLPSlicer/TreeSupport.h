@@ -7,7 +7,7 @@
 
 #include <qprogressbar.h>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 	inline void translate(stl_vertexs& vts, double x, double y, double z)
 	{

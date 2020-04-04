@@ -1,11 +1,9 @@
 #pragma once
-#ifndef slic3r_Line_hpp_
-#define slic3r_Line_hpp_
 
 #include "libslic3r.h"
 #include "Point.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class Line;
 class Linef3;
@@ -98,5 +96,3 @@ namespace boost { namespace polygon {
     };
 } }
 // end Boost
-
-#endif

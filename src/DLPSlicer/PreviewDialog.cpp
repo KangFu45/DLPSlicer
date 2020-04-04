@@ -167,7 +167,7 @@ PreviewView::PreviewView()
 	slider->setRange(0, 0);
 	slider->setTickInterval(1);
 	slider->setValue(0);
-	connect(slider, SIGNAL(valueChanged(int)), this, SLOT(valueChange(int)));
+	(void)connect(slider, SIGNAL(valueChanged(int)), this, SLOT(valueChange(int)));
 
 	layerLayout = new QVBoxLayout();
 	layerLayout->addWidget(label);

@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_Point_hpp_
-#define slic3r_Point_hpp_
 
 #include "libslic3r.h"
 #include <math.h>
@@ -8,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class Line;
 class Linef;
@@ -224,5 +222,3 @@ namespace boost { namespace polygon {
     };
 } }
 // end Boost
-
-#endif

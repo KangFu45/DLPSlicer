@@ -15,11 +15,11 @@
 #include <stack>
 #include <vector>
 
-#ifdef SLIC3R_DEBUG
+#ifdef DLPSlicer_DEBUG
 #include "SVG.hpp"
 #endif
 
-#ifdef SLIC3R_DEBUG
+#ifdef DLPSlicer_DEBUG
 namespace boost { namespace polygon {
 
 // The following code for the visualization of the boost Voronoi diagram is based on:
@@ -194,7 +194,7 @@ class voronoi_visual_utils {
 
 using namespace boost::polygon;  // provides also high() and low()
 
-namespace Slic3r { namespace Geometry {
+namespace DLPSlicer { namespace Geometry {
 
 static bool
 sort_points (Point a, Point b)

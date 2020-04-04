@@ -1,13 +1,11 @@
 #pragma once
-#ifndef slic3r_ExPolygonCollection_hpp_
-#define slic3r_ExPolygonCollection_hpp_
 
 #include "libslic3r.h"
 #include "ExPolygon.hpp"
 #include "Line.hpp"
 #include "Polyline.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class ExPolygonCollection;
 typedef std::vector<ExPolygonCollection> ExPolygonCollections;
@@ -43,5 +41,3 @@ operator <<(ExPolygonCollection &coll, const ExPolygons &expolygons) {
 };
 
 }
-
-#endif

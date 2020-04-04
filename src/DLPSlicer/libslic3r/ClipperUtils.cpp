@@ -2,7 +2,7 @@
 #include "ClipperUtils.hpp"
 #include "Geometry.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 //-----------------------------------------------------------
 // legacy code from Clipper documentation
@@ -10,11 +10,11 @@ void AddOuterPolyNodeToExPolygons(ClipperLib::PolyNode& polynode, ExPolygons* ex
 {  
   size_t cnt = expolygons->size();
   expolygons->resize(cnt + 1);
-  (*expolygons)[cnt].contour = ClipperPath_to_Slic3rMultiPoint<Polygon>(polynode.Contour);
+  (*expolygons)[cnt].contour = ClipperPath_to_DLPSlicerMultiPoint<Polygon>(polynode.Contour);
   (*expolygons)[cnt].holes.resize(polynode.ChildCount());
   for (int i = 0; i < polynode.ChildCount(); ++i)
   {
-    (*expolygons)[cnt].holes[i] = ClipperPath_to_Slic3rMultiPoint<Polygon>(polynode.Childs[i]->Contour);
+    (*expolygons)[cnt].holes[i] = ClipperPath_to_DLPSlicerMultiPoint<Polygon>(polynode.Childs[i]->Contour);
     //Add outer polygons contained by (nested within) holes ...
     for (int j = 0; j < polynode.Childs[i]->ChildCount(); ++j)
       AddOuterPolyNodeToExPolygons(*polynode.Childs[i]->Childs[j], expolygons);
@@ -33,27 +33,27 @@ PolyTreeToExPolygons(ClipperLib::PolyTree& polytree)
 
 template <class T>
 T
-ClipperPath_to_Slic3rMultiPoint(const ClipperLib::Path &input)
+ClipperPath_to_DLPSlicerMultiPoint(const ClipperLib::Path &input)
 {
     T retval;
     for (ClipperLib::Path::const_iterator pit = input.begin(); pit != input.end(); ++pit)
         retval.points.push_back(Point( (*pit).X, (*pit).Y ));
     return retval;
 }
-template Polygon ClipperPath_to_Slic3rMultiPoint<Polygon>(const ClipperLib::Path &input);
+template Polygon ClipperPath_to_DLPSlicerMultiPoint<Polygon>(const ClipperLib::Path &input);
 
 template <class T>
 T
-ClipperPaths_to_Slic3rMultiPoints(const ClipperLib::Paths &input)
+ClipperPaths_to_DLPSlicerMultiPoints(const ClipperLib::Paths &input)
 {
     T retval;
     for (ClipperLib::Paths::const_iterator it = input.begin(); it != input.end(); ++it)
-        retval.push_back(ClipperPath_to_Slic3rMultiPoint<typename T::value_type>(*it));
+        retval.push_back(ClipperPath_to_DLPSlicerMultiPoint<typename T::value_type>(*it));
     return retval;
 }
 
 ExPolygons
-ClipperPaths_to_Slic3rExPolygons(const ClipperLib::Paths &input)
+ClipperPaths_to_DLPSlicerExPolygons(const ClipperLib::Paths &input)
 {
     // init Clipper
     ClipperLib::Clipper clipper;
@@ -69,7 +69,7 @@ ClipperPaths_to_Slic3rExPolygons(const ClipperLib::Paths &input)
 }
 
 ClipperLib::Path
-Slic3rMultiPoint_to_ClipperPath(const MultiPoint &input)
+DLPSlicerMultiPoint_to_ClipperPath(const MultiPoint &input)
 {
     ClipperLib::Path retval;
     for (Points::const_iterator pit = input.points.begin(); pit != input.points.end(); ++pit)
@@ -79,11 +79,11 @@ Slic3rMultiPoint_to_ClipperPath(const MultiPoint &input)
 
 template <class T>
 ClipperLib::Paths
-Slic3rMultiPoints_to_ClipperPaths(const T &input)
+DLPSlicerMultiPoints_to_ClipperPaths(const T &input)
 {
     ClipperLib::Paths retval;
     for (typename T::const_iterator it = input.begin(); it != input.end(); ++it)
-        retval.push_back(Slic3rMultiPoint_to_ClipperPath(*it));
+        retval.push_back(DLPSlicerMultiPoint_to_ClipperPath(*it));
     return retval;
 }
 
@@ -103,7 +103,7 @@ _offset(const Polygons &polygons, const float delta,
     double scale, ClipperLib::JoinType joinType, double miterLimit)
 {
     // read input
-    ClipperLib::Paths input = Slic3rMultiPoints_to_ClipperPaths(polygons);
+    ClipperLib::Paths input = DLPSlicerMultiPoints_to_ClipperPaths(polygons);
     
     // scale input
     scaleClipperPolygons(input, scale);
@@ -129,7 +129,7 @@ _offset(const Polylines &polylines, const float delta,
     double scale, ClipperLib::JoinType joinType, double miterLimit)
 {
     // read input
-    ClipperLib::Paths input = Slic3rMultiPoints_to_ClipperPaths(polylines);
+    ClipperLib::Paths input = DLPSlicerMultiPoints_to_ClipperPaths(polylines);
     
     // scale input
     scaleClipperPolygons(input, scale);
@@ -158,7 +158,7 @@ offset(const Polygons &polygons, const float delta,
     ClipperLib::Paths output = _offset(polygons, delta, scale, joinType, miterLimit);
     
     // convert into Polygons
-    return ClipperPaths_to_Slic3rMultiPoints<Polygons>(output);
+    return ClipperPaths_to_DLPSlicerMultiPoints<Polygons>(output);
 }
 
 Polygons
@@ -169,7 +169,7 @@ offset(const Polylines &polylines, const float delta,
     ClipperLib::Paths output = _offset(polylines, delta, scale, joinType, miterLimit);
     
     // convert into Polygons
-    return ClipperPaths_to_Slic3rMultiPoints<Polygons>(output);
+    return ClipperPaths_to_DLPSlicerMultiPoints<Polygons>(output);
 }
 
 //Surfaces
@@ -198,7 +198,7 @@ offset_ex(const Polygons &polygons, const float delta,
     ClipperLib::Paths output = _offset(polygons, delta, scale, joinType, miterLimit);
     
     // convert into ExPolygons
-    return ClipperPaths_to_Slic3rExPolygons(output);
+    return ClipperPaths_to_DLPSlicerExPolygons(output);
 }
 
 ExPolygons
@@ -213,7 +213,7 @@ _offset2(const Polygons &polygons, const float delta1, const float delta2,
     const double scale, const ClipperLib::JoinType joinType, const double miterLimit)
 {
     // read input
-    ClipperLib::Paths input = Slic3rMultiPoints_to_ClipperPaths(polygons);
+    ClipperLib::Paths input = DLPSlicerMultiPoints_to_ClipperPaths(polygons);
     
     // scale input
     scaleClipperPolygons(input, scale);
@@ -250,7 +250,7 @@ offset2(const Polygons &polygons, const float delta1, const float delta2,
     ClipperLib::Paths output = _offset2(polygons, delta1, delta2, scale, joinType, miterLimit);
     
     // convert into ExPolygons
-    return ClipperPaths_to_Slic3rMultiPoints<Polygons>(output);
+    return ClipperPaths_to_DLPSlicerMultiPoints<Polygons>(output);
 }
 
 ExPolygons
@@ -261,7 +261,7 @@ offset2_ex(const Polygons &polygons, const float delta1, const float delta2,
     ClipperLib::Paths output = _offset2(polygons, delta1, delta2, scale, joinType, miterLimit);
     
     // convert into ExPolygons
-    return ClipperPaths_to_Slic3rExPolygons(output);
+    return ClipperPaths_to_DLPSlicerExPolygons(output);
 }
 
 template <class T>
@@ -270,8 +270,8 @@ _clipper_do(const ClipperLib::ClipType clipType, const Polygons &subject,
     const Polygons &clip, const ClipperLib::PolyFillType fillType, const bool safety_offset_)
 {
     // read input
-    ClipperLib::Paths input_subject = Slic3rMultiPoints_to_ClipperPaths(subject);
-    ClipperLib::Paths input_clip    = Slic3rMultiPoints_to_ClipperPaths(clip);
+    ClipperLib::Paths input_subject = DLPSlicerMultiPoints_to_ClipperPaths(subject);
+    ClipperLib::Paths input_clip    = DLPSlicerMultiPoints_to_ClipperPaths(clip);
     
     // perform safety offset
     if (safety_offset_) {
@@ -306,8 +306,8 @@ inline ClipperLib::PolyTree _clipper_do_polytree2(const ClipperLib::ClipType cli
     const Polygons &clip, const ClipperLib::PolyFillType fillType, const bool safety_offset_)
 {
     // read input
-    ClipperLib::Paths input_subject = Slic3rMultiPoints_to_ClipperPaths(subject);
-    ClipperLib::Paths input_clip    = Slic3rMultiPoints_to_ClipperPaths(clip);
+    ClipperLib::Paths input_subject = DLPSlicerMultiPoints_to_ClipperPaths(subject);
+    ClipperLib::Paths input_clip    = DLPSlicerMultiPoints_to_ClipperPaths(clip);
     
     // perform safety offset
     if (safety_offset_) {
@@ -339,8 +339,8 @@ _clipper_do(const ClipperLib::ClipType clipType, const Polylines &subject,
     const bool safety_offset_)
 {
     // read input
-    ClipperLib::Paths input_subject = Slic3rMultiPoints_to_ClipperPaths(subject);
-    ClipperLib::Paths input_clip    = Slic3rMultiPoints_to_ClipperPaths(clip);
+    ClipperLib::Paths input_subject = DLPSlicerMultiPoints_to_ClipperPaths(subject);
+    ClipperLib::Paths input_clip    = DLPSlicerMultiPoints_to_ClipperPaths(clip);
     
     // perform safety offset
     if (safety_offset_) safety_offset(&input_clip);
@@ -367,7 +367,7 @@ _clipper(ClipperLib::ClipType clipType, const Polygons &subject,
     ClipperLib::Paths output = _clipper_do<ClipperLib::Paths>(clipType, subject, clip, ClipperLib::pftNonZero, safety_offset_);
     
     // convert into Polygons
-    return ClipperPaths_to_Slic3rMultiPoints<Polygons>(output);
+    return ClipperPaths_to_DLPSlicerMultiPoints<Polygons>(output);
 }
 
 ExPolygons
@@ -391,7 +391,7 @@ _clipper_pl(ClipperLib::ClipType clipType, const Polylines &subject,
     // convert into Polylines
     ClipperLib::Paths output;
     ClipperLib::PolyTreeToPaths(polytree, output);
-    return ClipperPaths_to_Slic3rMultiPoints<Polylines>(output);
+    return ClipperPaths_to_DLPSlicerMultiPoints<Polylines>(output);
 }
 
 Polylines
@@ -496,14 +496,14 @@ traverse_pt(ClipperLib::PolyNodes &nodes, Polygons* retval)
     
     // perform the ordering
     ClipperLib::PolyNodes ordered_nodes;
-    Slic3r::Geometry::chained_path_items(ordering_points, nodes, ordered_nodes);
+    DLPSlicer::Geometry::chained_path_items(ordering_points, nodes, ordered_nodes);
     
     // push results recursively
     for (ClipperLib::PolyNodes::iterator it = ordered_nodes.begin(); it != ordered_nodes.end(); ++it) {
         // traverse the next depth
         traverse_pt((*it)->Childs, retval);
         
-        Polygon p = ClipperPath_to_Slic3rMultiPoint<Polygon>((*it)->Contour);
+        Polygon p = ClipperPath_to_DLPSlicerMultiPoint<Polygon>((*it)->Contour);
         retval->push_back(p);
         if ((*it)->IsHole()) retval->back().reverse();  // ccw
     }
@@ -513,7 +513,7 @@ Polygons
 simplify_polygons(const Polygons &subject, bool preserve_collinear)
 {
     // convert into Clipper polygons
-    ClipperLib::Paths input_subject = Slic3rMultiPoints_to_ClipperPaths(subject);
+    ClipperLib::Paths input_subject = DLPSlicerMultiPoints_to_ClipperPaths(subject);
     
     ClipperLib::Paths output;
     if (preserve_collinear) {
@@ -526,8 +526,8 @@ simplify_polygons(const Polygons &subject, bool preserve_collinear)
         ClipperLib::SimplifyPolygons(input_subject, output, ClipperLib::pftNonZero);
     }
     
-    // convert into Slic3r polygons
-    return ClipperPaths_to_Slic3rMultiPoints<Polygons>(output);
+    // convert into DLPSlicer polygons
+    return ClipperPaths_to_DLPSlicerMultiPoints<Polygons>(output);
 }
 
 ExPolygons
@@ -538,7 +538,7 @@ simplify_polygons_ex(const Polygons &subject, bool preserve_collinear)
     }
     
     // convert into Clipper polygons
-    ClipperLib::Paths input_subject = Slic3rMultiPoints_to_ClipperPaths(subject);
+    ClipperLib::Paths input_subject = DLPSlicerMultiPoints_to_ClipperPaths(subject);
     
     ClipperLib::PolyTree polytree;
     

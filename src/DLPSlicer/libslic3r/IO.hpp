@@ -1,13 +1,11 @@
 #pragma once
-#ifndef slic3r_IO_hpp_
-#define slic3r_IO_hpp_
 
 #include "libslic3r.h"
 #include "Model.hpp"
 #include "TriangleMesh.hpp"
 #include <string>
 
-namespace Slic3r { namespace IO {
+namespace DLPSlicer { namespace IO {
 
 class STL
 {
@@ -48,5 +46,3 @@ class TMF
 };
 
 } }
-
-#endif

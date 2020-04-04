@@ -18,8 +18,8 @@
 #include "PreviewDialog.h"
 #include "IO.hpp"
 
-//ERROR:setting.h放在.cpp文件夹下会报错
-//#include "Setting.h"
+//ERROR:setting.h放在.cpp文件夹下会报错???
+#include "Setting.h"
 
 extern Setting e_setting;
 
@@ -52,16 +52,26 @@ MainWindow::MainWindow(QWidget* parent)
 
 	m_dlprint = new DLPrint(m_model, m_config);
 	m_glwidget = new GlWidget(m_model, m_dlprint);
-	setCentralWidget(m_glwidget);//要先于中央界面上button初始化
+	m_previewWidget = new PreviewWidget(m_dlprint);
+
+	m_tabWidget->addTab(m_glwidget, QStringLiteral("视图"));
+	m_tabWidget->addTab(m_previewWidget, QStringLiteral("预览"));
+	m_tabWidget->setTabPosition(QTabWidget::South);
+	setCentralWidget(m_tabWidget);//要先于中央界面上button初始化
+
 	InitAction();
 	m_centerTopWidget = std::unique_ptr<CenterTopWidget>(new CenterTopWidget(this));
+	m_previewTopWidget = std::unique_ptr<PreviewTopWidget>(new PreviewTopWidget(this));
 
-	connect(m_glwidget, &GlWidget::sig_modelSelect, this, &MainWindow::slot_modelSelect);
-	connect(m_glwidget, &GlWidget::sig_offsetChange, this, &MainWindow::slot_offsetChange);
-	connect(m_glwidget, &GlWidget::sig_rotateChange, this, &MainWindow::slot_rotateChange);
-	connect(m_glwidget, &GlWidget::sig_scaleChange, this, &MainWindow::slot_scaleChange);
-
-	connect(m_centerTopWidget->m_printerCombo, SIGNAL(currentIndexChanged(QString)), m_glwidget, SLOT(slot_dlprinterChange(QString)));
+	(void)connect(m_glwidget, &GlWidget::sig_modelSelect, this, &MainWindow::slot_modelSelect);
+	(void)connect(m_glwidget, &GlWidget::sig_offsetChange, this, &MainWindow::slot_offsetChange);
+	(void)connect(m_glwidget, &GlWidget::sig_rotateChange, this, &MainWindow::slot_rotateChange);
+	(void)connect(m_glwidget, &GlWidget::sig_scaleChange, this, &MainWindow::slot_scaleChange);
+	(void)connect(m_glwidget, &GlWidget::sig_sizeChange, this, &MainWindow::slot_glwidgetSizeChange);
+	(void)connect(m_previewWidget, &PreviewWidget::sig_sizeChange, this, &MainWindow::slot_previewSizeChange);
+	(void)connect(m_centerTopWidget->m_printerCombo, SIGNAL(currentIndexChanged(QString)), m_glwidget, SLOT(slot_dlprinterChange(QString)));
+	(void)connect(m_tabWidget, SIGNAL(currentChanged(int)), this, SLOT(slot_tabWidgetChange(int)));
+	(void)connect(m_previewTopWidget->m_slider, SIGNAL(valueChanged(int)), m_previewWidget, SLOT(slot_layerChanged(int)));
 
 	setAcceptDrops(true);
 	setWindowTitle("DLPSlicer");
@@ -72,23 +82,23 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
+	//关闭窗口时，此信号槽还会执行一次
+	(void)disconnect(m_tabWidget, SIGNAL(currentChanged(int)), this, SLOT(slot_tabWidgetChange(int)));
+
 	delete m_centerTopWidget.release();
 	delete m_config;
 	delete m_model;
 	delete m_dlprint;
-	//delete m_glwidget;
+	delete m_glwidget;
+	delete m_tabWidget;
 }
 
 QString MainWindow::ReadStlTxt()
 {
-	QFile dir(e_setting.ModelFile.c_str());
-	if (dir.exists()) {
-		QSettings readini(e_setting.ModelFile.c_str(), QSettings::IniFormat);
-		//读取打印设置
-		return readini.value("/modelPath/path").toString();
-	}
+	if (QFile(e_setting.ModelFile.c_str()).exists())
+		return QSettings(e_setting.ModelFile.c_str(), QSettings::IniFormat).value("/modelPath/path").toString();
 	else
-		return "";
+		return QString();
 }
 
 void MainWindow::StroyStlTxt(QString stl)
@@ -100,42 +110,38 @@ void MainWindow::StroyStlTxt(QString stl)
 
 void MainWindow::slot_openStl()
 {
- 	m_centerTopWidget->CenterButtonPush(OPENBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::OPENBTN);
+	QString path(ReadStlTxt());
+	LoadStl(QFileDialog::getOpenFileName(this, QStringLiteral("选择需要打开的文件"), 
+		path.left(path.lastIndexOf("/")), "*.stl *.sm *.obj"));
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::OPENBTN);
+}
 
-	QString temp, path;
-	path = ReadStlTxt();
-	int a = path.lastIndexOf("/");
-	QString s = path.left(a);
-	temp = QFileDialog::getOpenFileName(this, QStringLiteral("选择需要打开的文件"), s, "*.stl *.sm *.obj");
+void MainWindow::LoadStl(QString name)
+{
+	if (name.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0) {
+		StroyStlTxt(name);
 
-	if(temp.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0){
-		StroyStlTxt(temp);
-
-		m_centerTopWidget->showProgress(OPENBTN);
-		qDebug() << temp;
-		std::string file = temp.toStdString();
+		m_centerTopWidget->ShowProgress(CenterTopWidget::OPENBTN);
+		qDebug() << name;
 		m_centerTopWidget->P(20);
-		size_t id = m_model->load_model(file);
-		m_centerTopWidget->P(60);
-		m_glwidget->AddModelInstance(id);
+		m_glwidget->AddModelInstance(m_model->load_model(name.toStdString()));
 		m_centerTopWidget->P(100);
-		m_centerTopWidget->hideProgress();
+		m_centerTopWidget->HideProgress();
 		m_glwidget->UpdateConfine();
-	}
-	else if (temp.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0) 
-		ShowPreviewWidget(temp);
 
-	m_centerTopWidget->CenterButtonPush(OPENBTN);
+		this->SetDLPrintDirty();
+	}
+	else if (name.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0)
+		ShowPreviewWidget(name);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
-	if (event->key() == Qt::Key_Delete) {
+	if (event->key() == Qt::Key_Delete)
 		m_glwidget->slot_delSelectIntance();
-	}
-	else if (event->key() == Qt::Key_Return) {
+	else if (event->key() == Qt::Key_Return)
 		m_glwidget->AddNewSupportPoint();
-	}
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -155,28 +161,18 @@ void MainWindow::dropEvent(QDropEvent *event)
 	if (urls.isEmpty())
 		return;
 
-	//打开stl文件
-	QString fileName = urls.first().toLocalFile();
-	if (fileName.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0){
-		StroyStlTxt(fileName);
-
-		m_centerTopWidget->showProgress(OPENBTN);
-		std::string file = fileName.toStdString();
-		m_centerTopWidget->P(20);
-		size_t id = m_model->load_model(file);
-		m_centerTopWidget->P(60);
-		m_glwidget->AddModelInstance(id);
-		m_centerTopWidget->P(100);
-		m_centerTopWidget->hideProgress();
-		m_glwidget->UpdateConfine();
-	}
-	else if (fileName.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0)
-		ShowPreviewWidget(fileName);
+	LoadStl(urls.first().toLocalFile());
 }
 
-void MainWindow::resizeEvent(QResizeEvent *event)
+void MainWindow::slot_glwidgetSizeChange()
 {
-	m_centerTopWidget->resize(event->size());
+	//glwidget相对主窗口的位置=tabWidget相对主窗口的位置+glwidget相对tabWidget的位置
+	m_centerTopWidget->resize(QRect(m_tabWidget->pos(), m_glwidget->size()));
+}
+
+void MainWindow::slot_previewSizeChange()
+{
+	m_previewTopWidget->resize(QRect(m_tabWidget->pos(), m_previewWidget->size()));
 }
 
 void MainWindow::InitAction()
@@ -186,95 +182,90 @@ void MainWindow::InitAction()
 
 	QAction* newAct = new QAction(QStringLiteral("新建项目"), this);
 	fileMenu->addAction(newAct);
-	connect(newAct, SIGNAL(triggered()), this, SLOT(slot_newJob()));
+	(void)connect(newAct, SIGNAL(triggered()), this, SLOT(slot_newJob()));
 
 	QAction* openAct = new QAction(QStringLiteral("打开文件"), this);
 	fileMenu->addAction(openAct);
-	connect(openAct, SIGNAL(triggered()), this, SLOT(slot_openStl()));
+	(void)connect(openAct, SIGNAL(triggered()), this, SLOT(slot_openStl()));
 
 	QAction* deleteAct = new QAction(QStringLiteral("删除模型"), this);
 	fileMenu->addAction(deleteAct);
-	connect(deleteAct, SIGNAL(triggered()), m_glwidget, SLOT(slot_delSelectIntance()));
+	(void)connect(deleteAct, SIGNAL(triggered()), m_glwidget, SLOT(slot_delSelectIntance()));
 
 	fileMenu->addSeparator();
 
 	QAction* exitAct = new QAction(QStringLiteral("退出"), this);
 	fileMenu->addAction(exitAct);
-	connect(exitAct, SIGNAL(triggered()), this, SLOT(slot_exit()));
+	(void)connect(exitAct, SIGNAL(triggered()), this, SLOT(slot_exit()));
 
 	//“编辑”主菜单
 	QMenu* editMenu = menuBar()->addMenu(QStringLiteral("编辑(E)"));
 
 	editMenu->addSeparator();
 
-	QAction* repairAct = new QAction(QStringLiteral("模型修复"), this);
-	editMenu->addAction(repairAct);
-	repairAct->setDisabled(true);
-
 	QAction* autoAct = new QAction(QStringLiteral("自动排列"), this);
 	editMenu->addAction(autoAct);
-	connect(autoAct, SIGNAL(triggered()), this, SLOT(slot_autoArrange()));
+	(void)connect(autoAct, SIGNAL(triggered()), this, SLOT(slot_autoArrange()));
 
 	QAction*saveViewAct = new QAction(QStringLiteral("截图"), this);
 	editMenu->addAction(saveViewAct);
-	connect(saveViewAct, SIGNAL(triggered()), this, SLOT(slot_saveView()));
+	(void)connect(saveViewAct, SIGNAL(triggered()), this, SLOT(slot_saveView()));
 
 	QAction* duplicateAct = new QAction(QStringLiteral("复制"), this);
 	editMenu->addAction(duplicateAct);
-	connect(duplicateAct, SIGNAL(triggered()), this, SLOT(slot_duplicate()));
+	(void)connect(duplicateAct, SIGNAL(triggered()), this, SLOT(slot_duplicate()));
 
 	//“支撑”主菜单
 	QMenu* supportMenu = menuBar()->addMenu(QStringLiteral("支撑(S)"));
 
 	QAction* supportAct = new QAction(QStringLiteral("支撑"), this);
 	supportMenu->addAction(supportAct);
-	connect(supportAct, SIGNAL(triggered()), this, SLOT(slot_generateSupport()));
+	(void)connect(supportAct, SIGNAL(triggered()), this, SLOT(slot_generateSupport()));
 
 	QAction* deleteSupportAct = new QAction(QStringLiteral("删除支撑"));
 	supportMenu->addAction(deleteSupportAct);
-	deleteSupportAct->setEnabled(false);
-	//connect(deleteSupportAct, SIGNAL(triggered()), glwidget, SLOT(DelSelectSupport()));
+	(void)connect(deleteSupportAct, SIGNAL(triggered()), this, SLOT(slot_delSelSupport()));
 
 	QAction* supportAllAct = new QAction(QStringLiteral("支撑所有模型"));
 	supportMenu->addAction(supportAllAct);
-	connect(supportAllAct, SIGNAL(triggered()), this, SLOT(slot_generateAllSupport()));
+	(void)connect(supportAllAct, SIGNAL(triggered()), this, SLOT(slot_generateAllSupport()));
 
     //“视图”主菜单
 	QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图(V)"));
 
 	QAction* defaultAct = new QAction(QIcon(":/icon/images/iso.png"), QStringLiteral("默认视图"), this);
 	viewMenu->addAction(defaultAct);
-	connect(defaultAct, SIGNAL(triggered()), this, SLOT(slot_defaultView()));
+	(void)connect(defaultAct, SIGNAL(triggered()), this, SLOT(slot_defaultView()));
 
 	QAction* overlookAct = new QAction(QIcon(":/icon/images/top.png"),QStringLiteral("俯视图"), this);
 	viewMenu->addAction(overlookAct);
-	connect(overlookAct, SIGNAL(triggered()), this, SLOT(slot_overlookView()));
+	(void)connect(overlookAct, SIGNAL(triggered()), this, SLOT(slot_overlookView()));
 
 	QAction* leftAct = new QAction(QIcon(":/icon/images/left.png"), QStringLiteral("左视图"), this);
 	viewMenu->addAction(leftAct);
-	connect(leftAct, SIGNAL(triggered()), this, SLOT(slot_leftView()));
+	(void)connect(leftAct, SIGNAL(triggered()), this, SLOT(slot_leftView()));
 
 	QAction* rightAct = new QAction(QIcon(":/icon/images/right.png"), QStringLiteral("右视图"), this);
 	viewMenu->addAction(rightAct);
-	connect(rightAct, SIGNAL(triggered()), this, SLOT(slot_rightView()));
+	(void)connect(rightAct, SIGNAL(triggered()), this, SLOT(slot_rightView()));
 
 	QAction* frontAct = new QAction(QIcon(":/icon/images/front.png"), QStringLiteral("前视图"), this);
 	viewMenu->addAction(frontAct);
-	connect(frontAct, SIGNAL(triggered()), this, SLOT(slot_frontView()));
+	(void)connect(frontAct, SIGNAL(triggered()), this, SLOT(slot_frontView()));
 
 	QAction* behindAct = new QAction(QIcon(":/icon/images/back.png"), QStringLiteral("后视图"), this);
 	viewMenu->addAction(behindAct);
-	connect(behindAct, SIGNAL(triggered()), this, SLOT(slot_behindView()));
+	(void)connect(behindAct, SIGNAL(triggered()), this, SLOT(slot_behindView()));
 
 	viewMenu->addSeparator();
 
 	QAction* persperctiveAct = new QAction(QStringLiteral("透视投影"), this);
 	viewMenu->addAction(persperctiveAct);
-	connect(persperctiveAct, SIGNAL(triggered()), this, SLOT(slot_setPersperctive()));
+	(void)connect(persperctiveAct, SIGNAL(triggered()), this, SLOT(slot_setPersperctive()));
 
 	QAction* orthogonalityAct = new QAction(QStringLiteral("正交投影"), this);
 	viewMenu->addAction(orthogonalityAct);
-	connect(orthogonalityAct, SIGNAL(triggered()), this, SLOT(slot_setOrthogonality()));
+	(void)connect(orthogonalityAct, SIGNAL(triggered()), this, SLOT(slot_setOrthogonality()));
 }
 
 void MainWindow::slot_ZPosZero()
@@ -288,6 +279,8 @@ void MainWindow::slot_ZPosZero()
 
 	m_glwidget->DelSelectSupport();
 	m_glwidget->OffsetValueChange(0, 0, -box.min.z);
+
+	this->SetDLPrintDirty();
 }
 
 void MainWindow::SetOffsetValue(ModelInstance* instance)
@@ -306,6 +299,7 @@ void MainWindow::slot_xoffsetValueChange(double value)
 	if (fabs(x) >= 0.1) {
 		m_glwidget->DelSelectSupport();
 		m_glwidget->OffsetValueChange(x, 0, 0);
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -318,6 +312,7 @@ void MainWindow::slot_yoffsetValueChange(double value)
 	if (fabs(y) >= 0.1) {
 		m_glwidget->DelSelectSupport();
 		m_glwidget->OffsetValueChange(0, y, 0);
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -329,7 +324,8 @@ void MainWindow::slot_zoffsetValueChange(double value)
 	double z = value - m_glwidget->m_selInstance->z_translation;
 	if (fabs(z) >= 0.1) {
 		m_glwidget->DelSelectSupport();
-		m_glwidget->OffsetValueChange(z, 0, 0);
+		m_glwidget->OffsetValueChange(0, 0, z);
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -357,6 +353,7 @@ void MainWindow::slot_xRotateValueChange(double angle)
 	if (fabs(x) > 0.01) {
 		m_glwidget->DelSelectSupport();
 		m_glwidget->RotateValueChange(x, 1, 0, 0);
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -377,6 +374,7 @@ void MainWindow::slot_yRotateValueChange(double angle)
 	if (fabs(y) > 0.01) {
 		m_glwidget->DelSelectSupport();
 		m_glwidget->RotateValueChange(y, 0, 1, 0);
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -397,6 +395,7 @@ void MainWindow::slot_zRotateValueChange(double angle)
 	if (fabs(z) > 0.01) {
 		m_glwidget->DelSelectSupport();
 		m_glwidget->RotateValueChange(z, 0, 0, 1);
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -434,6 +433,7 @@ void MainWindow::slot_xScaleValueChange(double value)
 			double z = m_glwidget->m_selInstance->scaling_vector.z * (x / m_glwidget->m_selInstance->scaling_vector.x);
 			m_glwidget->ScaleValueChange(x, y, z);
 		}
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -452,6 +452,7 @@ void MainWindow::slot_yScaleValueChange(double value)
 			double z = m_glwidget->m_selInstance->scaling_vector.z * (y / m_glwidget->m_selInstance->scaling_vector.y);
 			m_glwidget->ScaleValueChange(x, y, z);
 		}
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -470,6 +471,7 @@ void MainWindow::slot_zScaleValueChange(double value)
 			double y = m_glwidget->m_selInstance->scaling_vector.y * (z / m_glwidget->m_selInstance->scaling_vector.z);
 			m_glwidget->ScaleValueChange(x, y, z);
 		}
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -480,6 +482,7 @@ void MainWindow::slot_newJob()//新建项目
 	m_dlprint->DelAllSupport();
 	m_glwidget->ClearModelBuffer();
 	m_glwidget->ClearSupportBuffer();
+	this->SetDLPrintDirty();
 }
 
 void MainWindow::slot_modelSelect()
@@ -492,15 +495,15 @@ void MainWindow::slot_modelSelect()
 
 void MainWindow::slot_generateSupport()
 {
-	m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SUPPORTBTN);
 
 	if (m_glwidget->m_selInstance == nullptr) {
 		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("请选中一个模型。"));
-		m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
+		m_centerTopWidget->CenterButtonPush(CenterTopWidget::SUPPORTBTN);
 		return;
 	}
 
-	m_centerTopWidget->showProgress(SUPPORTBTN);
+	m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTBTN);
 	m_centerTopWidget->P(10);
 
 	//删除选中支撑，提升一定高度
@@ -509,9 +512,17 @@ void MainWindow::slot_generateSupport()
 
 	m_glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
 	m_centerTopWidget->P(100);
-	m_centerTopWidget->hideProgress();
+	m_centerTopWidget->HideProgress();
 
-	m_centerTopWidget->CenterButtonPush(SUPPORTBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SUPPORTBTN);
+
+	this->SetDLPrintDirty();
+}
+
+void MainWindow::slot_delSelSupport()
+{
+	if(m_glwidget->DelSelectSupport())
+		this->SetDLPrintDirty();
 }
 
 void MainWindow::slot_generateAllSupport()
@@ -520,109 +531,98 @@ void MainWindow::slot_generateAllSupport()
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 			size_t id = m_model->find_id(*i);
 
-			m_centerTopWidget->showProgress(SUPPORTBTN);
+			m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTBTN);
 			m_centerTopWidget->P(10);
 
-			if (!m_glwidget->DelSelectSupport())
-				m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
+			m_glwidget->DelSupport(id);//不提升
+			//if (!m_glwidget->DelSupport(id))
+			//	m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
 
-			m_glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
+			m_glwidget->GenInstanceSupport(id, m_centerTopWidget->m_progressBar);
 			m_centerTopWidget->P(100);
-			m_centerTopWidget->hideProgress();
+			m_centerTopWidget->HideProgress();
 
+			this->SetDLPrintDirty();
 		}
 	}
 }
 
 void MainWindow::slot_saveView()
 {
-	QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), desktop, "histogram file(*.bmp)");
-	if (path.size() > 0) {
-		QByteArray a = path.toLocal8Bit();
-		char* file = a.data();
-		m_glwidget->SaveOneView(file);
-	}
+	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), 
+		QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), "histogram file(*.bmp)");
+	if (path.size() > 0)
+		m_glwidget->SaveOneView(path.toLocal8Bit().data());
 }
 
 void MainWindow::slot_supportEdit()
 {
 	if (!m_centerTopWidget->m_supportEditBtn->c_isChecked())
 	{
-		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
+		m_centerTopWidget->CenterButtonPush(CenterTopWidget::SUPPORTEDITBTN);
 		m_glwidget->SupportEditChange();
 	}
 	else {
 		//-----------退出支撑编辑模式，更新支撑点------------
-		m_centerTopWidget->showProgress(SUPPORTEDITBTN);
+		m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTEDITBTN);
 		m_glwidget->SupportEditChange(m_centerTopWidget->m_progressBar);
-		m_centerTopWidget->hideProgress();
+		m_centerTopWidget->HideProgress();
 
-		m_centerTopWidget->CenterButtonPush(SUPPORTEDITBTN);
+		m_centerTopWidget->CenterButtonPush(CenterTopWidget::SUPPORTEDITBTN);
 	}
 }
 
 void MainWindow::slot_slice()
 {
-	m_centerTopWidget->CenterButtonPush(SLICEBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SLICEBTN);
 
 	if (m_model->objects.size() == 0) {
-		m_centerTopWidget->CenterButtonPush(SLICEBTN);
+		m_centerTopWidget->CenterButtonPush(CenterTopWidget::SLICEBTN);
 		return;
 	}
 
 	if (!m_glwidget->CheckConfine()) {
-		QString desktop = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-		QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"), desktop, "histogram file(*.sm)");
-		if (path.size() > 0) {
-			//在用户目录下建立一个保存切片的文件夹
-			clearDir(e_setting.ZipTempPath.c_str());
+		//在用户目录下建立一个保存切片的文件夹
+		clearDir(e_setting.ZipTempPath.c_str());
 
-			QDir file(e_setting.ZipTempPath.c_str());
-			if (!file.exists()) {
-				if (!file.mkdir(e_setting.ZipTempPath.c_str()))
-					exit(2);
-			}
-			
-			//保存一张截图
-			QString view(e_setting.ZipTempPath.c_str());
-			view.append("/A_Front.bmp");
-			char* _path = view.toLocal8Bit().data();
-			m_glwidget->SaveOneView(_path);
-			
-			m_centerTopWidget->showProgress(SLICEBTN);
-			
-			m_centerTopWidget->P(10);
-			GenAllInsideSupport();
-			m_centerTopWidget->P(20);
-			m_dlprint->Slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
-			m_centerTopWidget->P(99);
-			JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
-			m_centerTopWidget->P(100);
-
-			//清空切片文件夹
-			clearDir(e_setting.ZipTempPath.c_str());
-
-			m_centerTopWidget->hideProgress();
-
-			switch (QMessageBox::question(this, QStringLiteral("提示"), QStringLiteral("切片完成，是否预览切片文件？"), QMessageBox::Cancel, QMessageBox::Ok))
-			{
-			case QMessageBox::Ok:
-				ShowPreviewWidget(path);
-				break;
-			case QMessageBox::Cancel:
-				break;
-			default:
-				break;
-			}
-		
+		QDir file(e_setting.ZipTempPath.c_str());
+		if (!file.exists()) {
+			if (!file.mkdir(e_setting.ZipTempPath.c_str()))
+				exit(2);
 		}
-	}
-	else {
-		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("模型超过边界，无法切片。"));
-	}
 
-	m_centerTopWidget->CenterButtonPush(SLICEBTN);
+		//保存一张截图
+		QString view(e_setting.ZipTempPath.c_str());
+		view.append("/A_Front.bmp");
+		char* _path = view.toLocal8Bit().data();
+		m_glwidget->SaveOneView(_path);
+
+		m_centerTopWidget->ShowProgress(CenterTopWidget::SLICEBTN);
+
+		m_centerTopWidget->P(10);
+		GenAllInsideSupport();
+		m_centerTopWidget->P(20);
+		m_dlprint->Slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
+		m_centerTopWidget->P(100);
+		m_previewWidget->reload();
+		m_previewTopWidget->reload(m_dlprint->layer_qt_path.size() + 1);
+	}
+	else
+		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("模型超过边界，无法切片。"));
+
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SLICEBTN);
+	m_tabWidget->setCurrentIndex(1);
+}
+
+void MainWindow::slot_saveSlice()
+{
+	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"),
+		QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), "histogram file(*.sm)");
+	if (path.size() > 0) {
+		m_dlprint->SaveSlice();
+		JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
+		clearDir(e_setting.ZipTempPath.c_str());
+	}
 }
 
 void MainWindow::ShowPreviewWidget(QString zipPath)
@@ -637,18 +637,14 @@ void MainWindow::ShowPreviewWidget(QString zipPath)
 	}
 
 	if (ExtractZipPath(zipPath)) {
-		JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
+		(void)JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
 
 		PreviewDialog previewDialog;
 		if (previewDialog.readIni(e_setting.ZipTempPath.c_str()))
 			previewDialog.exec();
 	}
-	else {
-		QString text(QStringLiteral("打开文件"));
-		text.append(zipPath);
-		text.append(QStringLiteral("失败！"));
-		QMessageBox::about(this, QStringLiteral("警告"), text);
-	}
+	else
+		QMessageBox::about(this, QStringLiteral("警告"), QString("%1%2%3").arg(QStringLiteral("打开文件")).arg(zipPath).arg(QStringLiteral("失败！")));
 }
 
 bool MainWindow::ExtractZipPath(QString zipPath)
@@ -743,29 +739,25 @@ void MainWindow::slot_duplicate()
 
 void MainWindow::InitDlprinter()
 {
-	if (QFile(e_setting.DlprinterFile.c_str()).exists()) {
-		QSettings readini(e_setting.DlprinterFile.c_str(), QSettings::IniFormat);
-		//读取打印设置
-		QString name = readini.value("/dlprinter/name").toString();
-		e_setting.setSelMachine(name.toStdString());
-	}
+	if (QFile(e_setting.DlprinterFile.c_str()).exists())
+		e_setting.setSelMachine(QSettings(e_setting.DlprinterFile.c_str(), QSettings::IniFormat).value("/dlprinter/name").toString().toStdString());
 }
 
 void MainWindow::slot_showSetupDialog()
 {
-	m_centerTopWidget->CenterButtonPush(SETUPBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SETUPBTN);
 
 	if (m_centerTopWidget->m_setupBtn->c_isChecked()) {
 		SetupDialog setupDialog(m_config);
 		setupDialog.exec();
 	}
 
-	m_centerTopWidget->CenterButtonPush(SETUPBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SETUPBTN);
 }
 
 void MainWindow::slot_showOffsetWidget()
 {
-	m_centerTopWidget->CenterButtonPush(OFFSETBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::OFFSETBTN);
 
 	if (m_centerTopWidget->m_offsetBtn->c_isChecked() && m_glwidget->m_selInstance != nullptr)
 		SetOffsetValue(m_glwidget->m_selInstance);
@@ -773,12 +765,12 @@ void MainWindow::slot_showOffsetWidget()
 
 void MainWindow::slot_showRotateWidget()
 {
-	m_centerTopWidget->CenterButtonPush(ROTATEBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::ROTATEBTN);
 }
 
 void MainWindow::slot_showScaleWidget()
 {
-	m_centerTopWidget->CenterButtonPush(SCALEBTN);
+	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SCALEBTN);
 
 	if (m_centerTopWidget->m_scaleBtn->c_isChecked() && m_glwidget->m_selInstance != nullptr) {
 		SetScaleValue(m_glwidget->m_selInstance);
@@ -797,6 +789,7 @@ void MainWindow::GenAllInsideSupport()
 				m_dlprint->GenInsideSupport(std::distance(m_model->objects.begin(), o) * InstanceNum + std::distance((*o)->instances.begin(), i), &mesh);
 			}
 		}
+		this->SetDLPrintDirty();
 	}
 }
 
@@ -805,6 +798,7 @@ void MainWindow::slot_offsetChange()
 	m_glwidget->DelSelectSupport();
 	if (!m_centerTopWidget->m_offsetWidget->isHidden())
 		SetOffsetValue(m_glwidget->m_selInstance);
+	this->SetDLPrintDirty();
 }
 
 void MainWindow::slot_scaleChange()
@@ -812,6 +806,7 @@ void MainWindow::slot_scaleChange()
 	m_glwidget->DelSelectSupport();
 	if (!m_centerTopWidget->m_scaleWidget->isHidden())
 		SetScaleValue(m_glwidget->m_selInstance);
+	this->SetDLPrintDirty();
 }
 
 void MainWindow::slot_rotateChange()
@@ -819,4 +814,25 @@ void MainWindow::slot_rotateChange()
 	m_glwidget->DelSelectSupport();
 	if (!m_centerTopWidget->m_rotateWidget->isHidden())
 		SetRotateValue(m_glwidget->m_selInstance);
+	this->SetDLPrintDirty();
+}
+
+void MainWindow::slot_tabWidgetChange(int index)
+{
+	if (index == 0) {
+		m_previewTopWidget->HideWidget();
+		m_centerTopWidget->ShowWidget();
+	}
+	else if (index == 1) {
+		m_centerTopWidget->HideWidget();
+		m_previewTopWidget->ShowWidget();
+	}
+}
+
+void MainWindow::SetDLPrintDirty()
+{
+	if (!m_previewWidget->m_dirty) {
+		m_previewTopWidget->setEnable(false);
+		m_previewWidget->m_dirty = true;
+	}
 }

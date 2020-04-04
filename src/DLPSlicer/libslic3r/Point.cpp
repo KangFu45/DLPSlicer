@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 Point::Point(double x, double y)
 {

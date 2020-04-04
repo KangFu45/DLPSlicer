@@ -7,7 +7,7 @@
 #include <iostream>
 #include <utility>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 Polyline::operator Polylines() const
 {

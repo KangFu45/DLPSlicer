@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_Geometry_hpp_
-#define slic3r_Geometry_hpp_
 
 #include "libslic3r.h"
 #include "BoundingBox.hpp"
@@ -12,7 +10,7 @@
 using boost::polygon::voronoi_builder;
 using boost::polygon::voronoi_diagram;
 
-namespace Slic3r { namespace Geometry {
+namespace DLPSlicer { namespace Geometry {
 
 Polygon convex_hull(Points points);
 Polygon convex_hull(const Polygons &polygons);
@@ -56,5 +54,3 @@ class MedialAxis {
 };
 
 } }
-
-#endif

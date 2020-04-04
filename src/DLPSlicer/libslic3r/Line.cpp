@@ -6,7 +6,7 @@
 #include <cmath>
 #include <sstream>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 std::string
 Line::wkt() const
@@ -144,7 +144,7 @@ Line::direction() const
 
 bool
 Line::parallel_to(double angle) const {
-    return Slic3r::Geometry::directions_parallel(this->direction(), angle);
+    return DLPSlicer::Geometry::directions_parallel(this->direction(), angle);
 }
 
 bool

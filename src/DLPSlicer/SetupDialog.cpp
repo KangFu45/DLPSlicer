@@ -54,7 +54,7 @@ SetupDialog::SetupDialog(Config* config)
 	resize(minimumSize());
 	setWindowFlags(windowFlags() & ~Qt::WindowCloseButtonHint);
 	setWindowTitle(QStringLiteral("设置"));
-	setWindowIcon(QIcon(":/icon/images/SM.png"));
+	setWindowIcon(QIcon(":/icon/images/printer.ico"));
 }
 
 SetupDialog::~SetupDialog()
@@ -340,14 +340,14 @@ void SetupDialog::initLayout()
 	setupTab->addTab(otherWidget, QStringLiteral("其他设置"));
 
 	defultBtn = new QPushButton(QStringLiteral("默认设置"));
-	connect(defultBtn, SIGNAL(clicked()), this, SLOT(slot_setDefultValue()));
+	(void)connect(defultBtn, SIGNAL(clicked()), this, SLOT(slot_setDefultValue()));
 
 	cancalBtn = new QPushButton(QStringLiteral("取消"));
-	connect(cancalBtn, SIGNAL(clicked()), this, SLOT(close()));
+	(void)connect(cancalBtn, SIGNAL(clicked()), this, SLOT(close()));
 
 	okBtn = new QPushButton(QStringLiteral("确认"));
-	connect(okBtn, SIGNAL(clicked()), this, SLOT(slot_writeConfig()));
-	connect(okBtn, SIGNAL(clicked()), this, SLOT(close()));
+	(void)connect(okBtn, SIGNAL(clicked()), this, SLOT(slot_writeConfig()));
+	(void)connect(okBtn, SIGNAL(clicked()), this, SLOT(close()));
 
 	mainLayout = new QGridLayout(this);
 	mainLayout->addWidget(setupTab, 0, 0, 6, 10);

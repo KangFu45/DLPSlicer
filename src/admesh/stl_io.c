@@ -53,7 +53,7 @@ void
 stl_stats_out(stl_file *stl, FILE *file, char *input_file) {
   if (stl->error) return;
 
-  /* this is here for Slic3r, without our config.h
+  /* this is here for DLPSlicer, without our config.h
      it won't use this part of the code anyway */
 #ifndef VERSION
 #define VERSION "unknown"

@@ -302,6 +302,8 @@ void GlWidget::resizeGL(int w, int h)
 		m_proj.perspective(45, GLfloat(w) / h, 0.1f, 10000.0f);
 	else
 		m_proj.ortho(-w / 2, w / 2, -h / 2, h / 2, -10000.0f, 10000.0f);
+
+	emit sig_sizeChange();
 }
 
 //函数：m_program->setAttributeBuffer(0, GL_FLOAT, 0, 3, 6 * sizeof(GLfloat));
@@ -589,8 +591,8 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 	}
 
 	if (m_supEditControl != nullptr && event->buttons() == Qt::LeftButton) {
-		pos.setX(event->pos().x());
-		pos.setY(event->pos().y());
+		_pos.setX(event->pos().x());
+		_pos.setY(event->pos().y());
 		_Depth = true;
 		update();
 	}
@@ -701,8 +703,8 @@ void GlWidget::ReadDepth()
 		GLfloat winx, winy, winz = 0;
 		glGetIntegerv(GL_VIEWPORT, viewport);
 
-		winx = pos.x();
-		winy = viewport[3] - pos.y();
+		winx = _pos.x();
+		winy = viewport[3] - _pos.y();
 
 		GLdouble mvmatrix[16], projmatrix[16];
 		GLdouble prox = 0, proy = 0, proz = 0;
@@ -2253,13 +2255,18 @@ bool GlWidget::DelSelectSupport()
 {
 	if (m_selInstance == nullptr)
 		return false;
+	return DelSupport(selectID);
+}
 
-	if (m_dlprint->DelTreeSupport(selectID)) {
+bool GlWidget::DelSupport(size_t id)
+{
+	if (m_dlprint->DelTreeSupport(id)) {
 		//支撑数据删除成功同时删除支撑缓存区
 		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
-			if ((*sb)->id == selectID) {
+			if ((*sb)->id == id) {
 				delete* sb;
 				treeSupportBuffers.erase(sb);
+				update();
 				return true;
 			}
 		}
@@ -2271,11 +2278,15 @@ void GlWidget::GenSelInstanceSupport(QProgressBar* progress)
 {
 	if (m_selInstance == nullptr)
 		return;
+	GenInstanceSupport(selectID, progress);
+}
 
+void GlWidget::GenInstanceSupport(size_t id, QProgressBar* progress)
+{
 	//支撑数值存入treeSupports
-	m_dlprint->InsertSupport(selectID, m_dlprint->GenSupport(selectID, &FindModel(selectID), progress));
+	m_dlprint->InsertSupport(id, m_dlprint->GenSupport(id, &FindModel(id), progress));
 	//渲染支撑
-	InitTreeSupportID(selectID, progress);
+	InitTreeSupportID(id, progress);
 }
 
 void GlWidget::slot_dlprinterChange(QString name)

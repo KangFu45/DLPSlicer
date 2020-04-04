@@ -21,14 +21,12 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_printerLabel = new QLabel(QStringLiteral("选择机型"), m_parent);
 	m_printerLabel->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
 	m_printerLabel->setFixedSize(90, 20);
-	m_printerLabel->show();
 
 	m_printerCombo = new QComboBox(m_parent);
 	for each (Setting::Printer per in e_setting.m_printers)
 		m_printerCombo->addItem(QString(per.name.c_str()));
 	m_printerCombo->setFixedSize(100, 20);
 	m_printerCombo->setCurrentIndex(0);
-	m_printerCombo->show();
 
 	//left
 	m_openBtn = new PushButton(QIcon(":/icon/images/load_b.png"), "", m_parent);
@@ -36,8 +34,7 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_openBtn->setStyleSheet(OnButton);
 	m_openBtn->setFixedSize(60, 70);
 	m_openBtn->setToolTip(QStringLiteral("打开"));
-	m_openBtn->show();
-	connect(m_openBtn, SIGNAL(clicked()), m_parent, SLOT(slot_openStl()));
+	(void)connect(m_openBtn, SIGNAL(clicked()), m_parent, SLOT(slot_openStl()));
 
 	m_offsetBtn = new PushButton(QIcon(":/icon/images/offset_b.PNG"), "", m_parent);
 	m_offsetBtn->setIconSize(QSize(90, 115));
@@ -45,8 +42,7 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_offsetBtn->setEnabled(true);
 	m_offsetBtn->setFixedSize(60, 70);
 	m_offsetBtn->setToolTip(QStringLiteral("移动"));
-	m_offsetBtn->show();
-	connect(m_offsetBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showOffsetWidget()));
+	(void)connect(m_offsetBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showOffsetWidget()));
 
 	m_scaleBtn = new PushButton(QIcon(":/icon/images/scale_b.png"), "", m_parent);
 	m_scaleBtn->setIconSize(QSize(90, 115));
@@ -54,8 +50,7 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_scaleBtn->setEnabled(true);
 	m_scaleBtn->setFixedSize(60, 70);
 	m_scaleBtn->setToolTip(QStringLiteral("缩放"));
-	m_scaleBtn->show();
-	connect(m_scaleBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showScaleWidget()));
+	(void)connect(m_scaleBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showScaleWidget()));
 
 	m_rotateBtn = new PushButton(QIcon(":/icon/images/rotate_b.png"), "", m_parent);
 	m_rotateBtn->setIconSize(QSize(90, 115));
@@ -63,8 +58,7 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_rotateBtn->setEnabled(true);
 	m_rotateBtn->setFixedSize(60, 70);
 	m_rotateBtn->setToolTip(QStringLiteral("旋转"));
-	m_rotateBtn->show();
-	connect(m_rotateBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showRotateWidget()));
+	(void)connect(m_rotateBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showRotateWidget()));
 
 	//right
 	m_supportBtn = new PushButton(QIcon(":/icon/images/support_b.png"), "", m_parent);
@@ -72,32 +66,28 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_supportBtn->setStyleSheet(OnButton);
 	m_supportBtn->setFixedSize(60, 70);
 	m_supportBtn->setToolTip(QStringLiteral("支撑"));
-	m_supportBtn->show();
-	connect(m_supportBtn, SIGNAL(clicked()), m_parent, SLOT(slot_generateSupport()));
+	(void)connect(m_supportBtn, SIGNAL(clicked()), m_parent, SLOT(slot_generateSupport()));
 
 	m_supportEditBtn = new PushButton(QIcon(":/icon/images/supportEdit_b.png"), "", m_parent);
 	m_supportEditBtn->setIconSize(QSize(90, 115));
 	m_supportEditBtn->setStyleSheet(OnButton);
 	m_supportEditBtn->setFixedSize(60, 70);
 	m_supportEditBtn->setToolTip(QStringLiteral("支撑编辑"));
-	m_supportEditBtn->show();
-	connect(m_supportEditBtn, SIGNAL(clicked()), m_parent, SLOT(slot_supportEdit()));
+	(void)connect(m_supportEditBtn, SIGNAL(clicked()), m_parent, SLOT(slot_supportEdit()));
 
 	m_sliceBtn = new PushButton(QIcon(":/icon/images/slice_b.png"), "", m_parent);
 	m_sliceBtn->setIconSize(QSize(90, 115));
 	m_sliceBtn->setStyleSheet(OnButton);
 	m_sliceBtn->setFixedSize(60, 70);
 	m_sliceBtn->setToolTip(QStringLiteral("切片"));
-	m_sliceBtn->show();
-	connect(m_sliceBtn, SIGNAL(clicked()), m_parent, SLOT(slot_slice()));
+	(void)connect(m_sliceBtn, SIGNAL(clicked()), m_parent, SLOT(slot_slice()));
 
 	m_setupBtn = new PushButton(QIcon(":/icon/images/setup_b.png"), "", m_parent);
 	m_setupBtn->setIconSize(QSize(90, 115));
 	m_setupBtn->setStyleSheet(OnButton);
 	m_setupBtn->setFixedSize(60, 70);
 	m_setupBtn->setToolTip(QStringLiteral("设置"));
-	m_setupBtn->show();
-	connect(m_setupBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showSetupDialog()));
+	(void)connect(m_setupBtn, SIGNAL(clicked()), m_parent, SLOT(slot_showSetupDialog()));
 
 	//--------------initOffsetWidget---------------
 	QLabel* offset_title = new QLabel(QStringLiteral("  平  移"));
@@ -113,24 +103,24 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	x_offset_spin->setSingleStep(1);
 	x_offset_spin->setStyleSheet(spinStyle);
 	x_offset_spin->setSuffix("mm");
-	connect(x_offset_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_xoffsetValueChange(double)));
+	(void)connect(x_offset_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_xoffsetValueChange(double)));
 
 	y_offset_spin = new QDoubleSpinBox();
 	y_offset_spin->setRange(-1000, 1000);
 	y_offset_spin->setSingleStep(1);
 	y_offset_spin->setStyleSheet(spinStyle);
 	y_offset_spin->setSuffix("mm");
-	connect(y_offset_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_yoffsetValueChange(double)));
+	(void)connect(y_offset_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_yoffsetValueChange(double)));
 
 	z_offset_spin = new QDoubleSpinBox();
 	z_offset_spin->setRange(-1000, 1000);
 	z_offset_spin->setSingleStep(1);
 	z_offset_spin->setStyleSheet(spinStyle);
 	z_offset_spin->setSuffix("mm");
-	connect(z_offset_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_zoffsetValueChange(double)));
+	(void)connect(z_offset_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_zoffsetValueChange(double)));
 
 	QPushButton* ZPosZeroBtn = new QPushButton(QStringLiteral("贴底"));
-	connect(ZPosZeroBtn, SIGNAL(clicked()), m_parent, SLOT(slot_ZPosZero()));
+	(void)connect(ZPosZeroBtn, SIGNAL(clicked()), m_parent, SLOT(slot_ZPosZero()));
 
 	QGridLayout* mainlayout = new QGridLayout();
 	mainlayout->setMargin(7);
@@ -164,21 +154,21 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	x_rotate_spin->setSingleStep(5.0);
 	x_rotate_spin->setSuffix(QStringLiteral("°"));
 	x_rotate_spin->setStyleSheet(spinStyle);
-	connect(x_rotate_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_xRotateValueChange(double)));
+	(void)connect(x_rotate_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_xRotateValueChange(double)));
 
 	y_rotate_spin = new QDoubleSpinBox();
 	y_rotate_spin->setRange(-360.0, 360.0);
 	y_rotate_spin->setSingleStep(5.0);
 	y_rotate_spin->setSuffix(QStringLiteral("°"));
 	y_rotate_spin->setStyleSheet(spinStyle);
-	connect(y_rotate_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_yRotateValueChange(double)));
+	(void)connect(y_rotate_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_yRotateValueChange(double)));
 
 	z_rotate_spin = new QDoubleSpinBox();
 	z_rotate_spin->setRange(-360.0, 360.0);
 	z_rotate_spin->setSingleStep(5.0);
 	z_rotate_spin->setSuffix(QStringLiteral("°"));
 	z_rotate_spin->setStyleSheet(spinStyle);
-	connect(z_rotate_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_zRotateValueChange(double)));
+	(void)connect(z_rotate_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_zRotateValueChange(double)));
 
 	QGridLayout* mainlayout1 = new QGridLayout();
 	mainlayout1->setMargin(7);
@@ -211,7 +201,7 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	x_scale_spin->setSingleStep(5);
 	x_scale_spin->setStyleSheet(spinStyle);
 	x_scale_spin->setSuffix("%");
-	connect(x_scale_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_xScaleValueChange(double)));
+	(void)connect(x_scale_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_xScaleValueChange(double)));
 
 	y_scale_spin = new QDoubleSpinBox();
 	y_scale_spin->setRange(1, 100000);
@@ -219,7 +209,7 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	y_scale_spin->setSuffix("%");
 	y_scale_spin->setDisabled(true);
 	y_scale_spin->setStyleSheet(spinStyle);
-	connect(y_scale_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_yScaleValueChange(double)));
+	(void)connect(y_scale_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_yScaleValueChange(double)));
 
 	z_scale_spin = new QDoubleSpinBox();
 	z_scale_spin->setRange(1, 100000);
@@ -227,33 +217,33 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	z_scale_spin->setSuffix("%");
 	z_scale_spin->setDisabled(true);
 	z_scale_spin->setStyleSheet(spinStyle);
-	connect(z_scale_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_zScaleValueChange(double)));
+	(void)connect(z_scale_spin, SIGNAL(valueChanged(double)), m_parent, SLOT(slot_zScaleValueChange(double)));
 
 	x_size_label = new QDoubleSpinBox();
 	x_size_label->setRange(0, 1000);
 	x_size_label->setDisabled(true);
 	x_size_label->setSuffix("mm");
 	x_size_label->setStyleSheet(spinStyle);
-	//connect(x_size_spin, SIGNAL(valueChanged(double)), this, SLOT(xSizeValueChange(double)));
+	//(void)connect(x_size_spin, SIGNAL(valueChanged(double)), this, SLOT(xSizeValueChange(double)));
 
 	y_size_label = new QDoubleSpinBox();
 	y_size_label->setRange(0, 1000);
 	y_size_label->setDisabled(true);
 	y_size_label->setSuffix("mm");
 	y_size_label->setStyleSheet(spinStyle);
-	//connect(y_size_spin, SIGNAL(valueChanged(double)), this, SLOT(ySizeValueChange(double)));
+	//(void)connect(y_size_spin, SIGNAL(valueChanged(double)), this, SLOT(ySizeValueChange(double)));
 
 	z_size_label = new QDoubleSpinBox();
 	z_size_label->setRange(0, 1000);
 	z_size_label->setDisabled(true);
 	z_size_label->setSuffix("mm");
 	z_size_label->setStyleSheet(spinStyle);
-	//connect(z_size_spin, SIGNAL(valueChanged(double)), this, SLOT(zSizeValueChange(double)));
+	//(void)connect(z_size_spin, SIGNAL(valueChanged(double)), this, SLOT(zSizeValueChange(double)));
 
 	unify_scale = new QCheckBox();
 	unify_scale->setCheckState(Qt::Checked);
 	unify_scale->setStyleSheet(labelStyle);
-	connect(unify_scale, SIGNAL(stateChanged(int)), this, SLOT(setUnifyScale(int)));
+	(void)connect(unify_scale, SIGNAL(stateChanged(int)), this, SLOT(setUnifyScale(int)));
 
 	QLabel* unify_scale_label = new QLabel(QStringLiteral("统一缩放"));
 	unify_scale_label->setStyleSheet(labelStyle);
@@ -426,30 +416,34 @@ void CenterTopWidget::CenterButtonPush(CenterBtn btn)
 }
 
 
-void CenterTopWidget::resize(const QSize& size)
+void CenterTopWidget::resize(const QRect& rect)
 {
-	int w = size.width();
-	int h = size.height();
+	int r = rect.right();
+	int l = rect.left();
+	int t = rect.top();
 
-	m_printerLabel->move(w / 2 - 110, 30);
-	m_printerCombo->move(w / 2 - 20, 30);
+	int yh = rect.center().y();
+	int xh = rect.center().x();
+
+	m_printerLabel->move(xh - 110, t + 10);
+	m_printerCombo->move(xh - 20, t + 10);
 
 	//left
-	m_openBtn->move(10, h / 2 - 240);
-	m_offsetBtn->move(10, h / 2 - 160);
-	m_scaleBtn->move(10, h / 2 - 80);
-	m_rotateBtn->move(10, h / 2);
+	m_openBtn->move(l + 10, yh - 240);
+	m_offsetBtn->move(l + 10, yh - 160);
+	m_scaleBtn->move(l + 10, yh - 80);
+	m_rotateBtn->move(l + 10, yh);
 
 	//rigft
-	m_supportBtn->move(w - 70, h / 2 - 240);
-	m_supportEditBtn->move(w - 70, h / 2 - 160);
-	m_sliceBtn->move(w - 70, h / 2 - 80);
-	m_setupBtn->move(w - 70, h / 2);
+	m_supportBtn->move(r - 70, yh - 240);
+	m_supportEditBtn->move(r - 70, yh - 160);
+	m_sliceBtn->move(r - 70, yh - 80);
+	m_setupBtn->move(r - 70, yh);
 
-	m_offsetWidget->move(75, h / 2 - 160 - 10);
-	m_rotateWidget->move(75, h / 2 - 10);
-	m_scaleWidget->move(75, h / 2 - 80 - 30);
-	m_progressWidget->move(w / 2 - 150, h / 2 - 50);
+	m_offsetWidget->move(l + 75, yh - 160 - 10);
+	m_rotateWidget->move(l + 75, yh - 10);
+	m_scaleWidget->move(l + 75, yh - 80 - 30);
+	m_progressWidget->move(xh - 150, yh - 50);
 }
 
 void CenterTopWidget::P(size_t i)
@@ -458,7 +452,7 @@ void CenterTopWidget::P(size_t i)
 	QCoreApplication::processEvents();
 }
 
-void CenterTopWidget::showProgress(int btn)
+void CenterTopWidget::ShowProgress(int btn)
 {
 	switch (btn)
 	{
@@ -503,4 +497,41 @@ void CenterTopWidget::setUnifyScale(int state)
 	default:
 		break;
 	}
+}
+
+void CenterTopWidget::HideWidget()
+{
+	m_openBtn->hide();
+	m_offsetBtn->hide();
+	m_rotateBtn->hide();
+	m_scaleBtn->hide();
+
+	m_supportBtn->hide();
+	m_supportEditBtn->hide();
+	m_setupBtn->hide();
+	m_sliceBtn->hide();
+
+	m_printerCombo->hide();
+	m_printerLabel->hide();
+
+	m_progressWidget->hide();
+	m_offsetWidget->hide();
+	m_scaleWidget->hide();
+	m_rotateWidget->hide();
+}
+
+void CenterTopWidget::ShowWidget()
+{
+	m_openBtn->show();
+	m_offsetBtn->show();
+	m_rotateBtn->show();
+	m_scaleBtn->show();
+
+	m_supportBtn->show();
+	m_supportEditBtn->show();
+	m_setupBtn->show();
+	m_sliceBtn->show();
+
+	m_printerCombo->show();
+	m_printerLabel->show();
 }

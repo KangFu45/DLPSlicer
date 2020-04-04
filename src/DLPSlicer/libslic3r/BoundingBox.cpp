@@ -1,7 +1,7 @@
 #include "BoundingBox.hpp"
 #include <algorithm>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 template <class PointClass>
 BoundingBoxBase<PointClass>::BoundingBoxBase(const std::vector<PointClass> &points)

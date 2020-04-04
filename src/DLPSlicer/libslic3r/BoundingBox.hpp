@@ -1,12 +1,10 @@
-
-#ifndef slic3r_BoundingBox_hpp_
-#define slic3r_BoundingBox_hpp_
+#pragma once
 
 #include "libslic3r.h"
 #include "Point.hpp"
 #include "Polygon.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 typedef Point   Size;
 typedef Point3  Size3;
@@ -107,5 +105,3 @@ inline bool operator!=(const BoundingBoxBase<VT> &bb1, const BoundingBoxBase<VT>
 }
 
 }
-
-#endif

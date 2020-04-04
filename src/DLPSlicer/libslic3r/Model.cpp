@@ -9,7 +9,7 @@
 #include <qdebug.h>
 #include <qmatrix4x4.h>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 Model::Model() : metadata(std::map<std::string, std::string>()) {}
 
@@ -257,7 +257,7 @@ bool
 Model::_arrange(const Pointfs &sizes, coordf_t dist, const BoundingBoxf* bb, Pointfs &out) const
 {
     // we supply unscaled data to arrange()
-    bool result = Slic3r::Geometry::arrange(
+    bool result = DLPSlicer::Geometry::arrange(
         sizes.size(),               // number of parts 部件数量
         BoundingBoxf(sizes).max,    // width and height of a single cell 一个最大的长和宽的方块
         dist,                       // distance between cells	方块之间的距离
@@ -267,7 +267,7 @@ Model::_arrange(const Pointfs &sizes, coordf_t dist, const BoundingBoxf* bb, Poi
 
 	if (!result && bb != NULL) {
         // Try to arrange again ignoring bb
-        result = Slic3r::Geometry::arrange(
+        result = DLPSlicer::Geometry::arrange(
             sizes.size(),               // number of parts
             BoundingBoxf(sizes).max,    // width and height of a single cell
             dist,                       // distance between cells

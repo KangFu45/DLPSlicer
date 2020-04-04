@@ -3,7 +3,7 @@
 #include "Polygon.hpp"
 #include "Polyline.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 Polygon::operator Polygons() const
 {
@@ -89,13 +89,13 @@ Polygon::equally_spaced_points(double distance) const
 double
 Polygon::area() const
 {
-    return ClipperLib::Area(Slic3rMultiPoint_to_ClipperPath(*this));
+    return ClipperLib::Area(DLPSlicerMultiPoint_to_ClipperPath(*this));
 }
 
 bool
 Polygon::is_counter_clockwise() const
 {
-    return ClipperLib::Orientation(Slic3rMultiPoint_to_ClipperPath(*this));
+    return ClipperLib::Orientation(DLPSlicerMultiPoint_to_ClipperPath(*this));
 }
 
 bool

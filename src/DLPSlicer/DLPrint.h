@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_DLPPrint_hpp_
-#define slic3r_DLPPrint_hpp_
 
 #include "libslic3r.h"
 #include "ExPolygon.hpp"
@@ -16,8 +14,9 @@
 #include <qpolygon.h>
 #include <qrect.h>
 #include <qprogressbar.h>
+#include <qpainter.h>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 	class DLPrint
 	{
@@ -59,7 +58,8 @@ namespace Slic3r {
 		};
 
 	public:
-		Config* m_config;															
+		Config* m_config;
+		std::map<size_t, QPainterPath> layer_qt_path;			//使用qt绘制图形的方式存储路径
 
 		void Slice(const TriangleMeshs& supMeshs, QProgressBar* progress);
 		void GenInsideSupport(size_t id, TriangleMesh* mesh);
@@ -72,9 +72,14 @@ namespace Slic3r {
 		void DelAllInsideSup();
 		void DelAllSupport();
 
+		void SaveSlice();
+		
+
 	private:
+		void SaveOneSlice(size_t num, QString path);
+
 		void SavePng(const BoundingBoxf3& box,size_t layerNum);
-		void SaveOnePng(size_t num, const std::string& path);
+		void SaveOnePng(size_t num);
 
 		void InfillLayer(size_t i, ExPolygons pattern);
 		void RadiatePoint(const BoundingBoxf3& bb, Pointf3s& ps,float space,int xyz);
@@ -84,5 +89,3 @@ namespace Slic3r {
 		ExPolygon GenHoneycombPattern(BoundingBox box, double wall, double radius);
 	};
 }
-
-#endif

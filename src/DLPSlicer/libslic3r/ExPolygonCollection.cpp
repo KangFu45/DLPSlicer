@@ -2,7 +2,7 @@
 #include "ExPolygonCollection.hpp"
 #include "Geometry.hpp"
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 ExPolygonCollection::ExPolygonCollection(const ExPolygon &expolygon)
 {
@@ -99,7 +99,7 @@ ExPolygonCollection::convex_hull() const
     Points pp;
     for (ExPolygons::const_iterator it = this->expolygons.begin(); it != this->expolygons.end(); ++it)
         pp.insert(pp.end(), it->contour.points.begin(), it->contour.points.end());
-    return Slic3r::Geometry::convex_hull(pp);
+    return DLPSlicer::Geometry::convex_hull(pp);
 }
 
 Lines

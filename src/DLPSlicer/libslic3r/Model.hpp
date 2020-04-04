@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_Model_hpp_
-#define slic3r_Model_hpp_
 
 #include "libslic3r.h"
 #include "BoundingBox.hpp"
@@ -14,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class ModelInstance;
 class ModelMaterial;
@@ -251,7 +249,7 @@ class ModelMaterial
     friend class Model;
     public:
     t_model_material_attributes attributes;
-    ///< Attributes are defined by the AMF file format, but they don't seem to be used by Slic3r for any purpose.
+    ///< Attributes are defined by the AMF file format, but they don't seem to be used by DLPSlicer for any purpose.
 
     //DynamicPrintConfig config;
     ///< Dynamic configuration storage for the object specific configuration values, overriding the global configuration.
@@ -300,7 +298,7 @@ class ModelObject
     ///< Printable and modifier volumes, each with its material ID and a set of override parameters.
     ///< ModelVolumes are owned by this ModelObject.
 
-    //DynamicPrintConfig config; ///< Configuration parameters specific to a single ModelObject, overriding the global Slic3r settings.
+    //DynamicPrintConfig config; ///< Configuration parameters specific to a single ModelObject, overriding the global DLPSlicer settings.
 
     //t_layer_height_ranges layer_height_ranges; ///< Variation of a layer thickness for spans of Z coordinates.
 
@@ -493,7 +491,7 @@ class ModelVolume
     TriangleMesh mesh;  ///< The triangular model.
     //DynamicPrintConfig config;
     ///< Configuration parameters specific to an object model geometry or a modifier volume,
-    ///< overriding the global Slic3r settings and the ModelObject settings.
+    ///< overriding the global DLPSlicer settings and the ModelObject settings.
 
     bool modifier;  ///< Is it an object to be printed, or a modifier volume?
 
@@ -561,7 +559,7 @@ class ModelInstance
     double scaling_factor;      ///< uniform scaling factorÍ¬Ò»Ëõ·Å.
     Pointf3 scaling_vector;     ///< scaling vector. Specific to 3MF format.
     Pointf offset;              ///< offset in unscaled coordinates.
-    double z_translation;       ///< translation in z axis. Specific to 3MF format. It's not used anywhere in Slic3r except at writing/reading 3mf.
+    double z_translation;       ///< translation in z axis. Specific to 3MF format. It's not used anywhere in DLPSlicer except at writing/reading 3mf.
 
 	BoundingBoxf3 box;
 	Pointf3 origin;
@@ -616,5 +614,3 @@ class ModelInstance
 };
 
 }
-
-#endif

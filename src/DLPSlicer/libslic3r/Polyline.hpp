@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_Polyline_hpp_
-#define slic3r_Polyline_hpp_
 
 #include "libslic3r.h"
 #include "Line.hpp"
@@ -9,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class Polyline;
 class ThickPolyline;
@@ -63,5 +61,3 @@ to_polylines(const Lines &lines)
 }
 
 }
-
-#endif

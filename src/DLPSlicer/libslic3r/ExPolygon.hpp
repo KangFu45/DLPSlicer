@@ -1,6 +1,4 @@
 #pragma once
-#ifndef slic3r_ExPolygon_hpp_
-#define slic3r_ExPolygon_hpp_
 
 #include "libslic3r.h"
 #include "BoundingBox.hpp"
@@ -9,7 +7,7 @@
 #include <ostream>
 #include <vector>
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 class ExPolygon;
 typedef std::vector<ExPolygon> ExPolygons;
@@ -121,7 +119,7 @@ namespace boost { namespace polygon {
     template <>
     struct polygon_with_holes_traits<ExPolygon> {
         typedef Polygons::const_iterator iterator_holes_type;
-		typedef Slic3r::Polygon hole_type;
+		typedef DLPSlicer::Polygon hole_type;
         static inline iterator_holes_type begin_holes(const ExPolygon& t) {
             return t.holes.begin();
         }
@@ -176,4 +174,3 @@ namespace boost { namespace polygon {
 } }
 // end Boost
 
-#endif

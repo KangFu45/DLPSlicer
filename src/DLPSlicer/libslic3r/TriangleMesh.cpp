@@ -18,11 +18,11 @@
 #include <boost/nowide/convert.hpp>
 #include "qdebug.h"
 
-#ifdef SLIC3R_DEBUG
+#ifdef DLPSlicer_DEBUG
 #include "SVG.hpp"
 #endif
 
-namespace Slic3r {
+namespace DLPSlicer {
 
 TriangleMesh::TriangleMesh()
     : repaired(false)
@@ -318,7 +318,7 @@ void TriangleMesh::translate(float x, float y, float z)
 void TriangleMesh::rotate(float angle, const Axis &axis)
 {
     // admesh uses degrees
-    angle = Slic3r::Geometry::rad2deg(angle);
+    angle = DLPSlicer::Geometry::rad2deg(angle);
     
     if (axis == X) {
         stl_rotate_x(&(this->stl), angle);
@@ -544,7 +544,7 @@ TriangleMesh::convex_hull()
         stl_vertex* v = &this->stl.v_shared[i];
         pp.push_back(Point(v->x / SCALING_FACTOR, v->y / SCALING_FACTOR));
     }
-    return Slic3r::Geometry::convex_hull(pp);
+    return DLPSlicer::Geometry::convex_hull(pp);
 }
 
 BoundingBoxf3
@@ -814,7 +814,7 @@ TriangleMeshSlicer<A>::slice(const std::vector<float> &z, std::vector<Polygons>*
        given heights.
        
        This method should basically combine the behavior of the existing
-       Perl methods defined in lib/Slic3r/TriangleMesh.pm:
+       Perl methods defined in lib/DLPSlicer/TriangleMesh.pm:
        
        - analyze(): this creates the 'facets_edges' and the 'edges_facets'
             tables (we don't need the 'edges' table)
@@ -868,7 +868,7 @@ TriangleMeshSlicer<A>::_slice_do(size_t facet_idx, std::vector<IntersectionLines
     const float min_z = fminf(_z(facet.vertex[0]), fminf(_z(facet.vertex[1]), _z(facet.vertex[2])));
     const float max_z = fmaxf(_z(facet.vertex[0]), fmaxf(_z(facet.vertex[1]), _z(facet.vertex[2])));
     
-    #ifdef SLIC3R_DEBUG
+    #ifdef DLPSlicer_DEBUG
     printf("\n==> FACET %zu (%f,%f,%f - %f,%f,%f - %f,%f,%f):\n", facet_idx,
         _x(facet.vertex[0]), _y(facet.vertex[0]), _z(facet.vertex[0]),
         _x(facet.vertex[1]), _y(facet.vertex[1]), _z(facet.vertex[1]),
@@ -880,7 +880,7 @@ TriangleMeshSlicer<A>::_slice_do(size_t facet_idx, std::vector<IntersectionLines
     std::vector<float>::const_iterator min_layer, max_layer;
     min_layer = std::lower_bound(z.begin(), z.end(), min_z); // first layer whose slice_z is >= min_z
     max_layer = std::upper_bound(z.begin() + (min_layer - z.begin()), z.end(), max_z) - 1; // last layer whose slice_z is <= max_z
-    #ifdef SLIC3R_DEBUG
+    #ifdef DLPSlicer_DEBUG
     printf("layers: min = %d, max = %d\n", (int)(min_layer - z.begin()), (int)(max_layer - z.begin()));
     #endif
     
@@ -899,7 +899,7 @@ TriangleMeshSlicer<A>::slice(const std::vector<float> &z, std::vector<ExPolygons
     
     layers->resize(z.size());
     for (std::vector<Polygons>::const_iterator loops = layers_p.begin(); loops != layers_p.end(); ++loops) {
-        #ifdef SLIC3R_DEBUG
+        #ifdef DLPSlicer_DEBUG
         size_t layer_id = loops - layers_p.begin();
         printf("Layer %zu (slice_z = %.2f):\n", layer_id, z[layer_id]);
         #endif
@@ -1156,7 +1156,7 @@ TriangleMeshSlicer<A>::make_loops(std::vector<IntersectionLine> &lines, Polygons
                     
                     loops->push_back(p);
                     
-                    #ifdef SLIC3R_DEBUG
+                    #ifdef DLPSlicer_DEBUG
                     printf("  Discovered %s polygon of %d points\n", (p.is_counter_clockwise() ? "ccw" : "cw"), (int)p.points.size());
                     #endif
                     
@@ -1165,7 +1165,7 @@ TriangleMeshSlicer<A>::make_loops(std::vector<IntersectionLine> &lines, Polygons
                 
                 // we can't close this loop!
                 //// push @failed_loops, [@loop];
-                //#ifdef SLIC3R_DEBUG
+                //#ifdef DLPSlicer_DEBUG
                 printf("  Unable to close this loop having %d points\n", (int)loop.size());
                 //#endif
                 goto CYCLE;
@@ -1286,7 +1286,7 @@ TriangleMeshSlicer<A>::make_expolygons(const Polygons &loops, ExPolygons* slices
     double safety_offset = scale_(0.0499);
     ExPolygons ex_slices = offset2_ex(p_slices, +safety_offset, -safety_offset);
     
-    #ifdef SLIC3R_DEBUG
+    #ifdef DLPSlicer_DEBUG
     size_t holes_count = 0;
     for (ExPolygons::const_iterator e = ex_slices.begin(); e != ex_slices.end(); ++e) {
         holes_count += e->holes.size();
@@ -1507,7 +1507,7 @@ TriangleMeshSlicer<A>::TriangleMeshSlicer(TriangleMesh* _mesh) : mesh(_mesh), v_
                 }
                 this->facets_edges[facet_idx][i] = edge_idx;
                 
-                #ifdef SLIC3R_DEBUG
+                #ifdef DLPSlicer_DEBUG
                 printf("  [facet %d, edge %d] a_id = %d, b_id = %d   --> edge %d\n", facet_idx, i, a_id, b_id, edge_idx);
                 #endif
             }
@@ -1976,6 +1976,7 @@ void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_fac
             for (int i = 0; i < faces.num; ++i) {
                 int f = faces.v_shared_face[i];
                 for (int j = 0; j < 3; ++j) {
+                    //1.1依次选出每条边
                     stl_edge edge;
                     edge.p1 = this->stl.facet_start[f].vertex[j % 3];
                     edge.p2 = this->stl.facet_start[f].vertex[(j + 1) % 3];
@@ -1983,24 +1984,17 @@ void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_fac
                     edge.facet_number2 = -1;
 
                     bool ret = false;
-                    //for each (stl_edge & e in edges)
                     for (auto e = edges.begin(); e != edges.end(); ++e)
                     {
                         if (!equal_edge(edge, *e))
                             continue;
-                        if (e->facet_number1 == -1) {
-                            e->facet_number1 = f;
-                            ret = true;
-                            break;
-                        }
-                        if (e->facet_number2 == -1) {
-                            e->facet_number2 = f;
-                            ret = true;
-                            break;
-                        }
+
+                         e->facet_number2 = f;
+                         ret = true;
+                         break;
                     }
                     if (!ret)
-                        edges.push_back(edge);
+                        edges.emplace_back(edge);
                 }
             }
 
@@ -2109,17 +2103,21 @@ void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_fac
             else ratio = space / 2 + 1;
 
             //向圆心偏移
-            bool ret1 = true;
+            ret = true;
             size_t aaa = 0;
             Pointfs points;
             //在路径上插入支撑点
-            while (ret1) {
-                if (aaa == 0)polygons1 = offset(polygons1, -scale_(ratio));
-                else polygons1 = offset(polygons1, -scale_(space));
+            while (ret) {
+                if (aaa == 0)
+                    polygons1 = offset(polygons1, -scale_(ratio));
+                else 
+                    polygons1 = offset(polygons1, -scale_(space));
+                for(auto p=polygons1.begin();p!=polygons1.end();++p)
                 ++aaa;
 
+                points.clear();
                 if (!polygons1.empty()) {
-                    contous = *polygons1.begin();
+                    contous = *polygons1.begin();//只有一条多边形
                     Pointf beginP(Pointf(unscale(contous.points.front().x), unscale(contous.points.front().y)));
                     Pointf endP;
                     points.emplace_back(beginP);
@@ -2132,10 +2130,10 @@ void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_fac
                         bool ret3 = true;
                         while (ret3) {
                             float lenght = DisPoint2(beginP, endP);
-                            if (lenght > space1) {
+                            if (lenght >= space1) {
                                 beginP = InterpolationPoint(beginP, endP, space1);
                                 points.emplace_back(beginP);
-                                space1 = 5;
+                                space1 = space;
                             }
                             else {
                                 beginP = endP;
@@ -2149,7 +2147,7 @@ void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_fac
                 {
                     Point p = contous.centroid();
                     points.emplace_back(Pointf(unscale(p.x), unscale(p.y)));
-                    ret1 = false;
+                    ret = false;
                 }
 
                 //删除接近的点
@@ -2187,6 +2185,7 @@ void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_fac
                                 continue;
                             feature_faces_point.emplace_back(Pf32Ver(CalPlaneLineIntersectPoint(Nor2Vt3(f.normal), Ver2Pf3(f.vertex[0]), Vectorf3(0, 0, 1), _p)));//存储采样点
                             ++count;
+                            break;
                         }
                     }
                 }

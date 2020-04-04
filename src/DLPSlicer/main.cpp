@@ -5,21 +5,21 @@
 
 Setting e_setting;
 
-#ifdef SLIC3R_GUI
+#ifdef DLPSlicer_GUI
 // Let the NVIDIA and AMD know we want to use their graphics card
 // on a dual graphics card system.
 __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-#endif /* SLIC3R_GUI */
+#endif /* DLPSlicer_GUI */
 
-#ifdef SLIC3R_GUI
+#ifdef DLPSlicer_GUI
 #include <GL/GL.h>
-#endif /* SLIC3R_GUI */
+#endif /* DLPSlicer_GUI */
 
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 
-#ifdef SLIC3R_GUI
+#ifdef DLPSlicer_GUI
 class OpenGLVersionCheck
 {
 public:
@@ -185,25 +185,25 @@ protected:
 };
 
 bool OpenGLVersionCheck::message_pump_exit = false;
-#endif /* SLIC3R_GUI */
+#endif /* DLPSlicer_GUI */
 
 int main(int argc, char *argv[])
 {
 	QApplication a(argc, argv);
 
-#ifdef SLIC3R_GUI
+#ifdef DLPSlicer_GUI
 	// Here one may push some additional parameters based on the wrapper type.
 	bool force_mesa = true;
-#endif /* SLIC3R_GUI */
+#endif /* DLPSlicer_GUI */
 
-//#ifdef SLIC3R_GUI
+//#ifdef DLPSlicer_GUI
 //	if (wcscmp(argv[i], L"--sw-renderer") == 0)
 //		force_mesa = true;
 //	else if (wcscmp(argv[i], L"--no-sw-renderer") == 0)
 //		force_mesa = false;
-//#endif /* SLIC3R_GUI */
+//#endif /* DLPSlicer_GUI */
 
-#ifdef SLIC3R_GUI
+#ifdef DLPSlicer_GUI
 	OpenGLVersionCheck opengl_version_check;
 	bool load_mesa =
 		// Forced from the command line.
@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
 		::GetSystemMetrics(SM_REMOTESESSION) ||
 		// Try to load the default OpenGL driver and test its context version.
 		!opengl_version_check.load_opengl_dll() || !opengl_version_check.is_version_greater_or_equal_to(2, 0);
-#endif /* SLIC3R_GUI */
+#endif /* DLPSlicer_GUI */
 
 	wchar_t path_to_exe[MAX_PATH + 1] = { 0 };
 	::GetModuleFileNameW(nullptr, path_to_exe, MAX_PATH);
@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
 	_wsplitpath(path_to_exe, drive, dir, fname, ext);
 	_wmakepath(path_to_exe, drive, dir, nullptr, nullptr);
 
-#ifdef SLIC3R_GUI
+#ifdef DLPSlicer_GUI
 	// https://wiki.qt.io/Cross_compiling_Mesa_for_Windows
 	// http://download.qt.io/development_releases/prebuilt/llvmpipe/windows/
 	if (load_mesa) {
@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
 		else
 			printf("MESA OpenGL library was loaded sucessfully\n");
 	}
-#endif /* SLIC3R_GUI */
+#endif /* DLPSlicer_GUI */
 
 	//TODO:初始化错误处理,c++获取程序路径
 	//Setting* m_setting = new Setting((QCoreApplication::applicationDirPath() + "/AppSet.xml").toStdString());
