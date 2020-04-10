@@ -6,7 +6,9 @@
 <App>
     
     
-  <Name>DLPSlicer</Name><Version>1.6.1v</Version></App><UserFile>
+  <Name>DLPSlicer</Name><Version>1.6.1v</Version>
+  <SuffixName>fk</SuffixName>
+</App><UserFile>
     
   <Path>C:\Users\ADMINI~1.DAD\AppData\Local\Temp/DLPSlicer</Path></UserFile><Machines>
     

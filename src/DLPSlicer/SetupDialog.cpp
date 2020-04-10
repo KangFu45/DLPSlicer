@@ -200,8 +200,9 @@ void SetupDialog::initLayout()
 	bottom_radius_label = new QLabel(QStringLiteral("底端直径"));
 	bottom_radius_label->setToolTip(QStringLiteral("一端在底板上的支撑柱底端的粗细程度"));
 
-	support_space_spin = new QSpinBox();
-	support_space_spin->setRange(2, 20);
+	support_space_spin = new QDoubleSpinBox();
+	support_space_spin->setRange(2., 20.);
+	support_space_spin->setSingleStep(0.5);
 	support_space_spin->setSuffix("mm");
 	support_space_label = new QLabel(QStringLiteral("支撑间距"));
 	support_space_label->setToolTip(QStringLiteral("支撑特征面的支撑柱的间距"));
@@ -453,7 +454,7 @@ void SetupDialog::readConfig()
 
 		bottom_radius_spin->setValue(readini.value("/support_config/bottomRadius").toDouble());
 
-		support_space_spin->setValue(readini.value("/support_config/supportSpace").toInt());
+		support_space_spin->setValue(readini.value("/support_config/supportSpace").toDouble());
 
 		support_angle_spin->setValue(readini.value("/support_config/supportAngle").toInt());
 

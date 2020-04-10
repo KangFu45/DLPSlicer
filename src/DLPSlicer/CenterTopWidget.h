@@ -35,7 +35,6 @@ public:
 		SUPPORTBTN,
 		SUPPORTEDITBTN
 	};
-
 private:
 	MainWindow* m_parent;
 	QLabel* m_printerLabel;
@@ -44,6 +43,7 @@ private slots:
 	void setUnifyScale(int state);
 
 public:
+
 	QComboBox* m_printerCombo;
 
 	//按钮
@@ -55,12 +55,7 @@ public:
 	PushButton* m_offsetBtn;
 	PushButton* m_rotateBtn;
 	PushButton* m_scaleBtn;
-	CenterBtn currentBtn = { NULLBTN };
-
-	//进度条对话框
-	QLabel* m_progressLabel;
-	QProgressBar* m_progressBar;
-	QWidget* m_progressWidget;
+	CenterBtn currentBtn{ NULLBTN };
 
 	//平移对话框
 	QDoubleSpinBox* x_offset_spin;
@@ -92,10 +87,6 @@ public:
 	void resize(const QRect& rect);
 	void CenterButtonPush(CenterBtn btn);
 	bool isUnityScale() { return unify_scale->checkState() == Qt::Unchecked; };
-
-	void P(size_t i);
-	void ShowProgress(int btn);
-	void HideProgress() { m_progressWidget->hide(); };
 
 	void HideWidget();
 	void ShowWidget();

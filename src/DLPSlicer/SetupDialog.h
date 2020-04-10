@@ -27,7 +27,7 @@ struct Config
 	float	support_radius;
 	float	support_top_radius;
 	float	support_bottom_radius;
-	int		space;
+	float	space;
 	int		angle;
 	int		leaf_num;
 	float   model_lift;
@@ -83,7 +83,7 @@ public:
 	QLabel* support_radius_label;
 	QDoubleSpinBox* bottom_radius_spin;			  //底部半径
 	QLabel* bottom_radius_label;
-	QSpinBox* support_space_spin;                 //支撑间距
+	QDoubleSpinBox* support_space_spin;           //支撑间距
 	QLabel* support_space_label;
 	QSpinBox* support_angle_spin;                 //支撑角度
 	QLabel* support_angle_label;

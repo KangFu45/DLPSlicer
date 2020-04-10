@@ -4,7 +4,6 @@
 #include <qmenu.h>
 #include <qaction.h>
 #include <qdialog.h>
-#include <qcoreapplication.h>
 #include <qmessagebox.h>  
 #include <qmimedata.h>  
 #include <qurl.h>
@@ -42,6 +41,7 @@ private:
 	Config* m_config = { new Config };
 	PreviewWidget* m_previewWidget;
 	QTabWidget* m_tabWidget = {new QTabWidget};
+	ProgressWidget* m_progressWidget;
 
 	void SetOffsetValue(ModelInstance* instance);
 	void SetRotateValue(ModelInstance* instance);
@@ -54,7 +54,6 @@ private:
 	void LoadStl(QString name);
 	QString ReadStlTxt();
 	void StroyStlTxt(QString stl);
-	void ShowPreviewWidget(QString zipPath);
 	bool ExtractZipPath(QString zipPath);
 	void Duplicate(size_t num, bool arrange);
 	void GenAllInsideSupport();

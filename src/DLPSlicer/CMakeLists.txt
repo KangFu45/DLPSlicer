@@ -11,7 +11,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_CURRENT_BINARY_DIR}/../debug)
 
 #设置qt cmake路径
 if(NOT DEFINED CMAKE_PREFIX_PATH)
-	set(CMAKE_PREFIX_PATH C:/Qt/Qt5.12.0/5.12.0/msvc2015_64/lib/cmake)
+	set(CMAKE_PREFIX_PATH C:/Qt/Qt5.12.0/5.12.0/msvc2017_64/lib/cmake)
 endif()
 
 # 开启Qt代码自动生成，不再需用自己手写了。按顺序，分别是`Q_OBJECT`宏展开，资源文件，界面文件。
@@ -46,3 +46,5 @@ target_link_libraries(DLPSlicer debug quazipd.lib)
 
 # 在CMake中使用Qt最快捷的方式，一句代码搞定
 qt5_use_modules(DLPSlicer ${QT})
+
+Set_Target_Properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")

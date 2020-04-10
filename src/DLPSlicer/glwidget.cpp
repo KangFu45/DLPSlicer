@@ -602,7 +602,7 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 		int x = event->pos().x() - xLastPos;
 		int y = yLastPos - event->pos().y();
 
-		double _h, x_ratio, y_ratio;
+		float _h, x_ratio, y_ratio;
 		if (translationID == translateMesh_X.id) {
 			_h = _horizonAngle - 90;
 			x_ratio = cosf((_h / 180.0) * PI);
@@ -621,16 +621,16 @@ void GlWidget::mouseMoveEvent(QMouseEvent* event)
 			_h = _horizonAngle + 90;
 			x_ratio = cosf((_h / 180.0) * PI);
 			y_ratio = sinf((_h / 180.0) * PI);
-			ScaleValueChange((x * x_ratio + y * y_ratio) / _scale, 0, 0, true);
+			ScaleValueChange((x * x_ratio + y * y_ratio) / (_scale * 100), 0, 0, true);
 		}
 		else if (translationID == scaleMesh_Y.id) {
 			_h = _horizonAngle + 180;
 			x_ratio = cosf((_h / 180.0) * PI);
 			y_ratio = sinf((_h / 180.0) * PI);
-			ScaleValueChange(0, -(x * x_ratio + y * y_ratio) / _scale, 0, true);
+			ScaleValueChange(0, -(x * x_ratio + y * y_ratio) / (_scale * 100), 0, true);
 		}
 		else if (translationID == scaleMesh_Z.id) {
-			ScaleValueChange(0, 0, -y / _scale, true);
+			ScaleValueChange(0, 0, -y / (_scale * 100), true);
 		}
 		else if (translationID == rotateMesh_Z.id || translationID == rotateMesh_X.id || translationID == rotateMesh_Y.id)
 		{

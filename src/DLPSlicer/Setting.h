@@ -25,6 +25,8 @@ public:
 	string DlprinterFile;
 	string ConfigFile;
 
+	string SuffixName;		//切片文件后缀名
+
 	struct Printer
 	{
 		string name;

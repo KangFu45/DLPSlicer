@@ -74,7 +74,6 @@ namespace DLPSlicer {
 
 		void SaveSlice();
 		
-
 	private:
 		void SaveOneSlice(size_t num, QString path);
 

@@ -4,11 +4,6 @@
 #include "Setting.h"
 extern Setting e_setting;
 
-//对自定义对话框进行裁剪的多边形的点
-static QVector<QPoint> progressRect = { QPoint(3,0)
-,QPoint(297,0),QPoint(300,3),QPoint(300,77)
-,QPoint(297,80),QPoint(3,80),QPoint(0,77),QPoint(0,3) };
-
 //自旋盒的QSS
 static QString spinStyle("background-color: rgba(225,225,225,0);border: 1px outset black;");
 //标签的QSS
@@ -183,7 +178,7 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_rotateWidget = new QWidget(m_parent);
 	m_rotateWidget->setLayout(mainlayout1);
 	m_rotateWidget->setStyleSheet("background-color: rgba(225,225,225,100);");
-	m_rotateWidget->setMinimumSize(130, 100);
+	m_rotateWidget->setMinimumSize(170, 100);
 	//rotateWidget->setMask(QPolygon(anomalyRect1));
 	m_rotateWidget->hide();
 
@@ -266,34 +261,9 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_scaleWidget = new QWidget(m_parent);
 	m_scaleWidget->setLayout(mainlayout2);
 	m_scaleWidget->setStyleSheet("background-color: rgba(225,225,225,100);");
-	m_scaleWidget->setMinimumSize(200, 140);
+	m_scaleWidget->setMinimumSize(230, 140);
 	//scaleWidget->setMask(QPolygon(anomalyRect2));
 	m_scaleWidget->hide();
-
-	//-------------------initProgress-------------------
-	m_progressLabel = new QLabel;
-	QFont font("ZYSong18030", 15);
-	m_progressLabel->setFont(font);
-	m_progressLabel->setStyleSheet("color: white");
-	m_progressLabel->setText("waiting ......");
-	m_progressBar = new QProgressBar;
-	m_progressBar->setOrientation(Qt::Horizontal);
-
-	QString strStyle = "QProgressBar {border-radius: 5px ; text-align: center; background: rgb(200, 200, 200);}"
-		"QProgressBar::chunk {border-radius:5px;border:1px solid black;background: rgb(200,50,0)}";
-	m_progressBar->setStyleSheet(strStyle);
-	m_progressBar->setRange(0, 100);
-	QGridLayout* layout = new QGridLayout();
-	layout->setMargin(10);
-	layout->setSpacing(2);
-	layout->addWidget(m_progressLabel, 0, 2);
-	layout->addWidget(m_progressBar, 1, 0, 2, 5);
-	m_progressWidget = new QWidget(m_parent);
-	m_progressWidget->setLayout(layout);
-	m_progressWidget->setStyleSheet("background-color: rgba(100,100,100,225);");
-	m_progressWidget->setMask(QPolygon(progressRect));
-	m_progressWidget->setMinimumSize(QSize(300, 80));
-	m_progressWidget->hide();
 }
 
 CenterTopWidget::~CenterTopWidget()
@@ -309,10 +279,6 @@ CenterTopWidget::~CenterTopWidget()
 	delete m_offsetBtn;
 	delete m_rotateBtn;
 	delete m_scaleBtn;
-	
-	delete m_progressLabel;
-	delete m_progressBar;
-	delete m_progressWidget;
 	
 	delete x_offset_spin;
 	delete y_offset_spin;
@@ -443,37 +409,6 @@ void CenterTopWidget::resize(const QRect& rect)
 	m_offsetWidget->move(l + 75, yh - 160 - 10);
 	m_rotateWidget->move(l + 75, yh - 10);
 	m_scaleWidget->move(l + 75, yh - 80 - 30);
-	m_progressWidget->move(xh - 150, yh - 50);
-}
-
-void CenterTopWidget::P(size_t i)
-{
-	m_progressBar->setValue(i);
-	QCoreApplication::processEvents();
-}
-
-void CenterTopWidget::ShowProgress(int btn)
-{
-	switch (btn)
-	{
-	case OPENBTN:
-		m_progressLabel->setText(QStringLiteral("读取模型"));
-		break;
-	case SUPPORTBTN:
-		m_progressLabel->setText(QStringLiteral("生成支撑"));
-		break;
-	case SLICEBTN:
-		m_progressLabel->setText(QStringLiteral("切片"));
-		break;
-	case SUPPORTEDITBTN:
-		m_progressLabel->setText(QStringLiteral("重新生成支撑"));
-
-	default:
-		break;
-	}
-	m_progressWidget->show();
-	m_progressBar->reset();
-	P(0);
 }
 
 void CenterTopWidget::setUnifyScale(int state)
@@ -514,7 +449,6 @@ void CenterTopWidget::HideWidget()
 	m_printerCombo->hide();
 	m_printerLabel->hide();
 
-	m_progressWidget->hide();
 	m_offsetWidget->hide();
 	m_scaleWidget->hide();
 	m_rotateWidget->hide();

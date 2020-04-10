@@ -112,7 +112,7 @@ void PreviewWidget::paintEvent(QPaintEvent* event)
 	else {
 		painter.setRenderHint(QPainter::Antialiasing, true);
 		painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-		painter.setBrush(QBrush(QColor(150, 150, 150)));
+		painter.setBrush(QBrush(QColor(50, 50, 50)));
 		painter.setPen(QPen(Qt::Dense7Pattern, 1));
 
 		auto p = m_pdlprint->layer_qt_path.find(m_cur_layer);
@@ -148,3 +148,70 @@ void PreviewWidget::resizeEvent(QResizeEvent* event)
 
 	emit sig_sizeChange();
 }
+
+//bool PreviewDialog::readIni(QString path)
+//{
+//	this->previewWidget->path = path;
+//	this->previewWidget->path.append("/");
+//	this->previewWidget->path.append(ImageName);
+//
+//	QDir* dir = new QDir(path);
+//	QStringList filter;
+//	//得到文件名列表
+//	QList<QFileInfo>* fileInfo = new QList<QFileInfo>(dir->entryInfoList(filter));
+//
+//	int normIlluminationTime, numberSlices;
+//
+//	for (auto f = fileInfo->begin(); f != fileInfo->end(); ++f) {
+//		if ((*f).baseName() == buildsciptName) {
+//			QFile file((*f).filePath());
+//			if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+//				return false;
+//			QTextStream in(&file);
+//			QString line = in.readLine();
+//			while (!line.isNull())
+//			{
+//				if (line.contains("number of slices")) {
+//					int a = line.lastIndexOf("=");
+//					QString num = line.mid(a + 2);//得到总层数
+//					previewWidget->slider->setRange(0, num.toInt() - 1);
+//					numberSlices = num.toInt();
+//
+//					num.append(QStringLiteral("层"));
+//					numberSlicesLabel->setText(num);
+//					//初始化
+//					previewWidget->slider->setValue(0);
+//					previewWidget->image->setScale(1);
+//					previewWidget->image->setPos(0, 0);
+//					previewWidget->_scale = 1;
+//					previewWidget->x = 0;
+//					previewWidget->y = 0;
+//
+//					//读取第一张图片
+//					QString s = path;
+//					s.append("/");
+//					s.append(ImageName);
+//					s.append("0.png");
+//					previewWidget->image->updateItem(s);
+//
+//				}
+//				else if (line.contains("model volume")) {
+//					int a = line.lastIndexOf("=");
+//					QString num = line.mid(a + 2);
+//					num.append("ml");
+//					modelVolumeLabel->setText(num);
+//				}
+//				else if (line.contains("norm illumination time")) {
+//					int a = line.lastIndexOf("=");
+//					normIlluminationTime = line.mid(a + 2).toInt();
+//				}
+//				line = in.readLine();
+//			}
+//		}
+//	}
+//
+//	//计算打印时间
+//	//int printTime= normIlluminationTime*
+//
+//	return true;
+//}

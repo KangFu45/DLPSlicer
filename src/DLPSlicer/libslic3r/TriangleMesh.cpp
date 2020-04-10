@@ -1670,14 +1670,11 @@ int* TriangleMesh::cliff_point(unsigned short& num)//得到悬挂点
 //删除重复点
 inline void IntsDelRepetition(std::vector<int>& ps)
 {
-    int count = ps.size();
-    for (int i = 0; i < count; ++i) {
-        for (int j = i + 1; j < count; ++j) {
-            if (*(ps.begin() + i) == *(ps.begin() + j)) {
-                ps.erase(ps.begin() + i);
-                --count;
-                --i;
-                break;
+    for (auto p1 = ps.begin(); p1 != ps.end(); ++p1) {
+        for (auto p2 = p1 + 1; p2 != ps.end(); ++p2) {
+            if (*p1 == *p2) {
+                --p2;
+                ps.erase(p2 + 1);
             }
         }
     }
@@ -1688,7 +1685,7 @@ inline void IntsDelTwig(std::vector<int>& bole, const std::vector<int>& twig)
 {
     int count = bole.size();
     for (int i = 0; i < count; ++i) {
-        for each (const int& j in twig) {
+        for each (int j in twig) {
             if (*(bole.begin() + i) == j) {
                 bole.erase(bole.begin() + i);
                 --count;
@@ -1805,10 +1802,10 @@ std::vector<v_face_struct> TriangleMesh::generate_feature_faces(char extra, floa
             area += TriArea(this->stl.facet_start[faces->v_shared_face[i]]);
 
         if (area < min_area) {
-            feature_faces.erase(faces);
+            delete faces->v_shared_face;
             --faces;
+            feature_faces.erase(faces + 1);
         }
-
     }
     return feature_faces;
 }
@@ -2151,19 +2148,13 @@ void TriangleMesh::feature_face_to_point(std::vector<v_face_struct>& feature_fac
                 }
 
                 //删除接近的点
-                for (auto p1 = points.begin(); p1 != points.end(); ) {
-                    bool ret4 = false;
-                    for (auto p2 = points.begin(); p2 != points.end(); ++p2) {
-                        if (p1 == p2)
-                            continue;
-                        if (DisPoint2(*p1, *p2) < space / 2) {
-                            points.erase(p1);
-                            ret4 = true;
-                            break;
+                for (auto p1 = points.begin(); p1 != points.end(); ++p1) {
+                    for (auto p2 = p1 + 1; p2 != points.end(); ++p2) {
+                        if (DisPoint2(*p1, *p2) < space / 2.) {
+                            --p2;
+                            points.erase(p2 + 1);
                         }
                     }
-                    if (!ret4)
-                        ++p1;
                 }
 
                 size_t count = 0;

@@ -15,7 +15,6 @@
 
 #include <quazip/JlCompress.h>
 
-#include "PreviewDialog.h"
 #include "IO.hpp"
 
 //ERROR:setting.h放在.cpp文件夹下会报错???
@@ -59,6 +58,8 @@ MainWindow::MainWindow(QWidget* parent)
 	m_tabWidget->setTabPosition(QTabWidget::South);
 	setCentralWidget(m_tabWidget);//要先于中央界面上button初始化
 
+	m_progressWidget = new ProgressWidget(m_tabWidget);
+
 	InitAction();
 	m_centerTopWidget = std::unique_ptr<CenterTopWidget>(new CenterTopWidget(this));
 	m_previewTopWidget = std::unique_ptr<PreviewTopWidget>(new PreviewTopWidget(this));
@@ -90,6 +91,7 @@ MainWindow::~MainWindow()
 	delete m_model;
 	delete m_dlprint;
 	delete m_glwidget;
+	delete m_progressWidget;
 	delete m_tabWidget;
 }
 
@@ -121,19 +123,19 @@ void MainWindow::LoadStl(QString name)
 {
 	if (name.right(4).indexOf(".stl", 0, Qt::CaseInsensitive) >= 0) {
 		StroyStlTxt(name);
-
-		m_centerTopWidget->ShowProgress(CenterTopWidget::OPENBTN);
+		
+		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("加载模型"));
 		qDebug() << name;
-		m_centerTopWidget->P(20);
+		m_progressWidget->P(20);
 		m_glwidget->AddModelInstance(m_model->load_model(name.toStdString()));
-		m_centerTopWidget->P(100);
-		m_centerTopWidget->HideProgress();
+		m_progressWidget->P(100);
+		m_progressWidget->hide();
 		m_glwidget->UpdateConfine();
 
 		this->SetDLPrintDirty();
 	}
-	else if (name.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0)
-		ShowPreviewWidget(name);
+	//else if (name.right(3).indexOf(".sm", 0, Qt::CaseInsensitive) >= 0)
+	//	ShowPreviewWidget(name);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event)
@@ -503,16 +505,16 @@ void MainWindow::slot_generateSupport()
 		return;
 	}
 
-	m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTBTN);
-	m_centerTopWidget->P(10);
+	m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("支撑"));
+	m_progressWidget->P(10);
 
 	//删除选中支撑，提升一定高度
 	if (!m_glwidget->DelSelectSupport())
 		m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
 
-	m_glwidget->GenSelInstanceSupport(m_centerTopWidget->m_progressBar);
-	m_centerTopWidget->P(100);
-	m_centerTopWidget->HideProgress();
+	m_glwidget->GenSelInstanceSupport(m_progressWidget->m_progressBar);
+	m_progressWidget->P(100);
+	m_progressWidget->hide();
 
 	m_centerTopWidget->CenterButtonPush(CenterTopWidget::SUPPORTBTN);
 
@@ -531,16 +533,16 @@ void MainWindow::slot_generateAllSupport()
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 			size_t id = m_model->find_id(*i);
 
-			m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTBTN);
-			m_centerTopWidget->P(10);
+			m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("支撑"));
+			m_progressWidget->P(10);
 
 			m_glwidget->DelSupport(id);//不提升
 			//if (!m_glwidget->DelSupport(id))
 			//	m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
 
-			m_glwidget->GenInstanceSupport(id, m_centerTopWidget->m_progressBar);
-			m_centerTopWidget->P(100);
-			m_centerTopWidget->HideProgress();
+			m_glwidget->GenInstanceSupport(id, m_progressWidget->m_progressBar);
+			m_progressWidget->P(100);
+			m_progressWidget->hide();
 
 			this->SetDLPrintDirty();
 		}
@@ -564,9 +566,10 @@ void MainWindow::slot_supportEdit()
 	}
 	else {
 		//-----------退出支撑编辑模式，更新支撑点------------
-		m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTEDITBTN);
-		m_glwidget->SupportEditChange(m_centerTopWidget->m_progressBar);
-		m_centerTopWidget->HideProgress();
+		//m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTEDITBTN);
+		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("更新支撑"));
+		m_glwidget->SupportEditChange(m_progressWidget->m_progressBar);
+		m_progressWidget->hide();
 
 		m_centerTopWidget->CenterButtonPush(CenterTopWidget::SUPPORTEDITBTN);
 	}
@@ -597,13 +600,14 @@ void MainWindow::slot_slice()
 		char* _path = view.toLocal8Bit().data();
 		m_glwidget->SaveOneView(_path);
 
-		m_centerTopWidget->ShowProgress(CenterTopWidget::SLICEBTN);
+		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("切片"));
 
-		m_centerTopWidget->P(10);
+		m_progressWidget->P(10);
 		GenAllInsideSupport();
-		m_centerTopWidget->P(20);
-		m_dlprint->Slice(m_glwidget->GetSupportModel(), m_centerTopWidget->m_progressBar);
-		m_centerTopWidget->P(100);
+		m_progressWidget->P(20);
+		m_dlprint->Slice(m_glwidget->GetSupportModel(), m_progressWidget->m_progressBar);
+		m_progressWidget->P(100);
+		m_progressWidget->hide();
 		m_previewWidget->reload();
 		m_previewTopWidget->reload(m_dlprint->layer_qt_path.size() + 1);
 	}
@@ -617,35 +621,39 @@ void MainWindow::slot_slice()
 void MainWindow::slot_saveSlice()
 {
 	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"),
-		QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), "histogram file(*.sm)");
+		QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), QString("histogram file(*.%1)").arg(e_setting.SuffixName.c_str()));
 	if (path.size() > 0) {
+		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("保存"));
+		m_progressWidget->P(35);
 		m_dlprint->SaveSlice();
+		m_progressWidget->P(70);
 		JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
 		clearDir(e_setting.ZipTempPath.c_str());
+		m_progressWidget->hide();
 	}
 }
 
-void MainWindow::ShowPreviewWidget(QString zipPath)
-{
-	//解压zip包到用户目录下
-	clearDir(e_setting.ZipTempPath.c_str());
-
-	QDir file(e_setting.ZipTempPath.c_str());
-	if (!file.exists()) {
-		if (!file.mkdir(e_setting.ZipTempPath.c_str()))
-			exit(2);
-	}
-
-	if (ExtractZipPath(zipPath)) {
-		(void)JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
-
-		PreviewDialog previewDialog;
-		if (previewDialog.readIni(e_setting.ZipTempPath.c_str()))
-			previewDialog.exec();
-	}
-	else
-		QMessageBox::about(this, QStringLiteral("警告"), QString("%1%2%3").arg(QStringLiteral("打开文件")).arg(zipPath).arg(QStringLiteral("失败！")));
-}
+//void MainWindow::ShowPreviewWidget(QString zipPath)
+//{
+//	//解压zip包到用户目录下
+//	clearDir(e_setting.ZipTempPath.c_str());
+//
+//	QDir file(e_setting.ZipTempPath.c_str());
+//	if (!file.exists()) {
+//		if (!file.mkdir(e_setting.ZipTempPath.c_str()))
+//			exit(2);
+//	}
+//
+//	if (ExtractZipPath(zipPath)) {
+//		(void)JlCompress::extractDir(zipPath, e_setting.ZipTempPath.c_str());
+//
+//		PreviewDialog previewDialog;
+//		if (previewDialog.readIni(e_setting.ZipTempPath.c_str()))
+//			previewDialog.exec();
+//	}
+//	else
+//		QMessageBox::about(this, QStringLiteral("警告"), QString("%1%2%3").arg(QStringLiteral("打开文件")).arg(zipPath).arg(QStringLiteral("失败！")));
+//}
 
 bool MainWindow::ExtractZipPath(QString zipPath)
 {

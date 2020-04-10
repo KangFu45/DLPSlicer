@@ -31,6 +31,7 @@ Setting::Setting(string _appPath)
 	string NodePath("Config.App");
 	this->appName = pt.get<string>(NodePath + ".Name", "DLPSlicer");
 	this->appVersion = pt.get<string>(NodePath + ".Version", "0.0.0v");
+	this->SuffixName = pt.get<string>(NodePath + ".SuffixName", "fk");
 
 	this->UserPath = pt.get<string>("Config.UserFile.Path", "");
 	if (this->UserPath.empty() || !exists(filesystem::path(this->UserPath))) {
@@ -45,12 +46,12 @@ Setting::Setting(string _appPath)
 		write_xml(this->xmlFile, pt);//覆盖原xml文件
 	}
 
-	ZipTempPath = UserPath + "ZipTemp";
+	ZipTempPath = UserPath + "\ZipTemp";
 	ifNotExistCreate(ZipTempPath);
 
-	DlprinterFile = UserPath + "Dlprinter.ini";
-	ModelFile = UserPath + "ModelPath.ini";
-	ConfigFile = UserPath + "Config.ini";
+	DlprinterFile = UserPath + "\Dlprinter.ini";
+	ModelFile = UserPath + "\ModelPath.ini";
+	ConfigFile = UserPath + "\Config.ini";
 
 	//读取机器参数
 	BOOST_AUTO(child, pt.get_child("Config.Machines"));
