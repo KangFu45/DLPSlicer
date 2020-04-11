@@ -723,8 +723,11 @@ void MainWindow::Duplicate(size_t num, bool arrange)
 	TreeSupport* ts1 = m_dlprint->GetTreeSupport(m_model->find_id(m_glwidget->m_selInstance));
 
 	for (int i = 0; i < num; ++i) {
-		ModelInstance* s = m_model->addInstance(m_model->find_id(m_glwidget->m_selInstance));
-		size_t id = m_model->find_id(s);
+		size_t id = m_model->find_id(
+			m_model->addInstance(m_model->find_id(m_glwidget->m_selInstance)));
+
+		qDebug() << "duolicate: " << id;
+
 		m_glwidget->AddModelInstance(id);
 		if (ts1 != nullptr)
 			m_dlprint->InsertSupport(id, new TreeSupport(ts1));

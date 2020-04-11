@@ -147,14 +147,21 @@ namespace DLPSlicer {
 
 		progress->setValue(75);
 
-		tbb::parallel_for(
-			tbb::blocked_range<size_t>(0, nodess.size() - 1),
-			[this, &nodess, &mesh, paras](const tbb::blocked_range<size_t>& range) {
-			for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
-				this->GenTreeSupArea(line_idx, &nodess,mesh,paras);
-			}
-		}
-		);
+		parallelize<size_t>(
+			0,
+			nodess.size() - 1,
+			boost::bind(&TreeSupport::GenTreeSupArea, this, _1, &nodess, mesh, paras),
+			paras.thread > 1 ? paras.thread : 1
+			);
+
+		//tbb::parallel_for(
+		//	tbb::blocked_range<size_t>(0, nodess.size() - 1),
+		//	[this, &nodess, &mesh, paras](const tbb::blocked_range<size_t>& range) {
+		//	for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
+		//		this->GenTreeSupArea(line_idx, &nodess,mesh,paras);
+		//	}
+		//}
+		//);
 
 		progress->setValue(90);
 		GenSupportBeam(mesh);
@@ -417,7 +424,6 @@ namespace DLPSlicer {
 			}
 		}
 
-		//for (auto b = boles.begin(); b != boles.end(); ++b) {
 		for each (const TreeBole & b in boles)
 		{
 			if (b.num > 0)
@@ -426,7 +432,6 @@ namespace DLPSlicer {
 			//参数化
 			float len = 30;//存储匹配树干之间的长度
 			TreeBole b2;
-			//for (auto b3 = boles.begin(); b3 != boles.end(); ++b3) {
 			for each (const TreeBole & b3 in boles) {
 				float t_len = DisPoint2(Pointf(b.bole.a.x, b.bole.a.y), Pointf(b3.bole.a.x, b3.bole.a.y));
 				if (t_len < 30 && t_len < len && t_len != 0) {

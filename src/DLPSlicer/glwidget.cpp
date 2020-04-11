@@ -365,21 +365,26 @@ void GlWidget::DelModelBuffer(size_t id)//删除一个模型缓冲区
 {
 	for (auto m = modelBuffers.begin(); m != modelBuffers.end(); ++m) {
 		if ((*m)->id == id) {
-			delete *m;
+			delete* m;
 			modelBuffers.erase(m);
 			update();
-			return;
+			break;
 		}
+	}
+
+	for (auto m = modelBuffers.begin(); m != modelBuffers.end(); ++m) {
+		if ((*m)->id / InstanceNum == id / InstanceNum && (*m)->id > id)
+			(*m)->id = (*m)->id - 1;
 	}
 }
 
 void GlWidget::ClearModelBuffer()
 {
 	while (!modelBuffers.empty()) {
-		auto m = modelBuffers.begin();
-		delete *m;
-		modelBuffers.erase(m);
+		delete* (modelBuffers.begin());
+		modelBuffers.erase(modelBuffers.begin());
 	}
+	modelBuffers.swap(ModelBufferPtrs());
 
 	selectID = SelInvalidID;
 	m_selInstance = nullptr;
@@ -391,11 +396,11 @@ void GlWidget::ClearModelBuffer()
 
 void GlWidget::ClearSupportBuffer()
 {
-	while (!treeSupportBuffers.empty()){
-		auto s = treeSupportBuffers.begin();
-		delete *s;
-		treeSupportBuffers.erase(s);
+	while (!treeSupportBuffers.empty()) {
+		delete* (treeSupportBuffers.begin());
+		treeSupportBuffers.erase(treeSupportBuffers.begin());
 	}
+	treeSupportBuffers.swap(SupportBufferPtrs());
 	update();
 }
 
@@ -2242,7 +2247,7 @@ void GlWidget::slot_delSelectIntance()
 	if (m_selInstance == nullptr)
 		return;
 
-	DelSelectSupport();
+	DelSelectSupport(true);//删除模型时，删除支撑需重新排序
 	DelModelBuffer(selectID);
 	m_model->delete_modelInstance(selectID);
 	UpdateConfine();
@@ -2251,27 +2256,37 @@ void GlWidget::slot_delSelectIntance()
 	selectID = SelInvalidID;
 }
 
-bool GlWidget::DelSelectSupport()
+bool GlWidget::DelSelectSupport(bool resort)
 {
 	if (m_selInstance == nullptr)
 		return false;
-	return DelSupport(selectID);
+	return DelSupport(selectID, true);
 }
 
-bool GlWidget::DelSupport(size_t id)
+bool GlWidget::DelSupport(size_t id, bool resort)
 {
-	if (m_dlprint->DelTreeSupport(id)) {
+	bool ret = false;
+	if (m_dlprint->DelTreeSupport(id, resort)) {
 		//支撑数据删除成功同时删除支撑缓存区
 		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
 			if ((*sb)->id == id) {
 				delete* sb;
 				treeSupportBuffers.erase(sb);
-				update();
-				return true;
+				ret = true;
+				break;
+			}
+		}
+
+		if (resort) {
+			for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
+				if ((*sb)->id / InstanceNum == id / InstanceNum && (*sb)->id > id)
+					(*sb)->id = (*sb)->id - 1;
 			}
 		}
 	}
-	return false;
+	if (ret)
+		update();
+	return ret;
 }
 
 void GlWidget::GenSelInstanceSupport(QProgressBar* progress)

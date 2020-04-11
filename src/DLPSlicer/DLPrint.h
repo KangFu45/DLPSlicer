@@ -18,6 +18,8 @@
 
 namespace DLPSlicer {
 
+	typedef std::vector<TreeSupport*> TreeSupportPtrs;
+
 	class DLPrint
 	{
 	public:
@@ -46,7 +48,7 @@ namespace DLPSlicer {
 		std::map <size_t, linef3s*> inside_supports;		//每个模型对象各自的内部支撑
 
 		Model* model;										//模型
-		std::map<int, TreeSupport*> treeSupports;
+		TreeSupportPtrs treeSupports;
 
 		//四个方向支撑枚举
 		enum xyz
@@ -65,7 +67,7 @@ namespace DLPSlicer {
 		void GenInsideSupport(size_t id, TriangleMesh* mesh);
 		void InsertSupport(size_t id, TreeSupport* s);
 		TreeSupport* GetTreeSupport(size_t id);
-		bool DelTreeSupport(size_t id);
+		bool DelTreeSupport(size_t id, bool resort = false);
 		bool TreeSupportsEmpty() { return treeSupports.empty(); };
 		TreeSupport* GenSupport(size_t id, TriangleMesh* mesh, QProgressBar* progress);
 

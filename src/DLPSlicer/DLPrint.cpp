@@ -28,7 +28,7 @@ namespace DLPSlicer {
 	DLPrint::~DLPrint()
 	{
 		while (!treeSupports.empty()) {
-			delete treeSupports.begin()->second;
+			delete *(treeSupports.begin());
 			treeSupports.erase(treeSupports.begin());
 		}
 
@@ -464,16 +464,26 @@ namespace DLPSlicer {
 	}
 
 	//更新键值只对删除模型时有效
-	bool DLPrint::DelTreeSupport(size_t id)
+	bool DLPrint::DelTreeSupport(size_t id,bool resort)
 	{
-		auto s = treeSupports.find(id);
-		if (s != treeSupports.end()) {
-			delete (*s).second;
-			treeSupports.erase(s);
-			return true;
+		bool ret = false;
+		for (auto ts = treeSupports.begin(); ts != treeSupports.end(); ++ts) {
+			if ((*ts)->id == id) {
+				delete* ts;
+				treeSupports.erase(ts);
+				ret = true;
+				break;
+			}
 		}
 
-		return false;
+		if (resort) {
+			for (auto ts = treeSupports.begin(); ts != treeSupports.end(); ++ts) {
+				if ((*ts)->id / InstanceNum == id / InstanceNum && (*ts)->id > id)
+					(*ts)->id = (*ts)->id - 1;
+			}
+		}
+
+		return ret;
 	}
 
 	void DLPrint::SaveSlice()
@@ -911,16 +921,17 @@ namespace DLPSlicer {
 	void DLPrint::InsertSupport(size_t id, TreeSupport* s)
 	{
 		DelTreeSupport(id);
-		treeSupports.insert(std::make_pair(id, s));
+		s->id = id;
+		treeSupports.emplace_back(s);
 	}
 
 	//传出指针的引用
 	TreeSupport* DLPrint::GetTreeSupport(size_t id)
 	{
-		auto s1 = treeSupports.find(id);
-		if (s1 != treeSupports.end())
-			return (*s1).second;
-
+		for (auto ts = treeSupports.begin(); ts != treeSupports.end(); ++ts) {
+			if ((*ts)->id == id)
+				return *ts;
+		}
 		return nullptr;
 	}
 
@@ -935,10 +946,10 @@ namespace DLPSlicer {
 	void DLPrint::DelAllSupport()
 	{
 		while (!treeSupports.empty()) {
-			auto s = treeSupports.begin();
-			delete (*s).second;
+			delete* (treeSupports.begin());
+			treeSupports.erase(treeSupports.begin());
 		}
-		treeSupports.swap(std::map<int, TreeSupport*>());
+		treeSupports.swap(TreeSupportPtrs());
 	}
 
 }
