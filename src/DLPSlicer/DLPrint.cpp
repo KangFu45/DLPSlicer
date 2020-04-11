@@ -7,10 +7,15 @@
 #include <qtextstream.h>
 #include <qimage.h>
 #include <qbuffer.h>
-#include <qdebug.h>
+
+#include <tbb/parallel_for.h>
 
 #include "Setting.h"
 extern Setting e_setting;
+
+#ifdef DLPSlicer_DEBUG
+#include "qdebug.h"
+#endif
 
 namespace DLPSlicer {
 
@@ -55,7 +60,7 @@ namespace DLPSlicer {
 		const float lh = this->m_config->layer_height;
 		Layers ls;
 		ls.emplace_back(Layer(lh / 2, lh));
-		while (ls.back().print_z + lh / 2 <= box.max.z)
+		while (ls.back().print_z + (double)lh / 2 <= box.max.z)
 			ls.emplace_back(Layer(ls.back().print_z + lh / 2, ls.back().print_z + lh));
 
 		this->layerss.swap(std::vector<Layers>());
@@ -139,12 +144,16 @@ namespace DLPSlicer {
 								box.merge(Point::new_scale((*i)->box.max.x, (*i)->box.max.y));
 								pattern.emplace_back(GenHoneycombPattern(box, wall, space));
 							}
-							parallelize<size_t>(
-								0,
-								this->t_layers.size() - 1,
-								boost::bind(&DLPrint::InfillLayer, this, _1, pattern),
-								m_config->threads
-								);
+							
+							tbb::parallel_for(
+								tbb::blocked_range<size_t>(0, t_layers.size() - 1),
+								[this, pattern](const tbb::blocked_range<size_t>& range) {
+								for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
+									this->InfillLayer(line_idx, pattern);
+								}
+							}
+							);
+
 						}
 					}
 					layerss.emplace_back(t_layers);
@@ -402,7 +411,7 @@ namespace DLPSlicer {
 			for (int j = 0; j < y; ++j) {
 				hole = _hole;
 				hole.scale(space);
-				hole.translate(scale_(_box.min.x + i * space + space / 2), scale_(_box.min.y + j * space + space / 2));
+				hole.translate(scale_(_box.min.x + (INT64)i * space + space / 2), scale_(_box.min.y + j * space + space / 2));
 				pattern.holes.push_back(hole);
 			}
 		}
@@ -443,9 +452,13 @@ namespace DLPSlicer {
 
 		TreeSupport* s = new TreeSupport;
 		s->support_point = mesh->feature_point(progress);
-		qDebug() << "support point: " << s->support_point.size();
 		s->support_point_face = mesh->feature_point_face(m_config->space, progress);
+
+#ifdef DLPSlicer_DEBUG
+		qDebug() << "support point: " << s->support_point.size();
 		qDebug() << "support point face: " << s->support_point_face.size();
+#endif
+
 		s->GenTreeSupport(*mesh, TreeSupport::Paras{ m_config->leaf_num ,m_config->threads ,m_config->support_top_height }, progress);
 		return s;
 	}
@@ -482,19 +495,12 @@ namespace DLPSlicer {
 			stream << "number of slices = " << layer_qt_path.size() << "\n";
 			stream << "length = " << box.max.x - box.min.x << "\n";
 			stream << "width = " << box.max.y - box.min.y << "\n";
-			stream << "height = " << box.max.z + m_config->layer_height * m_config->raft_layers << "\n";
+			stream << "height = " << box.max.z + (double)m_config->layer_height * m_config->raft_layers << "\n";
 			double vol = 0;
 			for (int i = 0; i < layer_qt_path.size() + m_config->raft_layers; ++i)
 				vol += m_areas[i] * m_config->layer_height;
 		
 			stream << "model volume = " << vol / 1000 << "\n";
-
-			parallelize<size_t>(
-				0,
-				layer_qt_path.size() - 1,
-				boost::bind(&DLPrint::SaveOneSlice, this, _1, e_setting.ZipTempPath.c_str()),
-				m_config->threads
-				);
 		
 			float aaa = 0;
 			for (int j = 0; j < layer_qt_path.size() + m_config->raft_layers; ++j) {
@@ -513,23 +519,38 @@ namespace DLPSlicer {
 			}
 		}
 		file.close();
+
+		tbb::parallel_for(
+			tbb::blocked_range<size_t>(0, layer_qt_path.size()),
+			[this](const tbb::blocked_range<size_t>& range) {
+			for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
+				this->SaveOneSlice(line_idx, e_setting.ZipTempPath.c_str());
+			}
+		}
+		);
 	}
 
 	void DLPrint::SavePng(const BoundingBoxf3& box, size_t layerNum)
 	{
-		layer_qt_path.swap(map<size_t, QPainterPath >());
+		if (!layer_qt_path.empty()) {
+			for (auto l = layer_qt_path.begin(); l != layer_qt_path.end(); ++l)
+				delete l->second;
+			layer_qt_path.swap(map<size_t, QPainterPath* >());
+		}
 
 		if (this->m_areas != nullptr)
 			delete this->m_areas;
 
 		this->m_areas = new double[layerNum + m_config->raft_layers];
 
-		parallelize<size_t>(
-			0,
-			layerNum + m_config->raft_layers - 1,
-			boost::bind(&DLPrint::SaveOnePng, this, _1),
-			m_config->threads
-			);
+		tbb::parallel_for(
+			tbb::blocked_range<size_t>(0, layerNum + m_config->raft_layers - 1),
+			[this](const tbb::blocked_range<size_t>& range) {
+			for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
+				this->SaveOnePng(line_idx);
+			}
+		}
+		);
 	}
 
 	inline QPolygonF poly2Qpoly(const Polygon& p)//将Polygon装换为QPolygonF
@@ -552,9 +573,9 @@ namespace DLPSlicer {
 		painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 		painter.setBrush(QBrush(QColor(255, 255, 255)));
 		painter.setPen(QPen(Qt::Dense7Pattern, 1));
-		
-		painter.drawPath(layer_qt_path.find(num)->second);
-		
+
+		painter.drawPath(*(layer_qt_path.find(num)->second));
+
 		QFile file(path + QObject::tr("/slice%1.png").arg(num));
 		if (!file.open(QIODevice::ReadWrite))
 			return;
@@ -567,15 +588,15 @@ namespace DLPSlicer {
 
 	void DLPrint::SaveOnePng(size_t num)
 	{
-		QPainterPath painterPath;
-		painterPath.setFillRule(Qt::WindingFill);
+		QPainterPath* painterPath =new QPainterPath;
+		painterPath->setFillRule(Qt::WindingFill);
 
 		//画底板
 		if (m_config->raft_layers > num) {
 			for (ExPolygons::iterator exps = r_layers[num].slices.expolygons.begin(); exps != r_layers[num].slices.expolygons.end(); ++exps) {
-				painterPath.addPolygon(poly2Qpoly((*exps).contour));
+				painterPath->addPolygon(poly2Qpoly((*exps).contour));
 				for (Polygons::iterator ps = (*exps).holes.begin(); ps != (*exps).holes.end(); ++ps)
-					painterPath.addPolygon(poly2Qpoly(*ps));
+					painterPath->addPolygon(poly2Qpoly(*ps));
 			}
 		}
 		else {
@@ -604,12 +625,12 @@ namespace DLPSlicer {
 			for (Polygons::iterator ps = poly.begin(); ps != poly.end(); ++ps) {
 				//求面积
 				area += (*ps).area() * SCALING_FACTOR * SCALING_FACTOR;
-				painterPath.addPolygon(poly2Qpoly(*ps));
+				painterPath->addPolygon(poly2Qpoly(*ps));
 			}
 			this->m_areas[num] = area;
 		}
 
-		layer_qt_path.insert(std::pair<size_t, QPainterPath>(num, painterPath));
+		layer_qt_path.insert(std::pair<size_t, QPainterPath*>(num, painterPath));
 	}
 
 	void DLPrint::RadiatePoint(const BoundingBoxf3& bb, Pointf3s& ps, float space, int xyz)

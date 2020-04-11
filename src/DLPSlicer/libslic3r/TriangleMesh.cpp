@@ -16,10 +16,10 @@
 #include <stdexcept>
 #include <boost/config.hpp>
 #include <boost/nowide/convert.hpp>
-#include "qdebug.h"
 
 #ifdef DLPSlicer_DEBUG
 #include "SVG.hpp"
+#include "qdebug.h"
 #endif
 
 namespace DLPSlicer {

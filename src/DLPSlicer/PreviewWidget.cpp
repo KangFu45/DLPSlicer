@@ -1,5 +1,4 @@
 #include "PreviewWidget.h"
-
 #include "mainwindow.h"
 
 #include <qpainter.h>
@@ -122,7 +121,7 @@ void PreviewWidget::paintEvent(QPaintEvent* event)
 		}
 		
 		painter.scale(m_scale, m_scale);
-		painter.drawPath(p->second);
+		painter.drawPath(*(p->second));
 	}
 
 }

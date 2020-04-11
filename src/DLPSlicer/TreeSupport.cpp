@@ -1,5 +1,7 @@
 #include "TreeSupport.h"
 
+#include <tbb/parallel_for.h>
+
 namespace DLPSlicer {
 
 	TreeSupport::TreeSupport(const TreeSupport* ts) {
@@ -145,12 +147,14 @@ namespace DLPSlicer {
 
 		progress->setValue(75);
 
-		parallelize<size_t>(
-			0,
-			nodess.size() - 1,
-			boost::bind(&TreeSupport::GenTreeSupArea, this, _1, &nodess, mesh, paras),
-			paras.thread > 1 ? paras.thread : 1
-			);
+		tbb::parallel_for(
+			tbb::blocked_range<size_t>(0, nodess.size() - 1),
+			[this, &nodess, &mesh, paras](const tbb::blocked_range<size_t>& range) {
+			for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
+				this->GenTreeSupArea(line_idx, &nodess,mesh,paras);
+			}
+		}
+		);
 
 		progress->setValue(90);
 		GenSupportBeam(mesh);

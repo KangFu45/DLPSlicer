@@ -248,7 +248,7 @@ inline Pointf InterpolationPoint(const Pointf& a,const Pointf& b, float dis)
 {
 	float v[3] = { b.x - a.x, b.y - a.y,0 };
 	stl_normalize_vector(v);
-	return Pointf(a.x + dis * v[0], a.y + dis * v[1]);
+	return Pointf(a.x + (double)dis * v[0], a.y + (double)dis * v[1]);
 }
 //******************************************************************************88
 

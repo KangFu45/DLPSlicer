@@ -59,7 +59,7 @@ namespace DLPSlicer {
 
 	public:
 		Config* m_config;
-		std::map<size_t, QPainterPath> layer_qt_path;			//使用qt绘制图形的方式存储路径
+		std::map<size_t, QPainterPath*> layer_qt_path;			//使用qt绘制图形的方式存储路径
 
 		void Slice(const TriangleMeshs& supMeshs, QProgressBar* progress);
 		void GenInsideSupport(size_t id, TriangleMesh* mesh);

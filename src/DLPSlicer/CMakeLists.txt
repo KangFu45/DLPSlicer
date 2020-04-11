@@ -5,6 +5,9 @@ FILE(GLOB HEAD_FILES "./*.h")
 FILE(GLOB DLPSlicerLib_SRC_FILES "libslic3r/*.cpp")
 FILE(GLOB DLPSlicerLib_HEAD_FILES "libslic3r/*.h" "libslic3r/*.hpp")
 
+set(TBB_INC_DIR ${PROJECT_SOURCE_DIR}/lib-64/include)
+set(TBB_LINK_DIR ${PROJECT_SOURCE_DIR}/lib-64/lib/tbb)
+
 #设置输出路径
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_CURRENT_BINARY_DIR}/../release)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_CURRENT_BINARY_DIR}/../debug) 
@@ -43,6 +46,8 @@ target_link_libraries(DLPSlicer glu32.lib opengl32.lib)
 #链接第三方库
 target_link_libraries(DLPSlicer optimized quazip.lib)
 target_link_libraries(DLPSlicer debug quazipd.lib)
+target_link_libraries(DLPSlicer optimized  ${TBB_LINK_DIR}/tbb.lib)
+target_link_libraries(DLPSlicer debug ${TBB_LINK_DIR}/tbb_debug.lib)
 
 # 在CMake中使用Qt最快捷的方式，一句代码搞定
 qt5_use_modules(DLPSlicer ${QT})

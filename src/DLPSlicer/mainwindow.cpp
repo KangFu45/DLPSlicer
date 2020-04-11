@@ -2,7 +2,6 @@
 
 #include <qmenubar.h>
 #include <qevent.h>
-#include <qdebug.h>
 #include <qregion.h>
 #include <qsettings.h>
 #include <qplaintextedit.h>
@@ -19,8 +18,11 @@
 
 //ERROR:setting.h放在.cpp文件夹下会报错???
 #include "Setting.h"
-
 extern Setting e_setting;
+
+#ifdef DLPSlicer_DEBUG
+#include "qdebug.h"
+#endif
 
 inline bool clearDir(QString path)
 {
@@ -533,7 +535,7 @@ void MainWindow::slot_generateAllSupport()
 		for (ModelInstancePtrs::const_iterator i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 			size_t id = m_model->find_id(*i);
 
-			m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("支撑"));
+			m_progressWidget->ShowProgress(this->rect(), QStringLiteral("支撑"));
 			m_progressWidget->P(10);
 
 			m_glwidget->DelSupport(id);//不提升
@@ -566,7 +568,6 @@ void MainWindow::slot_supportEdit()
 	}
 	else {
 		//-----------退出支撑编辑模式，更新支撑点------------
-		//m_centerTopWidget->ShowProgress(CenterTopWidget::SUPPORTEDITBTN);
 		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("更新支撑"));
 		m_glwidget->SupportEditChange(m_progressWidget->m_progressBar);
 		m_progressWidget->hide();
@@ -794,7 +795,7 @@ void MainWindow::GenAllInsideSupport()
 			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
 				TriangleMesh mesh((*o)->volumes[0]->mesh);
 				(*i)->transform_mesh(&mesh);
-				m_dlprint->GenInsideSupport(std::distance(m_model->objects.begin(), o) * InstanceNum + std::distance((*o)->instances.begin(), i), &mesh);
+				m_dlprint->GenInsideSupport(m_model->find_id(*i), &mesh);
 			}
 		}
 		this->SetDLPrintDirty();

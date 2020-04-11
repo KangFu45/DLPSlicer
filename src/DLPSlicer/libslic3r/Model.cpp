@@ -6,8 +6,11 @@
 #include <set>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
-#include <qdebug.h>
 #include <qmatrix4x4.h>
+
+#ifdef DLPSlicer_DEBUG
+#include "qdebug.h"
+#endif
 
 namespace DLPSlicer {
 

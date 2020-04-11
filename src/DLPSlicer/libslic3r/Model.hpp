@@ -30,8 +30,8 @@ typedef std::vector<ModelInstance*> ModelInstancePtrs;
 
 inline void model_center(TriangleMesh& mesh)
 {
-	Pointf _origin((mesh.stl.stats.max.x - mesh.stl.stats.min.x) / 2 + mesh.stl.stats.min.x,
-		(mesh.stl.stats.max.y - mesh.stl.stats.min.y) / 2 + mesh.stl.stats.min.y);
+	Pointf _origin((double)(mesh.stl.stats.max.x - mesh.stl.stats.min.x) / 2 + mesh.stl.stats.min.x,
+		(double)(mesh.stl.stats.max.y - mesh.stl.stats.min.y) / 2 + mesh.stl.stats.min.y);
 
 	mesh.translate(-_origin.x, -_origin.y, -mesh.stl.stats.min.z);
 }

@@ -3,6 +3,7 @@
 #include <qpushbutton.h>
 #include <qgridlayout.h>
 #include <qcoreapplication.h>
+#include <qprogressbar.h>
 
 //对自定义对话框进行裁剪的多边形的点
 static QVector<QPoint> progressRect = { QPoint(3,0)
@@ -86,7 +87,8 @@ public:
 	}
 
 	void ShowProgress(QRect rect, QString text) {
-		this->move(rect.center().x() / 2 + 150, rect.center().y() / 2 + 50);
+		this->move(rect.center().x() / 2 + this->width() / 2
+			, rect.center().y() / 2 + this->height() / 2);
 		this->m_progressLabel->setText(text);
 		this->show();
 		m_progressBar->reset();
