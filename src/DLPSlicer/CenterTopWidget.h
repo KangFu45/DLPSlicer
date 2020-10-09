@@ -130,7 +130,6 @@ public:
 	ScaleWidget* m_scaleWidget;
 	ViewWidget* m_viewWidget;
 
-
 	void setXOffsetVal(double val) { this->m_offsetWidget->x_offset_spin->setValue(val); };
 	void setYOffsetVal(double val) { this->m_offsetWidget->y_offset_spin->setValue(val); };
 	void setZOffsetVal(double val) { this->m_offsetWidget->z_offset_spin->setValue(val); };

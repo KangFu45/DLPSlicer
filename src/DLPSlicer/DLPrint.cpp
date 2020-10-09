@@ -28,7 +28,7 @@ namespace DLPSlicer {
 	DLPrint::~DLPrint()
 	{
 		while (!treeSupports.empty()) {
-			delete *(treeSupports.begin());
+			delete treeSupports.begin()->second;
 			treeSupports.erase(treeSupports.begin());
 		}
 
@@ -38,24 +38,7 @@ namespace DLPSlicer {
 
 	void DLPrint::Slice(const TriangleMeshs& supMeshs, QProgressBar* progress)
 	{
-		BoundingBoxf3 box;
-		bool ret = true;
-		int count = 0;//实例计数
-		for (auto o = model->objects.begin(); o != model->objects.end(); ++o) {
-			for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
-				++count;
-				TriangleMesh mesh = (*o)->volumes[0]->mesh;
-				(*i)->transform_mesh(&mesh);
-				if (ret) {
-					box = mesh.bounding_box();
-					ret = false;
-				}
-				else {
-					box.defined = true;
-					box.merge(mesh.bounding_box());
-				}
-			}
-		}
+		BoundingBoxf3 box = model->bounding_box();
 
 		const float lh = this->m_config->layer_height;
 		Layers ls;
@@ -91,7 +74,7 @@ namespace DLPSlicer {
 
 					//切片进度条范围21->98
 					if (progress != nullptr) {
-						int unit = (aaa + 1) / (count / (98 - 21) + 1);
+						int unit = (aaa + 1) / (model->instances_num() / (98 - 21) + 1);
 						if (progress->value() < 21 + unit)
 							progress->setValue(21 + unit);
 					}
@@ -153,7 +136,6 @@ namespace DLPSlicer {
 								}
 							}
 							);
-
 						}
 					}
 					layerss.emplace_back(t_layers);
@@ -464,26 +446,16 @@ namespace DLPSlicer {
 	}
 
 	//更新键值只对删除模型时有效
-	bool DLPrint::DelTreeSupport(size_t id,bool resort)
+	bool DLPrint::DelTreeSupport(size_t id)
 	{
-		bool ret = false;
-		for (auto ts = treeSupports.begin(); ts != treeSupports.end(); ++ts) {
-			if ((*ts)->id == id) {
-				delete* ts;
-				treeSupports.erase(ts);
-				ret = true;
-				break;
-			}
+		auto s = treeSupports.find(id);
+		if (s != treeSupports.end()) {
+			delete (*s).second;
+			treeSupports.erase(s);
+			return true;
 		}
 
-		if (resort) {
-			for (auto ts = treeSupports.begin(); ts != treeSupports.end(); ++ts) {
-				if ((*ts)->id / InstanceNum == id / InstanceNum && (*ts)->id > id)
-					(*ts)->id = (*ts)->id - 1;
-			}
-		}
-
-		return ret;
+		return false;
 	}
 
 	void DLPrint::SaveSlice()
@@ -506,26 +478,28 @@ namespace DLPSlicer {
 			stream << "length = " << box.max.x - box.min.x << "\n";
 			stream << "width = " << box.max.y - box.min.y << "\n";
 			stream << "height = " << box.max.z + (double)m_config->layer_height * m_config->raft_layers << "\n";
-			double vol = 0;
-			for (int i = 0; i < layer_qt_path.size() + m_config->raft_layers; ++i)
+			float vol = 0;
+			float laft_area = (box.max.x - box.min.x + m_config->raft_offset * 2) * (box.max.y - box.min.y + m_config->raft_offset * 2);
+			for (int i = m_config->raft_layers; i < layer_qt_path.size(); ++i) {
 				vol += m_areas[i] * m_config->layer_height;
-		
-			stream << "model volume = " << vol / 1000 << "\n";
-		
+			}
+			vol += laft_area * m_config->raft_layers;
+			stream << "model volume = " << vol / 1000.0 << "\n";
+			
 			float aaa = 0;
-			for (int j = 0; j < layer_qt_path.size() + m_config->raft_layers; ++j) {
-				if (j < m_config->raft_layers)
-					aaa = (box.max.x - box.min.x) * (box.max.y - box.min.y);
-				else
+			for (int j = 0; j < layer_qt_path.size(); ++j) {
+				if (j >= m_config->raft_layers)
 					aaa = m_areas[j];
-				if (j < m_config->overLayer) {
+				else
+					aaa = laft_area;
+				//if (j < m_config->overLayer) {
 					//长曝光层
 					stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
-				}
-				else {
-					//正常曝光层
-					stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
-				}
+				//}
+				//else {
+				//	//正常曝光层
+				//	stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
+				//}
 			}
 		}
 		file.close();
@@ -921,17 +895,16 @@ namespace DLPSlicer {
 	void DLPrint::InsertSupport(size_t id, TreeSupport* s)
 	{
 		DelTreeSupport(id);
-		s->id = id;
-		treeSupports.emplace_back(s);
+		treeSupports.insert(std::make_pair(id, s));
 	}
 
 	//传出指针的引用
 	TreeSupport* DLPrint::GetTreeSupport(size_t id)
 	{
-		for (auto ts = treeSupports.begin(); ts != treeSupports.end(); ++ts) {
-			if ((*ts)->id == id)
-				return *ts;
-		}
+		auto s1 = treeSupports.find(id);
+		if (s1 != treeSupports.end())
+			return (*s1).second;
+
 		return nullptr;
 	}
 
@@ -946,10 +919,10 @@ namespace DLPSlicer {
 	void DLPrint::DelAllSupport()
 	{
 		while (!treeSupports.empty()) {
-			delete* (treeSupports.begin());
-			treeSupports.erase(treeSupports.begin());
+			auto s = treeSupports.begin();
+			delete (*s).second;
 		}
-		treeSupports.swap(TreeSupportPtrs());
+		treeSupports.swap(std::map<int, TreeSupport*>());
 	}
 
 }

@@ -83,13 +83,6 @@ public slots:
 	void slot_showRotateWidget();
 	void slot_showScaleWidget();
 
-private	slots:
-	void slot_ZPosZero();
-	void slot_setPersperctive() { m_glwidget->SetViewPort(m_glwidget->PRESPRECTIVE); };
-	void slot_setOrthogonality() { m_glwidget->SetViewPort(m_glwidget->ORTHOGONALITY); };
-	void slot_openStl();
-	void slot_exit() { exit(0); };
-
 	//功能：多个视图方向。
 	void slot_defaultView() { m_glwidget->ChangeView(m_glwidget->DEFAULT); };
 	void slot_overlookView() { m_glwidget->ChangeView(m_glwidget->OVERLOOK); };
@@ -97,6 +90,13 @@ private	slots:
 	void slot_rightView() { m_glwidget->ChangeView(m_glwidget->RIGHT); };
 	void slot_frontView() { m_glwidget->ChangeView(m_glwidget->FRONT); };
 	void slot_behindView() { m_glwidget->ChangeView(m_glwidget->BEHIND); };
+
+private	slots:
+	void slot_ZPosZero();
+	void slot_setPersperctive() { m_glwidget->SetViewPort(m_glwidget->PRESPRECTIVE); };
+	void slot_setOrthogonality() { m_glwidget->SetViewPort(m_glwidget->ORTHOGONALITY); };
+	void slot_openStl();
+	void slot_exit() { exit(0); };
 
 	void slot_newJob();
 	void slot_delSelSupport();

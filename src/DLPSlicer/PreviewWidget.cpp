@@ -90,6 +90,11 @@ void PreviewTopWidget::ShowWidget()
 PreviewWidget::PreviewWidget(DLPrint* print)
 	:m_pdlprint(print)
 {
+	//…Ë÷√ª≠≤º—’…´
+	//QPalette palette;
+	//palette.setColor(QPalette::Background, Qt::black);
+	//this->setAutoFillBackground(true);
+	//this->setPalette(palette);
 }
 
 PreviewWidget::~PreviewWidget()
@@ -106,17 +111,17 @@ void PreviewWidget::paintEvent(QPaintEvent* event)
 	if (m_dirty) {
 		painter.setPen(Qt::black);
 		painter.setFont(QFont("Arial", 30));
-		painter.drawText(rect(), Qt::AlignCenter, "helloQt");
+		painter.drawText(rect(), Qt::AlignCenter, QStringLiteral("‘§¿¿"));
 	}
 	else {
 		painter.setRenderHint(QPainter::Antialiasing, true);
 		painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-		painter.setBrush(QBrush(QColor(50, 50, 50)));
+		painter.setBrush(QBrush(Qt::black));
 		painter.setPen(QPen(Qt::Dense7Pattern, 1));
 
 		auto p = m_pdlprint->layer_qt_path.find(m_cur_layer);
 		if (p == m_pdlprint->layer_qt_path.end()) {
-			painter.drawText(rect(), Qt::AlignCenter, "helloQt");
+			painter.drawText(rect(), Qt::AlignCenter, QStringLiteral("‘§¿¿"));
 			return;
 		}
 		

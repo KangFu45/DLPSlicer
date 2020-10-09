@@ -196,11 +196,36 @@ Model::add_default_instances()
 BoundingBoxf3
 Model::bounding_box() const
 {
+    //TODO:对原始包围盒进行转换
+    //for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+    //    bb.merge((*o)->bounding_box());
+    //}
     BoundingBoxf3 bb;
-    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
-        bb.merge((*o)->bounding_box());
+    bool ret = true;
+    for (auto o = objects.begin(); o != objects.end(); ++o) {
+        for (auto i = (*o)->instances.begin(); i != (*o)->instances.end(); ++i) {
+            TriangleMesh mesh = (*o)->volumes[0]->mesh;
+            (*i)->transform_mesh(&mesh);
+            if (ret) {
+                bb = mesh.bounding_box();
+                ret = false;
+            }
+            else {
+                bb.defined = true;
+                bb.merge(mesh.bounding_box());
+            }
+        }
     }
     return bb;
+}
+
+int Model::instances_num()
+{
+    int num = 0;
+    for (ModelObjectPtrs::const_iterator o = this->objects.begin(); o != this->objects.end(); ++o) {
+        num += (*o)->instances.size();
+    }
+    return num;
 }
 
 void
@@ -822,7 +847,8 @@ ModelObject::clear_instances()
 BoundingBoxf3
 ModelObject::bounding_box()
 {
-    if (!this->_bounding_box_valid) this->update_bounding_box();
+    //if (!this->_bounding_box_valid) 
+    this->update_bounding_box();
     return this->_bounding_box;
 }
 
@@ -1358,6 +1384,8 @@ ModelInstance::transform_mesh(TriangleMesh* mesh, bool dont_translate) const
 
 BoundingBoxf3 ModelInstance::transform_mesh_bounding_box(TriangleMesh* _mesh, bool dont_translate, bool old) const
 {
+    //TODO:通过模型转换与包围盒转换的方式得到转换后的包围盒均通过矩阵计算，可写成一个函数
+
     BoundingBoxf3 bbox;
     if (old) {
         // rotate around mesh origin
@@ -1435,47 +1463,81 @@ BoundingBoxf3 ModelInstance::transform_mesh_bounding_box(TriangleMesh* _mesh, bo
 
 BoundingBoxf3 ModelInstance::transform_bounding_box(const BoundingBoxf3 &bbox, bool dont_translate) const
 {
-    // rotate around mesh origin
-   // double c = cos(this->rotation);
-   // double s = sin(this->rotation);
-   // double cx = cos(this->x_rotation);
-   // double sx = sin(this->x_rotation);
-   // double cy = cos(this->y_rotation);
-   // double sy = sin(this->y_rotation);
-   // Pointf3 pts[4] = {
-   //     bbox.min,
-   //     bbox.max,
-   //     Pointf3(bbox.min.x, bbox.max.y, bbox.min.z),
-   //     Pointf3(bbox.max.x, bbox.min.y, bbox.max.z)
-   // };
+    QMatrix4x4 translateM, scaleM;
+    translateM.setToIdentity();
+    scaleM.setToIdentity();
+
+    scaleM.scale(scaling_vector.x, scaling_vector.y, scaling_vector.z);
+
+    QVector4D vs[2] = {QVector4D(bbox.min.x, bbox.min.y, bbox.min.z, 1),
+                        QVector4D(bbox.max.x, bbox.max.y, bbox.max.z, 1)};
+
+    for (int j = 0; j < 2; ++j) {
+
+        vs[j] = this->rotation_M * vs[j];
+        vs[j] = scaleM * vs[j];
+        if (!dont_translate) {
+            QVector4D v2(origin.x, origin.y, origin.z, 1);
+            QVector4D v3 = this->rotation_M * v2;
+
+            translateM.translate(offset.x, offset.y, z_translation);
+            //在模型中心旋转
+            translateM.translate(v2.x() - v3.x(), v2.y() - v3.y(), v2.z() - v3.z());
+
+            vs[j] = translateM * vs[j];
+        }
+    }
+     
     BoundingBoxf3 out;
-   // for (int i = 0; i < 4; ++ i) {
-   //     Pointf3 &v = pts[i];
-   //     double xold = v.x;
-   //     double yold = v.y;
-   //     double zold = v.z;
-   //     // Rotation around x axis.
-   //     v.z = float(sx * yold + cx * zold);
-   //     yold = v.y = float(cx * yold - sx * zold);
-   //     zold = v.z;
-   //     // Rotation around y axis.
-   //     v.x = float(cy * xold + sy * zold);
-   //     v.z = float(-sy * xold + cy * zold);
-   //     xold = v.x;
-   //     // Rotation around z axis.
-   //     v.x = float(c * xold - s * yold);
-   //     v.y = float(s * xold + c * yold);
-   //     v.x *= this->scaling_factor * this->scaling_vector.x;
-   //     v.y *= this->scaling_factor * this->scaling_vector.y;
-   //     v.z *= this->scaling_factor * this->scaling_vector.z;
-   //     if (!dont_translate) {
-   //         v.x += this->offset.x;
-   //         v.y += this->offset.y;
-	//		v.z += this->z_translation;
-   //     }
-   //     out.merge(v);
-   // }
+    out.min.x = vs[0].x();
+    out.min.y = vs[0].y();
+    out.min.z = vs[0].z();
+    out.max.x = vs[1].x();
+    out.max.y = vs[1].y();
+    out.max.z = vs[1].z();
     return out;
+
+    // rotate around mesh origin
+    //double c = cos(this->rotation);
+    //double s = sin(this->rotation);
+    //double cx = cos(this->x_rotation);
+    //double sx = sin(this->x_rotation);
+    //double cy = cos(this->y_rotation);
+    //double sy = sin(this->y_rotation);
+    //Pointf3 pts[4] = {
+    //    bbox.min,
+    //    bbox.max,
+    //    Pointf3(bbox.min.x, bbox.max.y, bbox.min.z),
+    //    Pointf3(bbox.max.x, bbox.min.y, bbox.max.z)
+    //};
+    //BoundingBoxf3 out;
+    //for (int i = 0; i < 4; ++ i) {
+    //    Pointf3 &v = pts[i];
+    //    double xold = v.x;
+    //    double yold = v.y;
+    //    double zold = v.z;
+    //    // Rotation around x axis.
+    //    v.z = float(sx * yold + cx * zold);
+    //    yold = v.y = float(cx * yold - sx * zold);
+    //    zold = v.z;
+    //    // Rotation around y axis.
+    //    v.x = float(cy * xold + sy * zold);
+    //    v.z = float(-sy * xold + cy * zold);
+    //    xold = v.x;
+    //    // Rotation around z axis.
+    //    v.x = float(c * xold - s * yold);
+    //    v.y = float(s * xold + c * yold);
+    //    v.x *= this->scaling_factor * this->scaling_vector.x;
+    //    v.y *= this->scaling_factor * this->scaling_vector.y;
+    //    v.z *= this->scaling_factor * this->scaling_vector.z;
+    //    if (!dont_translate) {
+    //        v.x += this->offset.x;
+    //        v.y += this->offset.y;
+	//		v.z += this->z_translation;
+    //    }
+    //    out.merge(v);
+    //}
+    //return out;
 }
 
 void

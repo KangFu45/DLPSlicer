@@ -43,7 +43,6 @@ namespace DLPSlicer {
 		TreeSupport(const TreeSupport* ts);
 		~TreeSupport() {};
 
-		int id;
 		stl_vertexs support_point;		//待支撑悬吊点集
 		stl_vertexs support_point_face;	//悬吊面上的待支撑点集
 		linef3s tree_support_branch;	//树枝

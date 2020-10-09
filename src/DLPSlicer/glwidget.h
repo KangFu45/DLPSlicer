@@ -223,8 +223,8 @@ public:
 	void ScaleValueChange(double x, double y, double z, bool back = false);
 	void RotateValueChange(double angle, int x, int y, int z, bool back = false);
 
-	bool DelSelectSupport(bool resort = false);
-	bool DelSupport(size_t id, bool resort = false);
+	bool DelSelectSupport();
+	bool DelSupport(size_t id);
 	void GenSelInstanceSupport(QProgressBar* progress);
 	void GenInstanceSupport(size_t id, QProgressBar* progress);
 	void SupportEditChange(QProgressBar* progress = nullptr);

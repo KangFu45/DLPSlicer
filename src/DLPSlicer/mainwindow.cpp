@@ -48,13 +48,14 @@ MainWindow::MainWindow(QWidget* parent)
 {
 	InitDlprinter();
 
-	{
-		QFile qssfile(":/icon/base.qss");
-		qssfile.open(QFile::ReadOnly);
-		QString qss;
-		qss = qssfile.readAll();
-		this->setStyleSheet(qss);
-	}
+	////读取qss配置文件
+	//{
+	//	QFile qssfile(":/icon/base.qss");
+	//	qssfile.open(QFile::ReadOnly);
+	//	QString qss;
+	//	qss = qssfile.readAll();
+	//	this->setStyleSheet(qss);
+	//}
 
 	SetupDialog setup(m_config);
 	setup.slot_writeConfig();
@@ -618,7 +619,7 @@ void MainWindow::slot_slice()
 		m_progressWidget->P(100);
 		m_progressWidget->hide();
 		m_previewWidget->reload();
-		m_previewTopWidget->reload(m_dlprint->layer_qt_path.size() + 1);
+		m_previewTopWidget->reload(m_dlprint->layer_qt_path.size());
 	}
 	else
 		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("模型超过边界，无法切片。"));
@@ -731,11 +732,8 @@ void MainWindow::Duplicate(size_t num, bool arrange)
 	TreeSupport* ts1 = m_dlprint->GetTreeSupport(m_model->find_id(m_glwidget->m_selInstance));
 
 	for (int i = 0; i < num; ++i) {
-		size_t id = m_model->find_id(
-			m_model->addInstance(m_model->find_id(m_glwidget->m_selInstance)));
-
-		qDebug() << "duolicate: " << id;
-
+		ModelInstance* s = m_model->addInstance(m_model->find_id(m_glwidget->m_selInstance));
+		size_t id = m_model->find_id(s);
 		m_glwidget->AddModelInstance(id);
 		if (ts1 != nullptr)
 			m_dlprint->InsertSupport(id, new TreeSupport(ts1));

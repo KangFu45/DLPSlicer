@@ -7,7 +7,7 @@
     
     
   <Name>DLPSlicer</Name><Version>1.6.1v</Version>
-  <SuffixName>fk</SuffixName>
+  <SuffixName>hb</SuffixName>
 </App><UserFile>
     
   <Path>C:\Users\ADMINI~1.DAD\AppData\Local\Temp/DLPSlicer</Path></UserFile><Machines>
@@ -19,14 +19,14 @@
       
       
       
-    <Name>S250</Name><Height>300</Height><Length>250</Length><Width>140</Width></Machine><Machine id="2">
+    <Name>S288</Name><Height>300</Height><Length>288</Length><Width>162</Width></Machine><Machine id="2">
       
       
       
       
-    <Name>S288</Name><Height>300</Height><Length>288</Length><Width>162</Width></Machine><Machine id="3">
+    <Name>S96</Name><Height>300</Height><Length>96</Length><Width>54</Width></Machine><Machine id="3">
       
       
       
       
-    <Name>S100</Name><Height>100</Height><Length>100</Length><Width>100</Width></Machine></Machines></Config>
+    <Name>S48</Name><Height>300</Height><Length>48</Length><Width>27</Width></Machine></Machines></Config>

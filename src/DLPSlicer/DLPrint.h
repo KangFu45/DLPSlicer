@@ -18,13 +18,16 @@
 
 namespace DLPSlicer {
 
-	class CanceledException : public std::exception {
-	public:
-		const char* what() const throw() { return "Background processing has been canceled"; }
-	};
-
-	typedef std::vector<TreeSupport*> TreeSupportPtrs;
-
+//<<<<<<< HEAD
+//	class CanceledException : public std::exception {
+//	public:
+//		const char* what() const throw() { return "Background processing has been canceled"; }
+//	};
+//
+//	typedef std::vector<TreeSupport*> TreeSupportPtrs;
+//
+//=======
+//>>>>>>> parent of f6126a0... 淇bug锛屾洿鏂拌嚦1.6.1鐗堟湰
 	class DLPrint
 	{
 	public:
@@ -53,7 +56,7 @@ namespace DLPSlicer {
 		std::map <size_t, linef3s*> inside_supports;		//每个模型对象各自的内部支撑
 
 		Model* model;										//模型
-		TreeSupportPtrs treeSupports;
+		std::map<int, TreeSupport*> treeSupports;
 
 		//四个方向支撑枚举
 		enum xyz
@@ -72,7 +75,7 @@ namespace DLPSlicer {
 		void GenInsideSupport(size_t id, TriangleMesh* mesh);
 		void InsertSupport(size_t id, TreeSupport* s);
 		TreeSupport* GetTreeSupport(size_t id);
-		bool DelTreeSupport(size_t id, bool resort = false);
+		bool DelTreeSupport(size_t id);
 		bool TreeSupportsEmpty() { return treeSupports.empty(); };
 		TreeSupport* GenSupport(size_t id, TriangleMesh* mesh, QProgressBar* progress);
 

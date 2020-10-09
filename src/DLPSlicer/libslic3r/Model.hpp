@@ -137,6 +137,8 @@ public:
 	/// \return BoundingBoxf3 a bounding box object.
 	BoundingBoxf3 bounding_box() const;
 
+    int instances_num();
+
 	/// Repair the ModelObjects of the current Model.
 	/// This function calls repair function on each TriangleMesh of each model object volume
 	void repair();

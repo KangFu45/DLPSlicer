@@ -48,13 +48,14 @@ void Config::writeConfig()
 SetupDialog::SetupDialog(Config* config)
 	:m_config(config)
 {
-	{
-		QFile qssfile(":/icon/base.qss");
-		qssfile.open(QFile::ReadOnly);
-		QString qss;
-		qss = qssfile.readAll();
-		this->setStyleSheet(qss);
-	}
+	////¶ÁÈ¡qssÅäÖÃÎÄ¼þ
+	//{
+	//	QFile qssfile(":/icon/base.qss");
+	//	qssfile.open(QFile::ReadOnly);
+	//	QString qss;
+	//	qss = qssfile.readAll();
+	//	this->setStyleSheet(qss);
+	//}
 
 	initLayout();
 	readConfig();
@@ -478,7 +479,13 @@ void SetupDialog::readConfig()
 
 		density_spin->setValue(readini.value("/hollow_out_config/fillDensity").toDouble());
 
-		thicknessCombo->setCurrentIndex(readini.value("/other/thickness").toInt());
+		double val = readini.value("/other/thickness").toDouble();
+		if (abs(val - 0.05) <= 1e-6)
+			thicknessCombo->setCurrentIndex(1);
+		else if (abs(val - 0.1) <= 1e-6)
+			thicknessCombo->setCurrentIndex(0);
+		else if (abs(val - 0.025) <= 1e-6)
+			thicknessCombo->setCurrentIndex(2);
 
 		raftSpin->setValue(readini.value("/other/raft").toInt());
 

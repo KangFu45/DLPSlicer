@@ -7,26 +7,28 @@ extern Setting e_setting;
 //------------------ViewWidget----------------------
 ViewWidget::ViewWidget(QWidget* parent) : QWidget(parent)
 {
+	QSize size(20, 20);
+
 	m_defViewBtn=new QPushButton(QIcon(":/icon/images/iso.png"),"");
-	m_defViewBtn->setFixedSize(20, 20);
+	m_defViewBtn->setFixedSize(size);
 
 	m_leftViewBtn = new QPushButton(QIcon(":/icon/images/left.png"), "");
-	m_leftViewBtn->setFixedSize(20, 20);
+	m_leftViewBtn->setFixedSize(size);
 
 	m_rightViewBtn = new QPushButton(QIcon(":/icon/images/right.png"), "");
-	m_rightViewBtn->setFixedSize(20, 20);
+	m_rightViewBtn->setFixedSize(size);
 
 	m_frontViewBtn = new QPushButton(QIcon(":/icon/images/front.png"), "");
-	m_frontViewBtn->setFixedSize(20, 20);
+	m_frontViewBtn->setFixedSize(size);
 
 	m_behindViewBtn = new QPushButton(QIcon(":/icon/images/back.png"), "");
-	m_behindViewBtn->setFixedSize(20, 20);
+	m_behindViewBtn->setFixedSize(size);
 
 	m_zoomInViewBtn = new QPushButton(QIcon(":/icon/images/add.png"), "");
-	m_zoomInViewBtn->setFixedSize(20, 20);
+	m_zoomInViewBtn->setFixedSize(size);
 
 	m_zoomOutViewBtn = new QPushButton(QIcon(":/icon/images/delete.png"), "");
-	m_zoomOutViewBtn->setFixedSize(20, 20);
+	m_zoomOutViewBtn->setFixedSize(size);
 
 	QGridLayout* layout = new QGridLayout(this);
 	layout->addWidget(m_behindViewBtn, 0, 1);
@@ -38,11 +40,17 @@ ViewWidget::ViewWidget(QWidget* parent) : QWidget(parent)
 	layout->addWidget(m_zoomOutViewBtn, 4, 1);
 	this->setLayout(layout);
 
-	this->setFixedSize(60, 100);
+	this->setFixedSize(90, 160);
 }
 
 ViewWidget::~ViewWidget() {
-
+	delete m_defViewBtn;
+	delete m_leftViewBtn;
+	delete m_rightViewBtn;
+	delete m_frontViewBtn;
+	delete m_behindViewBtn;
+	delete m_zoomInViewBtn;
+	delete m_zoomOutViewBtn;
 }
 
 //-----------------OffsetWidget----------------------
@@ -322,6 +330,11 @@ CenterTopWidget::CenterTopWidget(MainWindow* parent)
 	m_scaleWidget->hide();
 
 	m_viewWidget = new ViewWidget(m_parent);
+	connect(m_viewWidget->m_behindViewBtn, &QPushButton::clicked, m_parent, &MainWindow::slot_behindView);
+	connect(m_viewWidget->m_defViewBtn, &QPushButton::clicked, m_parent, &MainWindow::slot_defaultView);
+	connect(m_viewWidget->m_frontViewBtn, &QPushButton::clicked, m_parent, &MainWindow::slot_frontView);
+	connect(m_viewWidget->m_leftViewBtn, &QPushButton::clicked, m_parent, &MainWindow::slot_leftView);
+	connect(m_viewWidget->m_rightViewBtn, &QPushButton::clicked, m_parent, &MainWindow::slot_rightView);
 }
 
 CenterTopWidget::~CenterTopWidget()
@@ -452,7 +465,7 @@ void CenterTopWidget::resize(const QRect& rect)
 	m_offsetWidget->move(l + 75, t + 10);
 	m_rotateWidget->move(l + 75, t + 10);
 	m_scaleWidget->move(l + 75, t + 10);
-	m_viewWidget->move(r - 70, t + 10);
+	m_viewWidget->move(r - 100, t + 10);
 }
 
 void CenterTopWidget::setUnifyScale(int state)
