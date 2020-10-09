@@ -48,6 +48,14 @@ MainWindow::MainWindow(QWidget* parent)
 {
 	InitDlprinter();
 
+	{
+		QFile qssfile(":/icon/base.qss");
+		qssfile.open(QFile::ReadOnly);
+		QString qss;
+		qss = qssfile.readAll();
+		this->setStyleSheet(qss);
+	}
+
 	SetupDialog setup(m_config);
 	setup.slot_writeConfig();
 
@@ -289,9 +297,9 @@ void MainWindow::slot_ZPosZero()
 
 void MainWindow::SetOffsetValue(ModelInstance* instance)
 {
-	m_centerTopWidget->x_offset_spin->setValue(instance->offset.x);
-	m_centerTopWidget->y_offset_spin->setValue(instance->offset.y);
-	m_centerTopWidget->z_offset_spin->setValue(instance->z_translation);
+	m_centerTopWidget->setXOffsetVal(instance->offset.x);
+	m_centerTopWidget->setYOffsetVal(instance->offset.y);
+	m_centerTopWidget->setZOffsetVal(instance->z_translation);
 }
 
 void MainWindow::slot_xoffsetValueChange(double value)
@@ -349,7 +357,7 @@ void MainWindow::slot_xRotateValueChange(double angle)
 
 	if (angle == 360 || angle == -360) {
 		m_centerTopWidget->x_rotate = 0;
-		m_centerTopWidget->x_rotate_spin->setValue(0);
+		m_centerTopWidget->setXRotateVal(0);
 	}
 	else
 		m_centerTopWidget->x_rotate = angle;
@@ -370,7 +378,7 @@ void MainWindow::slot_yRotateValueChange(double angle)
 
 	if (angle == 360 || angle == -360) {
 		m_centerTopWidget->y_rotate = 0;
-		m_centerTopWidget->y_rotate_spin->setValue(0);
+		m_centerTopWidget->setYRotateVal(0);
 	}
 	else
 		m_centerTopWidget->y_rotate = angle;
@@ -391,7 +399,7 @@ void MainWindow::slot_zRotateValueChange(double angle)
 
 	if (angle == 360 || angle == -360) {
 		m_centerTopWidget->z_rotate = 0;
-		m_centerTopWidget->z_rotate_spin->setValue(0);
+		m_centerTopWidget->setZRotateVal(0);
 	}
 	else
 		m_centerTopWidget->z_rotate = angle;
@@ -405,9 +413,9 @@ void MainWindow::slot_zRotateValueChange(double angle)
 
 void MainWindow::SetScaleValue(ModelInstance* instance)
 {
-	m_centerTopWidget->x_scale_spin->setValue(instance->scaling_vector.x * 100);
-	m_centerTopWidget->y_scale_spin->setValue(instance->scaling_vector.y * 100);
-	m_centerTopWidget->z_scale_spin->setValue(instance->scaling_vector.z * 100);
+	m_centerTopWidget->setXScaleVal(instance->scaling_vector.x * 100);
+	m_centerTopWidget->setYScaleVal(instance->scaling_vector.y * 100);
+	m_centerTopWidget->setZScaleVal(instance->scaling_vector.z * 100);
 }
 
 void MainWindow::SetSizeValue(ModelInstance* instance)
@@ -417,9 +425,9 @@ void MainWindow::SetSizeValue(ModelInstance* instance)
 	instance->transform_mesh(&mesh);
 	BoundingBoxf3 box = mesh.bounding_box();
 
-	m_centerTopWidget->x_size_label->setValue(box.size().x);
-	m_centerTopWidget->y_size_label->setValue(box.size().y);
-	m_centerTopWidget->z_size_label->setValue(box.size().z);
+	m_centerTopWidget->setXSizeVal(box.size().x);
+	m_centerTopWidget->setYSizeVal(box.size().y);
+	m_centerTopWidget->setZSizeVal(box.size().z);
 }
 
 void MainWindow::slot_xScaleValueChange(double value)

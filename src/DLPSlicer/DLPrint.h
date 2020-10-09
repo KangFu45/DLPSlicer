@@ -18,6 +18,11 @@
 
 namespace DLPSlicer {
 
+	class CanceledException : public std::exception {
+	public:
+		const char* what() const throw() { return "Background processing has been canceled"; }
+	};
+
 	typedef std::vector<TreeSupport*> TreeSupportPtrs;
 
 	class DLPrint
@@ -75,6 +80,9 @@ namespace DLPSlicer {
 		void DelAllSupport();
 
 		void SaveSlice();
+
+		bool Finished() { return true; };
+		bool Canceled() { return true; };
 		
 	private:
 		void SaveOneSlice(size_t num, QString path);

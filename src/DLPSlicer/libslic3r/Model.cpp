@@ -1327,111 +1327,110 @@ void
 ModelInstance::transform_mesh(TriangleMesh* mesh, bool dont_translate) const
 {
 
-	BoundingBoxf3 box = mesh->bounding_box();
-	Pointf3 origin((box.max.x + box.min.x) / 2, (box.max.y + box.min.y) / 2, (box.max.z + box.min.z) / 2);
+    BoundingBoxf3 box = mesh->bounding_box();
+    Pointf3 origin((box.max.x + box.min.x) / 2, (box.max.y + box.min.y) / 2, (box.max.z + box.min.z) / 2);
 
-	QMatrix4x4 translateM, scaleM;
-	translateM.setToIdentity();
-	//rotateM.setToIdentity();
-	scaleM.setToIdentity();
+    QMatrix4x4 translateM, scaleM;
+    translateM.setToIdentity();
+    //rotateM.setToIdentity();
+    scaleM.setToIdentity();
 
-	//rotateM.rotate(rotation / PI * 180, 0.0, 0.0, 1.0);
-	//rotateM.rotate(y_rotation  / PI * 180, 0.0, 1.0, 0.0);
-	//rotateM.rotate(x_rotation / PI * 180, 1.0, 0.0, 0.0);
+    //rotateM.rotate(rotation / PI * 180, 0.0, 0.0, 1.0);
+    //rotateM.rotate(y_rotation  / PI * 180, 0.0, 1.0, 0.0);
+    //rotateM.rotate(x_rotation / PI * 180, 1.0, 0.0, 0.0);
 
-	scaleM.scale(scaling_vector.x, scaling_vector.y, scaling_vector.z);
+    scaleM.scale(scaling_vector.x, scaling_vector.y, scaling_vector.z);
 
-	mesh->transform_matrix(this->rotation_M);
-	mesh->transform_matrix(scaleM);
+    mesh->transform_matrix(this->rotation_M);
+    mesh->transform_matrix(scaleM);
 
-	if (!dont_translate) {
-		QVector4D v(origin.x, origin.y, origin.z, 1);
-		QVector4D v1 = this->rotation_M*v;
+    if (!dont_translate) {
+        QVector4D v(origin.x, origin.y, origin.z, 1);
+        QVector4D v1 = this->rotation_M * v;
 
-		translateM.translate(offset.x, offset.y, z_translation);
-		//在模型中心旋转
-		translateM.translate(v.x() - v1.x(), v.y() - v1.y(), v.z() - v1.z());
+        translateM.translate(offset.x, offset.y, z_translation);
+        //在模型中心旋转
+        translateM.translate(v.x() - v1.x(), v.y() - v1.y(), v.z() - v1.z());
 
-		mesh->transform_matrix(translateM);
-	}
-
+        mesh->transform_matrix(translateM);
+    }
 }
 
 BoundingBoxf3 ModelInstance::transform_mesh_bounding_box(TriangleMesh* _mesh, bool dont_translate, bool old) const
 {
-	BoundingBoxf3 bbox;
-	if (old) {
-		// rotate around mesh origin
-		//double c = cos(this->rotation);
-		//double s = sin(this->rotation);
-		//double cx = cos(this->x_rotation);
-		//double sx = sin(this->x_rotation);
-		//double cy = cos(this->y_rotation);
-		//double sy = sin(this->y_rotation);
-		//for (int i = 0; i < _mesh->stl.stats.number_of_facets; ++i) {
-		//	const stl_facet &facet = _mesh->stl.facet_start[i];
-		//	for (int j = 0; j < 3; ++j) {
-		//		stl_vertex v = facet.vertex[j];
-		//		double xold = v.x;
-		//		double yold = v.y;
-		//		double zold = v.z;
-		//		// Rotation around x axis.
-		//		v.z = float(sx * yold + cx * zold);
-		//		yold = v.y = float(cx * yold - sx * zold);
-		//		zold = v.z;
-		//		// Rotation around y axis.
-		//		v.x = float(cy * xold + sy * zold);
-		//		v.z = float(-sy * xold + cy * zold);
-		//		xold = v.x;
-		//		// Rotation around z axis.
-		//		v.x = float(c * xold - s * yold);
-		//		v.y = float(s * xold + c * yold);
-		//		v.x *= float(this->scaling_factor * this->scaling_vector.x);
-		//		v.y *= float(this->scaling_factor * this->scaling_vector.y);
-		//		v.z *= float(this->scaling_factor * this->scaling_vector.z);
-		//		if (!dont_translate) {
-		//			v.x += this->offset.x;
-		//			v.y += this->offset.y;
-		//			if (this->y_rotation || this->x_rotation)
-		//				v.z += -(_mesh->stl.stats.min.z);
-		//		}
-		//		bbox.merge(Pointf3(v.x, v.y, v.z));
-		//	}
-		//}
-	}
-	else {
-		BoundingBoxf3 box = _mesh->bounding_box();
-		Pointf3 origin((box.max.x + box.min.x) / 2, (box.max.y + box.min.y) / 2, (box.max.z + box.min.z) / 2);
+    BoundingBoxf3 bbox;
+    if (old) {
+        // rotate around mesh origin
+        //double c = cos(this->rotation);
+        //double s = sin(this->rotation);
+        //double cx = cos(this->x_rotation);
+        //double sx = sin(this->x_rotation);
+        //double cy = cos(this->y_rotation);
+        //double sy = sin(this->y_rotation);
+        //for (int i = 0; i < _mesh->stl.stats.number_of_facets; ++i) {
+        //	const stl_facet &facet = _mesh->stl.facet_start[i];
+        //	for (int j = 0; j < 3; ++j) {
+        //		stl_vertex v = facet.vertex[j];
+        //		double xold = v.x;
+        //		double yold = v.y;
+        //		double zold = v.z;
+        //		// Rotation around x axis.
+        //		v.z = float(sx * yold + cx * zold);
+        //		yold = v.y = float(cx * yold - sx * zold);
+        //		zold = v.z;
+        //		// Rotation around y axis.
+        //		v.x = float(cy * xold + sy * zold);
+        //		v.z = float(-sy * xold + cy * zold);
+        //		xold = v.x;
+        //		// Rotation around z axis.
+        //		v.x = float(c * xold - s * yold);
+        //		v.y = float(s * xold + c * yold);
+        //		v.x *= float(this->scaling_factor * this->scaling_vector.x);
+        //		v.y *= float(this->scaling_factor * this->scaling_vector.y);
+        //		v.z *= float(this->scaling_factor * this->scaling_vector.z);
+        //		if (!dont_translate) {
+        //			v.x += this->offset.x;
+        //			v.y += this->offset.y;
+        //			if (this->y_rotation || this->x_rotation)
+        //				v.z += -(_mesh->stl.stats.min.z);
+        //		}
+        //		bbox.merge(Pointf3(v.x, v.y, v.z));
+        //	}
+        //}
+    }
+    else {
+        BoundingBoxf3 box = _mesh->bounding_box();
+        Pointf3 origin((box.max.x + box.min.x) / 2, (box.max.y + box.min.y) / 2, (box.max.z + box.min.z) / 2);
 
-		QMatrix4x4 translateM, scaleM;
-		translateM.setToIdentity();
-		scaleM.setToIdentity();
+        QMatrix4x4 translateM, scaleM;
+        translateM.setToIdentity();
+        scaleM.setToIdentity();
 
-		scaleM.scale(scaling_vector.x, scaling_vector.y, scaling_vector.z);
+        scaleM.scale(scaling_vector.x, scaling_vector.y, scaling_vector.z);
 
-		for (int i = 0; i < _mesh->stl.stats.number_of_facets; ++i) {
-			const stl_facet &facet = _mesh->stl.facet_start[i];
-			for (int j = 0; j < 3; ++j) {
-				QVector4D v(facet.vertex[j].x, facet.vertex[j].y, facet.vertex[j].z, 1);
+        for (int i = 0; i < _mesh->stl.stats.number_of_facets; ++i) {
+            const stl_facet& facet = _mesh->stl.facet_start[i];
+            for (int j = 0; j < 3; ++j) {
+                QVector4D v(facet.vertex[j].x, facet.vertex[j].y, facet.vertex[j].z, 1);
 
-				v = this->rotation_M*v;
-				v = scaleM*v;
-				if (!dont_translate) {
-					QVector4D v2(origin.x, origin.y, origin.z, 1);
-					QVector4D v3 = this->rotation_M*v2;
+                v = this->rotation_M * v;
+                v = scaleM * v;
+                if (!dont_translate) {
+                    QVector4D v2(origin.x, origin.y, origin.z, 1);
+                    QVector4D v3 = this->rotation_M * v2;
 
-					translateM.translate(offset.x, offset.y, z_translation);
-					//在模型中心旋转
-					translateM.translate(v2.x() - v3.x(), v2.y() - v3.y(), v2.z() - v3.z());
+                    translateM.translate(offset.x, offset.y, z_translation);
+                    //在模型中心旋转
+                    translateM.translate(v2.x() - v3.x(), v2.y() - v3.y(), v2.z() - v3.z());
 
-					v = translateM*v;
-				}
-				bbox.merge(Pointf3( v.x(), v.y(), v.z()));
-			}
-		}
-		
-	}
-	return bbox;
+                    v = translateM * v;
+                }
+                bbox.merge(Pointf3(v.x(), v.y(), v.z()));
+            }
+        }
+
+    }
+    return bbox;
 }
 
 BoundingBoxf3 ModelInstance::transform_bounding_box(const BoundingBoxf3 &bbox, bool dont_translate) const

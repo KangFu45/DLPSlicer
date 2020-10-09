@@ -48,6 +48,14 @@ void Config::writeConfig()
 SetupDialog::SetupDialog(Config* config)
 	:m_config(config)
 {
+	{
+		QFile qssfile(":/icon/base.qss");
+		qssfile.open(QFile::ReadOnly);
+		QString qss;
+		qss = qssfile.readAll();
+		this->setStyleSheet(qss);
+	}
+
 	initLayout();
 	readConfig();
 
@@ -247,7 +255,7 @@ void SetupDialog::initLayout()
 	supportLayout->addWidget(leaf_num_spin, 6, 1);
 	supportLayout->addWidget(model_lift_label, 7, 0);
 	supportLayout->addWidget(model_lift_spin, 7, 1);
-	supportWidget = new QWidget(this);
+	supportWidget = new QFrame(this);
 	supportWidget->setLayout(supportLayout);
 
 	//抽空设置
@@ -283,7 +291,7 @@ void SetupDialog::initLayout()
 	hollowOutLayout->addWidget(wall_thickness_spin, 2, 1);
 	hollowOutLayout->addWidget(density_label, 3, 0);
 	hollowOutLayout->addWidget(density_spin, 3, 1);
-	hollowOutWidget = new QWidget(this);
+	hollowOutWidget = new QFrame(this);
 	hollowOutWidget->setLayout(hollowOutLayout);
 
 	//其他设置
@@ -331,7 +339,7 @@ void SetupDialog::initLayout()
 	otherLayourt->addWidget(arrange_space_spin, 3, 1);
 	otherLayourt->addWidget(threadLabel, 4, 0);
 	otherLayourt->addWidget(threadSpin, 4, 1);
-	otherWidget = new QWidget(this);
+	otherWidget = new QFrame(this);
 	otherWidget->setLayout(otherLayourt);
 
 	setupTab = new QTabWidget();

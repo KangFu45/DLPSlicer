@@ -1,0 +1,23 @@
+QLabel {
+    background-color:#3dce3d;
+    color:white;
+    border:0px;
+}
+
+QPushButton {
+    background-color:#3dce3d;
+    color:white;
+    border:0px;
+}
+
+QDoubleSpinBox QSpinBox{
+    background-color:#3dce3d;
+    color:white;
+    border:0px;
+}
+
+QFrame {
+     background-color:#3dce3d;
+    color:white;
+    border:0px;
+}

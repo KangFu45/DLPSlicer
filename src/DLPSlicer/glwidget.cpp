@@ -329,12 +329,12 @@ void GlWidget::DrawModel()//渲染模型
 		BoundingBoxf3 box = instance->get_object()->volumes[0]->mesh.bounding_box();
 		Pointf3 origin((box.max.x + box.min.x) / 2, (box.max.y + box.min.y) / 2, (box.max.z + box.min.z) / 2);
 
-		QMatrix4x4 translateM,scaleM;
+		QMatrix4x4 translateM, scaleM;
 		translateM.setToIdentity();
 		scaleM.setToIdentity();
 
 		QVector4D v(origin.x, origin.y, origin.z, 1);
-		QVector4D v1 = instance->rotation_M*v;
+		QVector4D v1 = instance->rotation_M * v;
 
 		scaleM.scale(instance->scaling_vector.x, instance->scaling_vector.y, instance->scaling_vector.z);
 		translateM.translate(instance->offset.x, instance->offset.y, instance->z_translation);

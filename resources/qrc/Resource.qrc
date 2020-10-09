@@ -34,5 +34,8 @@
         <file>images/supportEdit_w.png</file>
         <file>images/offset_b.PNG</file>
         <file>images/printer.ico</file>
+        <file>base.qss</file>
+        <file>images/add.png</file>
+        <file>images/delete.png</file>
     </qresource>
 </RCC>
