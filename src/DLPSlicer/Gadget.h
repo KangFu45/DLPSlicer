@@ -4,6 +4,7 @@
 #include <qgridlayout.h>
 #include <qcoreapplication.h>
 #include <qprogressbar.h>
+#include <qdir.h>
 
 //对自定义对话框进行裁剪的多边形的点
 static QVector<QPoint> progressRect = { QPoint(3,0)
@@ -14,6 +15,25 @@ static QVector<QPoint> progressRect = { QPoint(3,0)
 static QString OnButton("border: 1px outset white; border-radius: 5px;  background-color: rgba(100,225,50,225);");
 //不能被点击按钮的QSS
 static QString OffButton("border: 1px outset white; border-radius: 5px; background-color: rgba(200,200,200,150);");
+
+inline bool clearDir(QString path)
+{
+	if (path.isEmpty())
+		return false;
+
+	QDir dir(path);
+	if (!dir.exists())
+		return true;
+
+	dir.setFilter(QDir::AllEntries | QDir::NoDotAndDotDot); //设置过滤  
+	foreach(QFileInfo file, dir.entryInfoList()) { //遍历文件信息  
+		if (file.isFile()) // 是文件，删除  
+			file.dir().remove(file.fileName());
+		else if (file.isDir()) // 递归删除  
+			clearDir(file.absoluteFilePath());
+	}
+	return dir.rmpath(dir.absolutePath()); // 删除文件夹  
+}
 
 //自定义的按钮
 class PushButton : public QPushButton

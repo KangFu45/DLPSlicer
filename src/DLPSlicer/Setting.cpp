@@ -37,21 +37,22 @@ Setting::Setting(string _appPath)
 	if (this->UserPath.empty() || !exists(filesystem::path(this->UserPath))) {
 		//未发现用户目录
 		filesystem::path _path = filesystem::temp_directory_path().append("/" + appName).string();
-		//if (!exists(_path)) {
-		//	if (!create_directory(_path))//在用户临时文件夹下创建软件目录
-		//		;///TODO:软件配置文件夹创建失败，报错退出
-		//}
+		if (!exists(_path)) {
+			if (!create_directory(_path))//在用户临时文件夹下创建软件目录
+				;///TODO:软件配置文件夹创建失败，报错退出
+		}
 		this->UserPath = _path.string();
 		pt.put("Config.UserFile.Path", UserPath);
-		write_xml(this->xmlFile, pt);//覆盖原xml文件
+		//TODO:如果程序安装在系统盘，重写xml文件需要管理员权限
+		//write_xml(this->xmlFile, pt);//覆盖原xml文件
 	}
 
-	ZipTempPath = UserPath + "\ZipTemp";
+	ZipTempPath = UserPath + "/ZipTemp";
 	ifNotExistCreate(ZipTempPath);
 
-	DlprinterFile = UserPath + "\Dlprinter.ini";
-	ModelFile = UserPath + "\ModelPath.ini";
-	ConfigFile = UserPath + "\Config.ini";
+	DlprinterFile = UserPath + "/Dlprinter.ini";
+	ModelFile = UserPath + "/ModelPath.ini";
+	ConfigFile = UserPath + "/Config.ini";
 
 	//读取机器参数
 	BOOST_AUTO(child, pt.get_child("Config.Machines"));

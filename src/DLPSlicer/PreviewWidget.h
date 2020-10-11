@@ -10,6 +10,16 @@
 
 class MainWindow;
 
+class InfoWidget : public QFrame
+{
+public:
+	InfoWidget(QWidget* parent = nullptr);
+
+	QLabel* m_layersLab;
+	QLabel* m_sizeLab;
+	QLabel* m_volumeLab;
+};
+
 //中心窗口上悬浮的部件管理类，基础部件均能悬浮，但parent部件
 //还是主窗口，其只做管理的功能。
 class PreviewTopWidget : public QObject
@@ -22,22 +32,26 @@ public:
 
 	QSlider* m_slider;
 
-private:
-	MainWindow* m_parent;
-
-	PushButton* m_saveBtn;
-	QLabel* m_curLayerLab;
-
-private slots:
-	void slot_layerChanged(int);
-
-public:
 	void reload(size_t max);
 	void setEnable(bool);
 	void resize(const QRect& rect);
 
 	void HideWidget();
 	void ShowWidget();
+
+	void setLayers(int num) { m_infoWidget->m_layersLab->setText(QString::number(num)); };
+	void setSize(int x, int y, int z) { m_infoWidget->m_sizeLab->setText(QString("%1x%2x%3mm").arg(x).arg(y).arg(z)); };
+	void setVolume(float num) { m_infoWidget->m_volumeLab->setText(QString("%1ml").arg(num / 1000.0)); };
+
+private:
+	MainWindow* m_parent;
+
+	PushButton* m_saveBtn;
+	QLabel* m_curLayerLab;
+	InfoWidget* m_infoWidget;
+
+private slots:
+	void slot_layerChanged(int);
 };
 
 class PreviewWidget : public QWidget

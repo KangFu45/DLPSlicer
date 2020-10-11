@@ -487,25 +487,25 @@ void Model::arrange(const Pointfs& sizes, coordf_t dist, const BoundingBoxf* bb,
 		
 		if (dis == 0) {
 			//初始化
-			minx = (*o).x - (*s).x / 2;
-			miny = (*o).y - (*s).y / 2;
-			maxx = (*o).x + (*s).x / 2;
-			maxy = (*o).y + (*s).y / 2;
+			minx = (*o).x - (*s).x / 2.0;
+			miny = (*o).y - (*s).y / 2.0;
+			maxx = (*o).x + (*s).x / 2.0;
+			maxy = (*o).y + (*s).y / 2.0;
 		}
 		else {
-			temp = (*o).x - (*s).x / 2;
+			temp = (*o).x - (*s).x / 2.0;
 			if (minx > temp)
 				minx = temp;
 
-			temp = (*o).y - (*s).y / 2;
+			temp = (*o).y - (*s).y / 2.0;
 			if (miny > temp)
 				miny = temp;
 
-			temp = (*o).x + (*s).x / 2;
+			temp = (*o).x + (*s).x / 2.0;
 			if (maxx < temp)
 				maxx = temp;
 
-			temp = (*o).y + (*s).y / 2;
+			temp = (*o).y + (*s).y / 2.0;
 			if (maxy < temp)
 				maxy = temp;
 		}
@@ -513,8 +513,8 @@ void Model::arrange(const Pointfs& sizes, coordf_t dist, const BoundingBoxf* bb,
 
 
 	for (auto o = out.begin(); o != out.end(); ++o) {
-		(*o).x -= (maxx + minx) / 2;
-		(*o).y -= (maxy + miny) / 2;
+		(*o).x -= (maxx + minx) / 2.0;
+		//(*o).y -= (maxy + miny) / 2.0;
 	}
 }
 
@@ -649,9 +649,8 @@ void Model::delete_modelInstance(size_t id) {
 	size_t i = id % InstanceNum;//模型对象实例的id
 	ModelObject* o = find_object(id);
 	if (o != NULL) {
-		if (o->instances.size() == 1) {
+		if (o->instances.size() == 1)
 			delete_object(a);
-		}
 		else
 			o->delete_instance(i);
 	}

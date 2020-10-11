@@ -363,12 +363,19 @@ void GlWidget::DrawModel()//渲染模型
 
 void GlWidget::DelModelBuffer(size_t id)//删除一个模型缓冲区
 {
-	for (auto m = modelBuffers.begin(); m != modelBuffers.end(); ++m) {
+	size_t a = id / InstanceNum;
+	for (auto m = modelBuffers.begin(); m != modelBuffers.end();) {
 		if ((*m)->id == id) {
 			delete *m;
 			modelBuffers.erase(m);
 			update();
-			return;
+			continue;
+		}
+		else {
+			size_t b = (*m)->id / InstanceNum;
+			if (a == b && (*m)->id > id)
+				(*m)->id -= 1;
+			++m;
 		}
 	}
 }
@@ -2260,14 +2267,23 @@ bool GlWidget::DelSelectSupport()
 
 bool GlWidget::DelSupport(size_t id)
 {
-	if (m_dlprint->DelTreeSupport(id)) {
+	bool ret = false;
+	size_t a = id / InstanceNum;
+	if (ret = m_dlprint->DelTreeSupport(id)) {
 		//支撑数据删除成功同时删除支撑缓存区
-		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end(); ++sb) {
+		for (auto sb = treeSupportBuffers.begin(); sb != treeSupportBuffers.end();) {
 			if ((*sb)->id == id) {
 				delete* sb;
 				treeSupportBuffers.erase(sb);
 				update();
-				return true;
+				ret = true;
+				continue;
+			}
+			else {
+				size_t b = (*sb)->id / InstanceNum;
+				if (a == b && (*sb)->id > id)
+					(*sb)->id -= 1;
+				++sb;
 			}
 		}
 	}

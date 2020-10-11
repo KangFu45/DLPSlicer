@@ -18,16 +18,6 @@
 
 namespace DLPSlicer {
 
-//<<<<<<< HEAD
-//	class CanceledException : public std::exception {
-//	public:
-//		const char* what() const throw() { return "Background processing has been canceled"; }
-//	};
-//
-//	typedef std::vector<TreeSupport*> TreeSupportPtrs;
-//
-//=======
-//>>>>>>> parent of f6126a0... 淇bug锛屾洿鏂拌嚦1.6.1鐗堟湰
 	class DLPrint
 	{
 	public:
@@ -71,6 +61,16 @@ namespace DLPSlicer {
 		Config* m_config;
 		std::map<size_t, QPainterPath*> layer_qt_path;			//使用qt绘制图形的方式存储路径
 
+		//切片文件信息，在切片后更新
+		struct Info
+		{
+			int layers_num;
+			int length;
+			int width;
+			int height;
+			float volume;
+		}info;
+
 		void Slice(const TriangleMeshs& supMeshs, QProgressBar* progress);
 		void GenInsideSupport(size_t id, TriangleMesh* mesh);
 		void InsertSupport(size_t id, TreeSupport* s);
@@ -84,8 +84,8 @@ namespace DLPSlicer {
 
 		void SaveSlice();
 
-		bool Finished() { return true; };
-		bool Canceled() { return true; };
+		//bool Finished() { return true; };
+		//bool Canceled() { return true; };
 		
 	private:
 		void SaveOneSlice(size_t num, QString path);

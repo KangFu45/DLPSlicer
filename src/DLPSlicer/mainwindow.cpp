@@ -11,6 +11,8 @@
 #include <qstandardpaths.h>
 #include <qdir.h>
 #include <qfileinfo.h>
+#include <qapplication.h>
+#include <QDesktopWidget>
 
 #include <quazip/JlCompress.h>
 
@@ -23,25 +25,6 @@ extern Setting e_setting;
 #ifdef DLPSlicer_DEBUG
 #include "qdebug.h"
 #endif
-
-inline bool clearDir(QString path)
-{
-	if (path.isEmpty())
-		return false;
-
-	QDir dir(path);
-	if (!dir.exists())
-		return true;
-
-	dir.setFilter(QDir::AllEntries | QDir::NoDotAndDotDot); //设置过滤  
-	foreach(QFileInfo file, dir.entryInfoList()) { //遍历文件信息  
-		if (file.isFile()) // 是文件，删除  
-			file.dir().remove(file.fileName());
-		else if (file.isDir()) // 递归删除  
-			clearDir(file.absoluteFilePath());
-	}
-	return dir.rmpath(dir.absolutePath()); // 删除文件夹  
-}
 
 MainWindow::MainWindow(QWidget* parent)
 	: QMainWindow(parent)
@@ -126,7 +109,7 @@ void MainWindow::slot_openStl()
 	m_centerTopWidget->CenterButtonPush(CenterTopWidget::OPENBTN);
 	QString path(ReadStlTxt());
 	LoadStl(QFileDialog::getOpenFileName(this, QStringLiteral("选择需要打开的文件"), 
-		path.left(path.lastIndexOf("/")), "*.stl *.sm *.obj"));
+		path.left(path.lastIndexOf("/")), "*.stl"));
 	m_centerTopWidget->CenterButtonPush(CenterTopWidget::OPENBTN);
 }
 
@@ -136,7 +119,6 @@ void MainWindow::LoadStl(QString name)
 		StroyStlTxt(name);
 		
 		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("加载模型"));
-		qDebug() << name;
 		m_progressWidget->P(20);
 		m_glwidget->AddModelInstance(m_model->load_model(name.toStdString()));
 		m_progressWidget->P(100);
@@ -292,6 +274,7 @@ void MainWindow::slot_ZPosZero()
 
 	m_glwidget->DelSelectSupport();
 	m_glwidget->OffsetValueChange(0, 0, -box.min.z);
+	this->SetOffsetValue(m_glwidget->m_selInstance);
 
 	this->SetDLPrintDirty();
 }
@@ -547,9 +530,9 @@ void MainWindow::slot_generateAllSupport()
 			m_progressWidget->ShowProgress(this->rect(), QStringLiteral("支撑"));
 			m_progressWidget->P(10);
 
-			m_glwidget->DelSupport(id);//不提升
-			//if (!m_glwidget->DelSupport(id))
-			//	m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
+			if (!m_glwidget->DelSupport(id))
+				(*i)->z_translation += m_config->model_lift;
+			//m_glwidget->OffsetValueChange(0, 0, m_config->model_lift);
 
 			m_glwidget->GenInstanceSupport(id, m_progressWidget->m_progressBar);
 			m_progressWidget->P(100);
@@ -598,17 +581,15 @@ void MainWindow::slot_slice()
 		//在用户目录下建立一个保存切片的文件夹
 		clearDir(e_setting.ZipTempPath.c_str());
 
-		QDir file(e_setting.ZipTempPath.c_str());
-		if (!file.exists()) {
-			if (!file.mkdir(e_setting.ZipTempPath.c_str()))
+		QDir dir(e_setting.ZipTempPath.c_str());
+		if (!dir.exists()) {
+			if (!dir.mkdir(e_setting.ZipTempPath.c_str()))
 				exit(2);
 		}
 
 		//保存一张截图
-		QString view(e_setting.ZipTempPath.c_str());
-		view.append("/A_Front.bmp");
-		char* _path = view.toLocal8Bit().data();
-		m_glwidget->SaveOneView(_path);
+		QPixmap pix = QPixmap::grabWindow(QApplication::desktop()->winId(), geometry().x(), geometry().y(), geometry().width(), geometry().height());
+		pix.save(QString(e_setting.ZipTempPath.c_str()) + "/A_Front.bmp", "BMP");
 
 		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("切片"));
 
@@ -620,6 +601,10 @@ void MainWindow::slot_slice()
 		m_progressWidget->hide();
 		m_previewWidget->reload();
 		m_previewTopWidget->reload(m_dlprint->layer_qt_path.size());
+		//TODO:读取切片文件信息，需优化
+		m_previewTopWidget->setLayers(m_dlprint->info.layers_num);
+		m_previewTopWidget->setSize(m_dlprint->info.length, m_dlprint->info.width, m_dlprint->info.height);
+		m_previewTopWidget->setVolume(m_dlprint->info.volume);
 	}
 	else
 		QMessageBox::about(this, QStringLiteral("提示"), QStringLiteral("模型超过边界，无法切片。"));
@@ -632,13 +617,18 @@ void MainWindow::slot_saveSlice()
 {
 	QString path = QFileDialog::getSaveFileName(this, QStringLiteral("保存切片文件"),
 		QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), QString("histogram file(*.%1)").arg(e_setting.SuffixName.c_str()));
-	if (path.size() > 0) {
+	if (!path.isEmpty()) {
+		//判断头文件是否存在
+		if (!QFile(QString(e_setting.ZipTempPath.c_str()) + "/A_Front.bmp").exists()) {
+			QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("保存失败，请重新切片！"));
+			return;
+		}
+
 		m_progressWidget->ShowProgress(m_tabWidget->rect(), QStringLiteral("保存"));
 		m_progressWidget->P(35);
 		m_dlprint->SaveSlice();
 		m_progressWidget->P(70);
 		JlCompress::compressDir(path, e_setting.ZipTempPath.c_str());
-		clearDir(e_setting.ZipTempPath.c_str());
 		m_progressWidget->hide();
 	}
 }
@@ -686,8 +676,8 @@ bool MainWindow::ExtractZipPath(QString zipPath)
 
 void MainWindow::slot_autoArrange()
 {
-	double L = double(e_setting.m_printers.begin()->length / 2);
-	double W = double(e_setting.m_printers.begin()->width / 2);
+	double L = double(e_setting.m_printers.begin()->length) / 2.0;
+	double W = double(e_setting.m_printers.begin()->width) / 2.0;
 
 	BoundingBoxf box;
 	box.min.x = -L;
@@ -724,6 +714,8 @@ void MainWindow::slot_autoArrange()
 			}
 	    (*o)->invalidate_bounding_box();
 	}
+
+	m_glwidget->UpdateConfine();
 }
 
 void MainWindow::Duplicate(size_t num, bool arrange)

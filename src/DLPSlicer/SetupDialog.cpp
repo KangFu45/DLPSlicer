@@ -189,7 +189,7 @@ void SetupDialog::initLayout()
 	top_height_label = new QLabel(QStringLiteral("¶¥¶Ë¸ß¶È"));
 
 	top_radius_spin = new QDoubleSpinBox();
-	top_radius_spin->setRange(0.5, 2);
+	top_radius_spin->setRange(0.1, 2);
 	top_radius_spin->setSingleStep(0.1);
 	top_radius_spin->setSuffix("mm");
 	top_radius_label = new QLabel(QStringLiteral("¶¥¶ËÖ±¾¶"));
@@ -300,6 +300,7 @@ void SetupDialog::initLayout()
 	thicknessCombo->insertItem(0, "0.1mm");
 	thicknessCombo->insertItem(1, "0.05mm");
 	thicknessCombo->insertItem(2, "0.025mm");
+	thicknessCombo->insertItem(3, "0.01mm");
 	thicknessLabel = new QLabel(QStringLiteral("²ã    ºñ"));
 	thicknessLabel->setToolTip(QStringLiteral("Ä£ÐÍÇÐÆ¬µÄ²ãºñ"));
 
@@ -401,6 +402,8 @@ void SetupDialog::slot_writeConfig()
 		m_config->layer_height = 0.1;
 	else if (thicknessCombo->currentText() == "0.025mm")
 		m_config->layer_height = 0.025;
+	else if (thicknessCombo->currentText() == "0.01mm")
+		m_config->layer_height = 0.01;
 	m_config->raft_layers = raftSpin->value();
 	m_config->raft_offset = raftOffsetSpin->value();
 	m_config->arrange_space = arrange_space_spin->value();
@@ -486,6 +489,8 @@ void SetupDialog::readConfig()
 			thicknessCombo->setCurrentIndex(0);
 		else if (abs(val - 0.025) <= 1e-6)
 			thicknessCombo->setCurrentIndex(2);
+		else if (abs(val - 0.01) <= 1e-6)
+			thicknessCombo->setCurrentIndex(3);
 
 		raftSpin->setValue(readini.value("/other/raft").toInt());
 

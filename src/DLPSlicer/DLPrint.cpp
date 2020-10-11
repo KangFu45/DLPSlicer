@@ -7,6 +7,7 @@
 #include <qtextstream.h>
 #include <qimage.h>
 #include <qbuffer.h>
+#include <qdir.h>
 
 #include <tbb/parallel_for.h>
 
@@ -203,6 +204,19 @@ namespace DLPSlicer {
 
 		//导出图片
 		this->SavePng(box, layerNum);
+
+		//更新切片信息
+		info.layers_num = layer_qt_path.size();
+		info.length = box.max.x - box.min.x;
+		info.width = box.max.y - box.min.y;
+		info.height = box.max.z + (double)m_config->layer_height * m_config->raft_layers;
+
+		info.volume = 0;
+		float laft_area = (box.max.x - box.min.x + m_config->raft_offset * 2) * (box.max.y - box.min.y + m_config->raft_offset * 2);
+		for (int i = m_config->raft_layers; i < layer_qt_path.size(); ++i) {
+			info.volume += m_areas[i] * m_config->layer_height;
+		}
+		info.volume += laft_area * m_config->raft_layers;
 	}
 
 	void DLPrint::InfillLayer(size_t i, ExPolygons pattern)
@@ -445,73 +459,90 @@ namespace DLPSlicer {
 		return s;
 	}
 
-	//更新键值只对删除模型时有效
+	//删除支撑时需要更新id，但map的键值无法直接修改，所以效率比vector更新差许多
 	bool DLPrint::DelTreeSupport(size_t id)
 	{
+		bool ret = false;
+		size_t a = id / InstanceNum;
+		std::map<int, TreeSupport*> t_tss;
+		for (auto ts = treeSupports.begin(); ts != treeSupports.end(); ++ts) {
+			if (ts->first != id) {
+				size_t b = ts->first / InstanceNum;
+				if (a == b && ts->first > id)
+					t_tss.insert(*ts);
+			}
+		}
+
 		auto s = treeSupports.find(id);
 		if (s != treeSupports.end()) {
 			delete (*s).second;
 			treeSupports.erase(s);
-			return true;
+			ret = true;
 		}
 
-		return false;
+		for (auto ts = t_tss.begin(); ts != t_tss.end(); ++ts) {
+			treeSupports.erase(ts->first);
+			treeSupports.insert(std::pair<int, TreeSupport*>(ts->first - 1, ts->second));
+		}
+
+		return ret;
 	}
 
 	void DLPrint::SaveSlice()
 	{
 		BoundingBoxf3 box = model->bounding_box();
 
-		QFile file(string(e_setting.ZipTempPath + "/buildscipt.ini").c_str());
-		if (file.open(QFile::WriteOnly | QFile::Truncate))
-		{
-			QTextStream stream(&file);
-			stream << "Slice thickness = " << m_config->layer_height << "\n";
-			stream << "norm illumination time = " << m_config->normIlluTime << "\n";
-			stream << "norm illumination inttersity = " << m_config->norm_inttersity << "\n";
-			stream << "number of override slices = " << m_config->overLayer << "\n";
-			stream << "override illumination time = " << m_config->overIlluTime << "\n";
-			stream << "override illumination inttersity =" << m_config->over_inttersity << "\n";
-			stream << "first layer_illumination_time = " << m_config->overIlluTime << "\n";
-			stream << "first illumination inttersity = " << m_config->over_inttersity << "\n";
-			stream << "number of slices = " << layer_qt_path.size() << "\n";
-			stream << "length = " << box.max.x - box.min.x << "\n";
-			stream << "width = " << box.max.y - box.min.y << "\n";
-			stream << "height = " << box.max.z + (double)m_config->layer_height * m_config->raft_layers << "\n";
-			float vol = 0;
-			float laft_area = (box.max.x - box.min.x + m_config->raft_offset * 2) * (box.max.y - box.min.y + m_config->raft_offset * 2);
-			for (int i = m_config->raft_layers; i < layer_qt_path.size(); ++i) {
-				vol += m_areas[i] * m_config->layer_height;
-			}
-			vol += laft_area * m_config->raft_layers;
-			stream << "model volume = " << vol / 1000.0 << "\n";
-			
-			float aaa = 0;
-			for (int j = 0; j < layer_qt_path.size(); ++j) {
-				if (j >= m_config->raft_layers)
-					aaa = m_areas[j];
-				else
-					aaa = laft_area;
-				//if (j < m_config->overLayer) {
-					//长曝光层
-					stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
-				//}
-				//else {
-				//	//正常曝光层
-				//	stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
-				//}
-			}
-		}
-		file.close();
+		if (QDir(e_setting.ZipTempPath.c_str()).exists()) {
 
-		tbb::parallel_for(
-			tbb::blocked_range<size_t>(0, layer_qt_path.size()),
-			[this](const tbb::blocked_range<size_t>& range) {
-			for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
-				this->SaveOneSlice(line_idx, e_setting.ZipTempPath.c_str());
+			QFile file(string(e_setting.ZipTempPath + "/buildscipt.ini").c_str());
+			//每次切片都会删除上次的临时切片文件，当配置文件存在说明再次保存同一切片文件
+			if (!file.exists()) {
+				if (file.open(QFile::WriteOnly | QFile::Truncate))
+				{
+					QTextStream stream(&file);
+					stream << "Slice thickness = " << m_config->layer_height << "\n";
+					stream << "norm illumination time = " << m_config->normIlluTime << "\n";
+					stream << "norm illumination inttersity = " << m_config->norm_inttersity << "\n";
+					stream << "number of override slices = " << m_config->overLayer << "\n";
+					stream << "override illumination time = " << m_config->overIlluTime << "\n";
+					stream << "override illumination inttersity =" << m_config->over_inttersity << "\n";
+					stream << "first layer_illumination_time = " << m_config->overIlluTime << "\n";
+					stream << "first illumination inttersity = " << m_config->over_inttersity << "\n";
+					stream << "number of slices = " << info.layers_num << "\n";
+					stream << "length = " << info.length << "\n";
+					stream << "width = " << info.width << "\n";
+					stream << "height = " << info.height << "\n";
+					stream << "model volume = " << info.volume / 1000.0 << "\n";
+
+					float laft_area = (box.max.x - box.min.x + m_config->raft_offset * 2) * (box.max.y - box.min.y + m_config->raft_offset * 2);
+					float t = 0;
+					for (int j = 0; j < layer_qt_path.size(); ++j) {
+						if (j >= m_config->raft_layers)
+							t = m_areas[j];
+						else
+							t = laft_area;
+						//if (j < m_config->overLayer) {
+							//长曝光层
+						stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << t << "\n";
+						//}
+						//else {
+						//	//正常曝光层
+						//	stream << j * m_config->layer_height << " , " << "slice" << j << ".png , " << aaa << "\n";
+						//}
+					}
+				}
+				file.close();
 			}
+
+			tbb::parallel_for(
+				tbb::blocked_range<size_t>(0, layer_qt_path.size()),
+				[this](const tbb::blocked_range<size_t>& range) {
+				for (size_t line_idx = range.begin(); line_idx < range.end(); ++line_idx) {
+					this->SaveOneSlice(line_idx, e_setting.ZipTempPath.c_str());
+				}
+			}
+			);
 		}
-		);
 	}
 
 	void DLPrint::SavePng(const BoundingBoxf3& box, size_t layerNum)
@@ -551,23 +582,26 @@ namespace DLPSlicer {
 
 	void DLPrint::SaveOneSlice(size_t num, QString path)
 	{
-		QImage image(1920, 1080, QImage::Format_RGB32);
-		QPainter painter(&image);
-		painter.setRenderHint(QPainter::Antialiasing, true);
-		painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-		painter.setBrush(QBrush(QColor(255, 255, 255)));
-		painter.setPen(QPen(Qt::Dense7Pattern, 1));
-
-		painter.drawPath(*(layer_qt_path.find(num)->second));
-
 		QFile file(path + QObject::tr("/slice%1.png").arg(num));
-		if (!file.open(QIODevice::ReadWrite))
-			return;
-		QByteArray ba;
-		QBuffer buffer(&ba);
-		buffer.open(QIODevice::WriteOnly);
-		image.save(&buffer, "PNG");
-		file.write(ba);
+		if (!file.exists()) {
+			if (!file.open(QIODevice::ReadWrite))
+				return;
+
+			QImage image(1920, 1080, QImage::Format_RGB32);
+			QPainter painter(&image);
+			painter.setRenderHint(QPainter::Antialiasing, true);
+			painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+			painter.setBrush(QBrush(QColor(255, 255, 255)));
+			painter.setPen(QPen(Qt::Dense7Pattern, 1));
+
+			painter.drawPath(*(layer_qt_path.find(num)->second));
+
+			QByteArray ba;
+			QBuffer buffer(&ba);
+			buffer.open(QIODevice::WriteOnly);
+			image.save(&buffer, "PNG");
+			file.write(ba);
+		}
 	}
 
 	void DLPrint::SaveOnePng(size_t num)
